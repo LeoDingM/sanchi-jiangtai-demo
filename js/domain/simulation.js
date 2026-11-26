@@ -1,23 +1,24 @@
 /** 游戏状态机：上课/考试/分班/高考录取/毕业升学与自动跳阶段。 */
 import {
   PLAYER_CLASS_NO, PLAYER_DEFAULT_NAME, PLAYER_ROLE, START_DATE, GRADE_YEAR, HOMEROOM_NAME, MENTOR_NAME,
-} from "./config.js?v=t49u1";
-import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById, examParams, formatGradeTerm, formatCohortGrade, termOf } from "./calendar.js?v=t49u1";
-import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf, eraQuality, placeGraduatingRepeaters, applyRepeaterSeating } from "./school.js?v=t49u1";
-import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js?v=t49u1";
-import { runExam } from "./examService.js?v=t49u1";
-import { provincialPassCounts, schoolQuotaFromPrior, fallbackSchoolQuota, examResultLogText } from "./schoolLines.js?v=t49u1";
-import { admitCohort } from "./admission.js?v=t49u1";
-import { rngFrom, clamp } from "./prng.js?v=t49u1";
-import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands, homeroomEveningRoll as homeroomEveningRollCore, compileEveningRoll, studentRecentStatus, rollCallStatusLine, classLatecomers, wrongClassroomThisPeriod } from "./teaching.js?v=t49u1";
-import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, upcomingTutoring, formatSlotLabel, isTutoringSlot, weekMathCount, weekSchedule, weekStart } from "./timetable.js?v=t49u1";
-import { swapPeriods as swapPeriodsCore, borrowIn as borrowInCore, borrowOut as borrowOutCore, respondTimetableRequest as respondTimetableRequestCore, ensureIncomingRequest, pendingTimetableRequest, weekBorrowCounts, weekTiaokeSummary, canAlterSlot, shortSlotLabel, teacherOf, ensureTiaokeState } from "./tiaoke.js?v=t49u1";
-import { openParentsMeeting as openParentsMeetingCore, meetParent as meetParentCore, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE } from "./parents.js?v=t49u1";
-import { openSchoolActivity as openSchoolActivityCore, doActivityAction as doActivityActionCore, isSchoolActivityOpen, upcomingSchoolActivity, ACTIVITY_SOURCE_NOTE, playerStageLine } from "./activities.js?v=t49u1";
-import { classCommittee, dutyStudents, weekDuty, classBrief, isHomeroomMeetingSlot, attendClassMeeting as attendClassMeetingCore, hostClassMeeting as hostClassMeetingCore, committeeTitleOf, upcomingClassMeeting, formatStudentShort, DUTY_PER_DAY, COMMITTEE_ROLES } from "./classManage.js?v=t49u1";
-import { ensureStatePeers, ensureCohortPeers, classPeersOf } from "./peers.js?v=t49u1";
-import { syncStateHealth, classAbsences, isAwayFromClass, absenceLogLine } from "./health.js?v=t49u1";
-import { talkMathRoomBit, hasLargeRoom } from "./potential.js?v=t49u1";
+} from "./config.js?v=t50u1";
+import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById, examParams, formatGradeTerm, formatCohortGrade, termOf } from "./calendar.js?v=t50u1";
+import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf, eraQuality, placeGraduatingRepeaters, applyRepeaterSeating } from "./school.js?v=t50u1";
+import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js?v=t50u1";
+import { runExam } from "./examService.js?v=t50u1";
+import { provincialPassCounts, schoolQuotaFromPrior, fallbackSchoolQuota, examResultLogText } from "./schoolLines.js?v=t50u1";
+import { admitCohort } from "./admission.js?v=t50u1";
+import { rngFrom, clamp } from "./prng.js?v=t50u1";
+import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands, homeroomEveningRoll as homeroomEveningRollCore, compileEveningRoll, studentRecentStatus, rollCallStatusLine, classLatecomers, wrongClassroomThisPeriod } from "./teaching.js?v=t50u1";
+import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, upcomingTutoring, formatSlotLabel, isTutoringSlot, weekMathCount, weekSchedule, weekStart } from "./timetable.js?v=t50u1";
+import { swapPeriods as swapPeriodsCore, borrowIn as borrowInCore, borrowOut as borrowOutCore, respondTimetableRequest as respondTimetableRequestCore, ensureIncomingRequest, pendingTimetableRequest, weekBorrowCounts, weekTiaokeSummary, canAlterSlot, shortSlotLabel, teacherOf, ensureTiaokeState } from "./tiaoke.js?v=t50u1";
+import { openParentsMeeting as openParentsMeetingCore, meetParent as meetParentCore, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE } from "./parents.js?v=t50u1";
+import { openSchoolActivity as openSchoolActivityCore, doActivityAction as doActivityActionCore, isSchoolActivityOpen, upcomingSchoolActivity, ACTIVITY_SOURCE_NOTE, playerStageLine } from "./activities.js?v=t50u1";
+import { classCommittee, dutyStudents, weekDuty, classBrief, isHomeroomMeetingSlot, attendClassMeeting as attendClassMeetingCore, hostClassMeeting as hostClassMeetingCore, committeeTitleOf, upcomingClassMeeting, formatStudentShort, DUTY_PER_DAY, COMMITTEE_ROLES } from "./classManage.js?v=t50u1";
+import { ensureStatePeers, ensureCohortPeers, classPeersOf } from "./peers.js?v=t50u1";
+import { syncStateHealth, classAbsences, isAwayFromClass, absenceLogLine } from "./health.js?v=t50u1";
+import { OFFICIAL_ROLE, OFFICIAL_LOG_TEXT } from "./career.js?v=t50u1";
+import { talkMathRoomBit, hasLargeRoom } from "./potential.js?v=t50u1";
 
 export const SAVE_VERSION = 1;
 
@@ -473,17 +474,21 @@ export function doPromote(state, ev) {
     addLog(state, `新学年开始：${newEntry}级高一入学，各年级依次升等。${graduatedCohort}级已离校或进入补习班。`);
   }
   state.player.careerYear += 1;
+  let becameOfficial = false;
   if (!state.player.official && state.player.careerYear >= 1) {
     state.player.official = true;
-    state.player.role = "中学数学教师";
-    addLog(state, "实习期满，你转正为正式数学教师。");
+    state.player.role = OFFICIAL_ROLE;
+    state.player.officialSince = ev.date || state.date;
+    addLog(state, OFFICIAL_LOG_TEXT);
+    state.officialNotice = { date: ev.date || state.date, text: OFFICIAL_LOG_TEXT };
+    becameOfficial = true;
   }
   state.player.prep = 1;
   state.schoolYear = newEntry;
   state.flags[`promoted-${newEntry}`] = true;
   ensureStatePeers(state);
   syncStateHealth(state);
-  return { ok: true, newEntry };
+  return { ok: true, newEntry, becameOfficial };
 }
 
 export function doParentsMeeting(state, ev) {
@@ -598,8 +603,10 @@ export function skipToNextStage(state) {
   state.tutorAnswers = 0;
   syncStateHealth(state);
   const result = applyEvent(state, ev);
-  const message = describeStageAdvance(state, ev);
-  return { ok: true, event: ev, result, message };
+  const becameOfficial = !!result?.becameOfficial;
+  const advance = describeStageAdvance(state, ev);
+  const message = becameOfficial ? `${OFFICIAL_LOG_TEXT}${advance}` : advance;
+  return { ok: true, event: ev, result, message, becameOfficial };
 }
 
 /** 连续跳过，直到某届高考录取完成，或指定停止条件。 */
@@ -696,11 +703,14 @@ function finishSkipYear(state, opening, steps) {
     const already = (state.log || []).some((l) => l.date === opening.date && String(l.text || "").includes(opening.name));
     if (!already) addLog(state, `已到${opening.name}。${describePlayerStage(state)}。`);
   }
+  const becameOfficial = (steps || []).some((s) => !!(s.result?.becameOfficial || s.becameOfficial));
+  const arrive = `已推进到${opening.name}（${opening.date}）。${describePlayerStage(state)}。`;
   return {
     ok: true,
     event: opening,
     steps,
-    message: `已推进到${opening.name}（${opening.date}）。${describePlayerStage(state)}。`,
+    becameOfficial,
+    message: becameOfficial ? `${OFFICIAL_LOG_TEXT}${arrive}` : arrive,
   };
 }
 

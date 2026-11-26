@@ -46,6 +46,7 @@ h1 + .school { margin: 0; font-size: 12px; }
 #gradeline { font-size: 13px; color: var(--gold); margin-top: 2px; }
 #periodline { font-size: 13px; color: var(--gold); margin-top: 2px; }
 #roleline { font-size: 13px; color: var(--chalk-dim); }
+#careerline { font-size: 12px; color: var(--gold); margin-top: 2px; }
 #clock, #gradeline { flex-shrink: 0; }
 .top-actions, .boot-btns, .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 button {
@@ -206,7 +207,7 @@ a { color: var(--gold); }
   .top-actions { order: 3; }
   #clock { font-size: 16px; font-weight: 700; }
   #gradeline { font-size: 13px; color: var(--gold); }
-  #periodline, #roleline { font-size: 12px; }
+  #periodline, #roleline, #careerline { font-size: 12px; }
   .top-actions {
     flex: 1 1 100%;
     width: 100%;
@@ -540,3 +541,19 @@ button.peer-link {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
+.career-banner {
+  margin: 8px 16px 0;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  background: rgba(26, 40, 31, 0.92);
+  color: var(--chalk);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.career-banner p { margin: 0; line-height: 1.55; }
+.career-banner.hidden { display: none; }
+.settings-section#career-brief { margin-bottom: 18px; }

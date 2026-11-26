@@ -15,31 +15,32 @@ import {
   attendClassMeeting, hostClassMeeting, playerClassCommittee, playerClassBrief,
   playerDutyToday, playerWeekDuty, isHomeroomMeetingSlot, upcomingClassMeeting,
   committeeTitleOf, formatStudentShort,
-} from "../domain/simulation.js?v=t49u1";
-import { addDays } from "../domain/calendar.js?v=t49u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t49u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t49u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t49u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t49u1";
-import { rankRows } from "../domain/scores.js?v=t49u1";
-import { filterRows, sameTierCompare, classStandings, classCompareRows, examReportKey, pickExamReport } from "../domain/examService.js?v=t49u1";
-import { hydrateReport } from "../domain/simulation.js?v=t49u1";
-import { renderSeating } from "./classroom.js?v=t49u1";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t49u1";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t49u1";
-import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t49u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t49u1";
-import { formatAdmissionBatch, formatAdmissionDest } from "../domain/admission.js?v=t49u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t49u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t49u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t49u1";
+} from "../domain/simulation.js?v=t50u1";
+import { addDays } from "../domain/calendar.js?v=t50u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t50u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t50u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t50u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t50u1";
+import { rankRows } from "../domain/scores.js?v=t50u1";
+import { filterRows, sameTierCompare, classStandings, classCompareRows, examReportKey, pickExamReport } from "../domain/examService.js?v=t50u1";
+import { hydrateReport } from "../domain/simulation.js?v=t50u1";
+import { renderSeating } from "./classroom.js?v=t50u1";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t50u1";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t50u1";
+import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t50u1";
+import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t50u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t50u1";
+import { formatAdmissionBatch, formatAdmissionDest } from "../domain/admission.js?v=t50u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t50u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t50u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t50u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
   parseAiCommentary, emptyAiCommentary,
-} from "../domain/examAi.js?v=t49u1";
+} from "../domain/examAi.js?v=t50u1";
 
 let state = null;
 let view = "classroom";
@@ -318,7 +319,8 @@ async function handleSkipYear() {
     persist();
     hideLoading();
     render();
-    toast(r.ok ? (r.message || `已推进到${plan.event.name}`) : (r.reason || "无法推进"));
+    if (r.ok && r.becameOfficial) toast(r.message || OFFICIAL_LOG_TEXT);
+    else toast(r.ok ? (r.message || `已推进到${plan.event.name}`) : (r.reason || "无法推进"));
   } catch (err) {
     hideLoading();
     toast("推进下一学年没有完成，请再试一次。");
@@ -340,11 +342,13 @@ function handleAct(act) {
   }
   if (act === "nextperiod") {
     const r = advancePeriod(state);
-    toast(r.settled ? (r.text || `结算：${r.type}`) : (r.text || r.reason || "已到下一节"));
+    if (r.result?.becameOfficial || r.becameOfficial) toast(OFFICIAL_LOG_TEXT);
+    else toast(r.settled ? (r.text || `结算：${r.type}`) : (r.text || r.reason || "已到下一节"));
   }
   if (act === "nextday") {
     const r = advanceDay(state);
-    if (r.type === "activity") toast(r.text || r.result?.text || `今日学校活动「${r.event?.name || r.name || ""}」`);
+    if (r.becameOfficial) toast(OFFICIAL_LOG_TEXT);
+    else if (r.type === "activity") toast(r.text || r.result?.text || `今日学校活动「${r.event?.name || r.name || ""}」`);
     else if (r.type && r.type !== "day") toast(`结算：${r.type}`);
     else if (r.text) toast(r.text);
   }
@@ -354,6 +358,27 @@ function handleAct(act) {
   }
   persist();
   render();
+}
+
+function syncOfficialNotice() {
+  const el = $("#official-notice");
+  if (!el) return;
+  const note = state?.officialNotice;
+  if (note && !note.dismissed) {
+    el.hidden = false;
+    el.classList.remove("hidden");
+    el.innerHTML = `<p><b>转正</b>　${escapeHtml(note.text)}顶栏任职已改为正式数学教师，设置里也有说明。</p><button type="button" class="accent" id="official-notice-ok">知道了</button>`;
+    const ok = el.querySelector("#official-notice-ok");
+    if (ok) ok.onclick = () => {
+      state.officialNotice = { ...note, dismissed: true };
+      persist();
+      syncOfficialNotice();
+    };
+  } else {
+    el.hidden = true;
+    el.classList.add("hidden");
+    el.innerHTML = "";
+  }
 }
 
 function render() {
@@ -376,7 +401,11 @@ function render() {
     const tag = slot?.isTutoring ? " · 可答疑" : slot?.isMath ? " · 数学课" : slot?.isExamDay ? " · 停课" : slot?.isActivityPeriod ? " · 活动" : slot?.id === "rest" ? " · 休息" : "";
     periodEl.textContent = (slot ? formatSlotLabel(slot) : "") + tag;
   }
-  $("#roleline").textContent = `${state.player.role} ${state.player.name} · ${state.player.cohortYear}级卓行${state.player.classNo}班 ${playerSubjectName(state.player)}`;
+  const roleEl = $("#roleline");
+  if (roleEl) roleEl.textContent = `${playerCareerLine(state.player)} ${state.player.name} · ${state.player.cohortYear}级卓行${state.player.classNo}班 ${playerSubjectName(state.player)}`;
+  const careerEl = $("#careerline");
+  if (careerEl) careerEl.textContent = playerCareerStatus(state.player);
+  syncOfficialNotice();
   document.querySelectorAll("#sidenav [data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
   const host = $("#view");
   try {
@@ -1004,7 +1033,7 @@ function schoolActivityHtml() {
       </div>`;
   return `<div class="paper lesson-card parents-panel activity-panel">
     <h3>${act.name || "学校活动"}</h3>
-    <p class="notice">这是宁川中学的学校活动（${act.date}）。${sports ? "全日停课。你作为本班实习数学老师可以带队、看纪律、记录本班参赛情况。名次只是校内占位，不是全市或全省官方成绩。" : "当天后半段为活动时段。你可以参加、看班、写日志，不套用某台晚会的现成流程。"} ${note}</p>
+    <p class="notice">这是宁川中学的学校活动（${act.date}）。${sports ? `全日停课。你作为本班${state.player.official ? "数学教师" : "实习数学老师"}可以带队、看纪律、记录本班参赛情况。名次只是校内占位，不是全市或全省官方成绩。` : "当天后半段为活动时段。你可以参加、看班、写日志，不套用某台晚会的现成流程。"} ${note}</p>
     ${roster ? `<ul class="activity-roster">${roster}</ul>` : ""}
     ${btns}
   </div>`;
@@ -1307,7 +1336,7 @@ function viewClassManage(host) {
   const minutes = meetings.slice().reverse().map((m) => `<p class="muted">${m.date}　「${m.theme}」· ${m.mode === "assist" ? "协助" : "旁听"}<br/>${m.minutes}</p>`).join("")
     || `<p class="muted">还没有班会纪要。等到班会课再旁听或协助，纪要会记在这里。</p>`;
   host.innerHTML = `<h3>班级管理 · ${state.player.cohortYear}级卓行${state.player.classNo}班</h3>
-    <p class="notice">你是本班数学实习教师，协助班主任${home}管理日常事务：查看班委和值日、整理班情、在班会课旁听或协助。班委由本班学生特质硬定，一人一职；分班后若人员变化会按新名单重算。你不能代替班主任主持班会，也不能随意撤换班委。</p>
+    <p class="notice">${state.player.official ? "你是本班数学教师（已转正）" : "你是本班数学实习教师"}，协助班主任${home}管理日常事务：查看班委和值日、整理班情、在班会课旁听或协助。班委由本班学生特质硬定，一人一职；分班后若人员变化会按新名单重算。你不能代替班主任主持班会，也不能随意撤换班委。</p>
     <div class="kpi">
       <div><span>班主任</span><b>${home}</b></div>
       <div><span>任教班</span><b>卓行${state.player.classNo}班 · ${sts.length}人</b></div>
@@ -1339,7 +1368,7 @@ function viewClassManage(host) {
     <div class="paper lesson-card">
       <h3>班会旁听与协助</h3>
       <p>${meetingHint}</p>
-      <p class="muted">主讲是班主任${home}。实习教师可以旁听或协助，不能主持班会。</p>
+      <p class="muted">主讲是班主任${home}。${state.player.official ? "你已转正，仍" : "实习教师"}可以旁听或协助，不能主持班会。</p>
       <div class="row-actions">
         <button type="button" class="accent" id="cm-attend">旁听班会</button>
         <button type="button" id="cm-assist">协助班主任</button>
@@ -1697,6 +1726,11 @@ function viewSettings(host) {
   const officialName = officialHomeroomName(state.player);
   const keyHint = conf.hasKey ? `已保存密钥 ${maskApiKey(conf.apiKey)}。输入框留空再保存，会保留原密钥。` : "尚未保存密钥。";
   host.innerHTML = `<h3>设置</h3>
+    <section class="settings-section" id="career-brief">
+      <h4>任职说明</h4>
+      <p class="notice">${escapeHtml(playerCareerBrief(state.player))}</p>
+      <p class="muted">顶栏职务在转正时会改成「中学数学教师（已转正）」。转正不改变班主任或备课组长人选。</p>
+    </section>
     <section class="settings-section" id="world-seed">
       <h4>本局世界编号</h4>
       <p class="notice">每次开始新学期会随机生成一套学生名单和考试结果。同一编号可以重开出同一局。</p>
