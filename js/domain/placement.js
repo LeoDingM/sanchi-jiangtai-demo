@@ -67,6 +67,14 @@ export function firstPlacement(students, scoreMap, { overrides = {}, seed = 1 } 
   const wenTargets = FIRST_PLACEMENT_TARGETS.wen.filter((t) => !t.locked);
   fillByRank(byTrack.li, liTargets, assign, "li");
   fillByRank(byTrack.wen, wenTargets, assign, "wen");
+  // 分层后从卓行中前部抽少量学生“下沉”到笃学，换出笃学最弱的一部分。
+  // 这是重点中学底部班仍有一本苗子的写实处理，不倒挂层次均值。
+  const scoreOf = (id) => {
+    const row = [...byTrack.li, ...byTrack.wen].find((r) => r.student.id === id);
+    return row?._raw ?? row?.total ?? 0;
+  };
+  retainDuxueSeeds(assign, scoreOf, seed, "li", 16);
+  retainDuxueSeeds(assign, scoreOf, seed, "wen", 8);
 
   for (const r of yiti) assign.push({ id: r.student.id, classNo: 30, track: r.track, tier: "yiti", name: "艺体30班" });
 
@@ -85,6 +93,31 @@ export function firstPlacement(students, scoreMap, { overrides = {}, seed = 1 } 
     };
   });
   return { students: next, assignments: assign, type: "first" };
+}
+
+
+/** 把卓行中前部的少量学生与笃学底部对换，使笃学保留省控一本苗子。 */
+function retainDuxueSeeds(assign, scoreOf, seed, track, count) {
+  const zx = assign.filter((a) => a.track === track && a.tier === "zhuoxing")
+    .slice()
+    .sort((a, b) => scoreOf(b.id) - scoreOf(a.id) || String(a.id).localeCompare(String(b.id)));
+  const dx = assign.filter((a) => a.track === track && a.tier === "duxue")
+    .slice()
+    .sort((a, b) => scoreOf(b.id) - scoreOf(a.id) || String(a.id).localeCompare(String(b.id)));
+  if (zx.length < 30 || dx.length < 20 || count <= 0) return;
+  const pool = zx.slice(Math.floor(zx.length * 0.06), Math.floor(zx.length * 0.30));
+  const picked = pool
+    .slice()
+    .sort((a, b) => hash01(seed, "duxue-seed", track, a.id) - hash01(seed, "duxue-seed", track, b.id))
+    .slice(0, Math.min(count, pool.length, dx.length));
+  const weak = dx.slice(-picked.length);
+  for (let i = 0; i < picked.length; i++) {
+    const a = picked[i], b = weak[i];
+    if (!a || !b) break;
+    const tmp = { classNo: a.classNo, tier: a.tier, name: a.name };
+    a.classNo = b.classNo; a.tier = b.tier; a.name = b.name;
+    b.classNo = tmp.classNo; b.tier = tmp.tier; b.name = tmp.name;
+  }
 }
 
 function fillByRank(ranked, targets, assign, track) {

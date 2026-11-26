@@ -42,6 +42,7 @@ export function schoolYearOf(date) {
 
 /** 理科一本线相对 2020 年 535 的比例，用于该学年试卷总体难度。 */
 export const YEAR_LINE_FACTOR = {
+  2016: 529 / 535,
   2017: 503 / 535,
   2018: 527 / 535,
   2019: 522 / 535,
@@ -97,7 +98,7 @@ export function examParams(exam) {
     : 0.95 + hash01("exam-diff", exam.id) * 0.12; // 非高考场次 0.95–1.07
   const difficulty = clamp(base * yearF * jitter, 0.88, 1.12);
   const dispJ = 0.9 + hash01("exam-disp", exam.id) * 0.28; // 0.90–1.18
-  const dispersion = clamp((KIND_DISP[kind] ?? 1) * dispJ, 0.88, 1.22);
+  const dispersion = clamp((KIND_DISP[kind] ?? 1) * dispJ, 0.94, 1.12);
   return { difficulty, dispersion };
 }
 

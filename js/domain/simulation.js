@@ -8,6 +8,7 @@ import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js"
 import { runExam } from "./examService.js";
 import { admitCohort } from "./admission.js";
 import { rngFrom, clamp } from "./prng.js";
+import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES } from "./teaching.js";
 
 export const SAVE_VERSION = 1;
 
@@ -65,6 +66,8 @@ export function createGame(seed = 20170901, playerName = PLAYER_DEFAULT_NAME) {
       cohortYear: GRADE_YEAR,
       classNo: PLAYER_CLASS_NO,
       prep: 0,
+      lessons: [],
+      lessonPlan: null,
       mathTeaching: 0.8,
       mentor: MENTOR_NAME,
       homeroom: HOMEROOM_NAME,
@@ -342,6 +345,7 @@ export function skipToNextStage(state) {
   state.date = ev.date;
   state.periodId = "morning-read";
   state.talksToday = 0;
+  state.reviewsToday = 0;
   const result = applyEvent(state, ev);
   return { ok: true, event: ev, result };
 }
@@ -382,34 +386,35 @@ export function advanceDay(state) {
   state.date = addDays(state.date, 1);
   state.periodId = "morning-read";
   state.talksToday = 0;
+  state.reviewsToday = 0;
   const incoming = SCHOOL_CALENDAR.filter((e) => e.date === state.date);
   return { type: "day", date: state.date, events: incoming };
 }
 
-export function prepareLesson(state) {
-  state.player.prep = Math.min(3, (state.player.prep || 0) + 1);
-  addLog(state, `你在办公室备课。备课充分度现为${state.player.prep}。`);
-  return { ok: true, prep: state.player.prep };
+export function prepareLesson(state, opts = {}) {
+  const grade = gradeOf(state.player.cohortYear, state.date);
+  const r = prepareLessonCore(state, opts, grade);
+  addLog(state, r.text);
+  return r;
 }
 
 export function teach(state, style = "精讲例题", callId = null) {
-  const prep = state.player.prep || 0;
-  const quality = (prep >= 2 ? 1.1 : prep >= 1 ? 0.9 : 0.65);
-  const styles = { 精讲例题: 0.12, 练习巩固: 0.1, 提问互动: 0.08, 随堂小测: 0.11 };
-  const gain = (styles[style] || 0.08) * quality;
-  state.player.mathTeaching = clamp((state.player.mathTeaching || 0) + gain, 0, 12);
-  if (prep > 0) state.player.prep -= 1;
+  const grade = gradeOf(state.player.cohortYear, state.date);
   const cls = snapshotPlayerClass(state);
-  if (callId) {
-    const s = cls.find((x) => x.id === callId);
-    if (s) {
-      s.relation = clamp((s.relation || 0) + 2, 0, 100);
-      s.ability.math = clamp(s.ability.math + 0.08, 0, 99);
-    }
-  }
-  addLog(state, `你给卓行${state.player.classNo}班上了一节数学课（${style}${prep ? "，有备课" : "，备课不足"}）。班级数学教学积累到${state.player.mathTeaching.toFixed(1)}。`);
-  return { ok: true, teaching: state.player.mathTeaching };
+  const r = teachLesson(state, cls, { style, callId, grade });
+  addLog(state, r.text);
+  return r;
 }
+
+export function reviewHomework(state, studentId) {
+  const c = state.cohorts[state.player.cohortYear];
+  const s = c?.students.find((x) => x.id === studentId);
+  const r = reviewHomeworkCore(state, s);
+  if (r.ok) addLog(state, r.text);
+  return r;
+}
+
+export { topicsForGrade, LESSON_STYLES };
 
 export function talkTo(state, studentId, topic = "鼓励") {
   const c = state.cohorts[state.player.cohortYear];

@@ -52,10 +52,13 @@ export function scaleOf(grade, examKind) {
 /** 能力 → 期望得分率（难度=1、发挥=0）。按 750 分高考画像标定后再用于各卷满分。 */
 export function expectedPct(ability) {
   const a = clamp(ability, 0, 100);
-  // 锚点按 750 分制：44→456，56→492，68→525，78→555，86→588，96→649，99→687。
+  // 锚点按 750 分制。加陡的是校内第 400 与第 1000 名实际所在的中上段
+  // （约能力 64–76，对应理科这两条线），使分差接近江西 2016—2020 省控
+  // （理 72–84，文 56–75）。顶端仍压住，避免清北人数爆掉。
+  // 44→443，56→472，64→489，76→580，86→603，96→649，99→687。
   const pts = [
-    [0, 0.22], [30, 0.50], [44, 0.608], [56, 0.656],
-    [68, 0.700], [78, 0.740], [86, 0.784], [92, 0.822],
+    [0, 0.22], [30, 0.49], [44, 0.590], [50, 0.610], [56, 0.630],
+    [64, 0.652], [76, 0.773], [86, 0.804], [92, 0.822],
     [96, 0.865], [98, 0.895], [99, 0.916], [100, 0.930],
   ];
   for (let i = 1; i < pts.length; i++) {
@@ -82,7 +85,8 @@ export function scoreSubject({ max, ability, potential, teaching = 0, difficulty
   let pct = expectedPct(a);
   const pivot = 0.62; // 接近二本附近，拉开一本/二本分差
   pct = pivot + (pct - pivot) * dispersion;
-  pct = pct * difficulty;
+  // 难度以整体平移为主，避免难卷把第400/1000名分差按比例压到四十来分。
+  pct = pct + (difficulty - 1) * pivot;
   pct += form + fit + condition;
   pct = clamp(pct, 0.04, 0.97);
   return clamp(Math.round(pct * max), 0, max);
@@ -120,7 +124,7 @@ export function gradeStudent(student, exam, scale, teachingBonus = 0) {
     const rawP = student.potential[sub.id] ?? student.potential.math;
     const room = Math.max(0, rawP - rawA);
     // 低分段进步空间大，顶尖接近潜力则几乎不涨，避免高三把清北人数抬爆。
-    const gScale = rawA >= 84 ? 0.12 : rawA >= 74 ? 0.35 : rawA >= 62 ? 0.7 : 1.15;
+    const gScale = rawA >= 84 ? 0.12 : rawA >= 74 ? 0.30 : rawA >= 62 ? 0.45 : 0.85;
     const grown = rawA + years * Math.min(5.2, room * 0.28) * gScale;
     const v = scoreSubject({
       max: sub.max,

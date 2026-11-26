@@ -1,7 +1,7 @@
 import {
   createGame, playerStudents, skipToNextStage, skipToGaokaoOf, skipToNextCohort,
-  advanceDay, prepareLesson, teach, talkTo, listExamReports, formatDateCn,
-  applyEvent, SCHOOL_CALENDAR,
+  advanceDay, prepareLesson, teach, talkTo, reviewHomework, listExamReports, formatDateCn,
+  applyEvent, SCHOOL_CALENDAR, gradeOf, topicsForGrade, LESSON_STYLES,
 } from "../domain/simulation.js";
 import { saveSlot, loadSlot, listSlots, toJSON, fromJSON } from "../domain/save.js";
 import { subjectById, SUBJECTS_G1 } from "../domain/config.js";
@@ -69,8 +69,8 @@ function showMain() {
 
 function handleAct(act) {
   if (!state) return;
-  if (act === "prep") { prepareLesson(state); toast("备课完成"); }
-  if (act === "teach") { teach(state, "精讲例题", selectedId); toast("已上完一节数学课"); }
+  if (act === "prep") { const r = prepareLesson(state); toast(r.text || "备课完成"); }
+  if (act === "teach") { const r = teach(state, "精讲例题", selectedId); toast(r.text || "已上完一节数学课"); }
   if (act === "nextday") {
     const r = advanceDay(state);
     if (r.type && r.type !== "day") toast(`结算：${r.type}`);
@@ -89,7 +89,7 @@ function render() {
   $("#roleline").textContent = `${state.player.role} ${state.player.name} · ${state.player.cohortYear}级卓行${state.player.classNo}班 数学`;
   document.querySelectorAll("#sidenav [data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
   const host = $("#view");
-  const map = { classroom: viewClassroom, roster: viewRoster, profile: viewProfile, grades: viewGrades, office: viewOffice, admission: viewAdmission, auto: viewAuto, log: viewLog, save: viewSave };
+  const map = { classroom: viewClassroom, roster: viewRoster, profile: viewProfile, teach: viewTeach, placement: viewPlacement, grades: viewGrades, office: viewOffice, admission: viewAdmission, auto: viewAuto, log: viewLog, save: viewSave };
   host.innerHTML = "";
   (map[view] || viewClassroom)(host);
   renderAgenda();
@@ -365,6 +365,126 @@ function viewProfile(host) {
       });
     }
   });
+}
+
+
+function viewTeach(host) {
+  const grade = gradeOf(state.player.cohortYear, state.date);
+  const topics = topicsForGrade(grade);
+  const plan = state.player.lessonPlan;
+  const lessons = state.player.lessons || [];
+  const last = lessons[0];
+  const sts = clsStudents().slice().sort((a, b) => a.seq - b.seq);
+  const planBlock = plan ? `<p><b>课题</b> ${plan.topic}　<b>例题深度</b> ${plan.depth}　<b>作业</b> ${plan.homework}</p>
+      <p>${plan.goals || ""}</p>
+      <p class="muted">${plan.examples || ""} ${plan.homeworkNote || ""}</p>` : `<p class="muted">还没有教案。先选课题备一节课，再进教室。</p>`;
+  host.innerHTML = `<h3>日常教学 · 数学课</h3>
+    <p class="notice">备课要先写教案（课题、例题深度、作业量），上课可选课型、点名叫人，课后还可以面批。备课充分度和教学积累会进入下一次考试的数学成绩，不是点一下就算上过课。</p>
+    <div class="kpi">
+      <div><span>备课充分度</span><b>${state.player.prep || 0} / 3</b></div>
+      <div><span>数学教学积累</span><b>${Number(state.player.mathTeaching || 0).toFixed(1)}</b></div>
+      <div><span>今日面批</span><b>${state.reviewsToday || 0} / 6</b></div>
+    </div>
+    <div class="profile-grid">
+      <div class="paper lesson-card">
+        <h3>备课</h3>
+        <div class="form-grid">
+          <label>课题 <select id="topic">${topics.map((x) => `<option ${plan && plan.topic===x?"selected":""}>${x}</option>`).join("")}</select></label>
+          <label>例题深度 <select id="depth">${[1,2,3].map((d)=>`<option value="${d}" ${(!plan && d===2) || plan?.depth===d?"selected":""}>${d===1?"基本例题":d===2?"例题+变式":"例题+变式+综合"}</option>`).join("")}</select></label>
+          <label>作业量 <select id="hw">${["轻","中","重"].map((h)=>`<option ${(!plan && h==="中") || plan?.homework===h?"selected":""}>${h}</option>`).join("")}</select></label>
+        </div>
+        <div class="row-actions"><button type="button" class="accent" id="do-prep">写完教案</button></div>
+        ${planBlock}
+      </div>
+      <div class="paper lesson-card">
+        <h3>上课</h3>
+        <div class="form-grid">
+          <label>课型 <select id="style">${Object.keys(LESSON_STYLES).map((s)=>`<option>${s}</option>`).join("")}</select></label>
+          <label>提问/板演 <select id="call"><option value="">（不点名）</option>${sts.map((s)=>`<option value="${s.id}" ${s.id===selectedId?"selected":""}>${s.seq}号 ${s.name}</option>`).join("")}</select></label>
+        </div>
+        <div class="row-actions"><button type="button" class="accent" id="do-teach">开始上课</button></div>
+        ${last ? `<p class="muted">${last.date}　${last.topic} · ${last.style}</p><ol class="notes-list">${(last.notes||[]).map((n)=>`<li>${n}</li>`).join("")}</ol>${last.quiz?`<p class="muted">小测均分 ${last.quizAvg}。前列：${last.quiz.slice(0,5).map((q)=>`${q.name}${q.score}`).join("、")}</p>`:""}` : `<p class="muted">今天还没上课。</p>`}
+      </div>
+    </div>
+    <div class="paper lesson-card">
+      <h3>课后面批</h3>
+      <p class="muted">每天最多当面批 6 本。点名册里的学生，把作业问题落实到个人。</p>
+      <div class="row-actions">${sts.slice(0, 16).map((s)=>`<button type="button" data-rv="${s.id}">${s.name}</button>`).join("")}</div>
+    </div>
+    ${lessons.length ? `<h3>最近课堂记录</h3>
+      <div class="paper scroll-table"><table><thead><tr><th>日期</th><th>课题</th><th>课型</th><th>备课</th><th>纪要</th></tr></thead>
+      <tbody>${lessons.slice(0, 10).map((l)=>`<tr><td>${l.date}</td><td>${l.topic}</td><td>${l.style}</td><td>${l.prepUsed?"有":"不足"}</td><td>${(l.notes||[])[0]||""}</td></tr>`).join("")}</tbody></table></div>` : ""}`;
+  host.querySelector("#do-prep").onclick = () => {
+    const r = prepareLesson(state, {
+      topic: host.querySelector("#topic").value,
+      depth: Number(host.querySelector("#depth").value),
+      homework: host.querySelector("#hw").value,
+    });
+    toast(r.text);
+    persist(); render();
+  };
+  host.querySelector("#do-teach").onclick = () => {
+    const sid = host.querySelector("#call").value || null;
+    if (sid) selectedId = sid;
+    const r = teach(state, host.querySelector("#style").value, sid);
+    toast(r.text);
+    persist(); render();
+  };
+  host.querySelectorAll("[data-rv]").forEach((b) => {
+    b.onclick = () => {
+      selectedId = b.dataset.rv;
+      const r = reviewHomework(state, b.dataset.rv);
+      toast(r.ok ? r.text : r.reason);
+      persist(); render();
+    };
+  });
+}
+
+function viewPlacement(host) {
+  const c = state.cohorts[state.player.cohortYear];
+  const sts = (c?.students || []).filter((s) => !s.repeat);
+  const mine = sts.filter((s) => s.classNo === state.player.classNo);
+  const p1done = !!(c && (c.trackSplit || c.placed1 || state.flags[`place1-${state.player.cohortYear}`]));
+  const p2done = !!(c && (c.placed2 || state.flags[`place2-${state.player.cohortYear}`]));
+  const byTier = {};
+  for (const s of sts) {
+    const k = `${s.track || "mixed"}|${s.tier}`;
+    byTier[k] ??= { track: s.track, tier: s.tier, n: 0, classes: {} };
+    byTier[k].n++;
+    byTier[k].classes[s.classNo] = (byTier[k].classes[s.classNo] || 0) + 1;
+  }
+  const p1moves = sts.filter((s) => s.placement1 && s.placement1.from !== s.placement1.to);
+  const p2moves = sts.filter((s) => s.placement2 && s.placement2.from !== s.placement2.to);
+  const in16 = p1moves.filter((s) => s.placement1.to === state.player.classNo);
+  const out16 = p1moves.filter((s) => s.placement1.from === state.player.classNo && s.placement1.to !== state.player.classNo);
+  const p2in = p2moves.filter((s) => s.placement2.to === state.player.classNo);
+  const p2out = p2moves.filter((s) => s.placement2.from === state.player.classNo && s.placement2.to !== state.player.classNo);
+  const report = listExamReports(state, { entryYear: state.player.cohortYear })[0];
+  const classRows = (report?.classes || []).filter((x) => !x.repeat).sort((a, b) => a.classNo - b.classNo);
+  const sameTier = classRows.filter((x) => x.tier === (mine[0]?.tier || "zhuoxing"));
+  host.innerHTML = `<h3>分班调整</h3>
+    <p class="notice">两次分班不得混为一谈。第一次在高一上期末后：文理分科，并在凌霄及以下做梯队晋级淘汰；云岫 0/1 班不按普通淘汰踢出实验班，2—4 班保持顶尖梯队。第二次在高一下期末后：不再分文理、不跨梯队，只在同科类同层次内部均衡重组，0/1 班保持稳定。</p>
+    <div class="kpi">
+      <div><span>第一次分班（文理+梯队）</span><b>${p1done ? "已完成" : "未到或未做"}</b></div>
+      <div><span>第二次分班（同层均衡）</span><b>${p2done ? "已完成" : "未到或未做"}</b></div>
+      <div><span>任教班</span><b>${state.player.cohortYear}级卓行${state.player.classNo}班 · ${mine.length}人</b></div>
+    </div>
+    <div class="paper">
+      <h3>当前编制（${p1done ? "已分科" : "分科前"}）</h3>
+      <table><thead><tr><th>科类</th><th>层次</th><th>人数</th><th>班级</th></tr></thead>
+      <tbody>${Object.values(byTier).sort((a,b)=>String(a.tier).localeCompare(String(b.tier))).map((g)=>`<tr><td>${g.track==="wen"?"文科":g.track==="li"?"理科":"未分科"}</td><td>${tierLabel(g.tier)}</td><td>${g.n}</td><td>${Object.entries(g.classes).sort((a,b)=>a[0]-b[0]).map(([n,c])=>`${n}班${c}人`).join("、")}</td></tr>`).join("")}</tbody></table>
+    </div>
+    <h3>第一次分班去向</h3>
+    ${p1done ? `<p class="notice">全年级跨班调整 ${p1moves.length} 人。进入卓行${state.player.classNo}班 ${in16.length} 人，从本班调出 ${out16.length} 人。0/1 班只做文理互换，不按普通淘汰降到卓行或笃学。</p>
+      <div class="scroll-table paper"><table><thead><tr><th>姓名</th><th>原班</th><th>新班</th><th>科类</th></tr></thead>
+      <tbody>${[...in16, ...out16].slice(0, 80).map((s)=>`<tr class="${s.classNo===state.player.classNo?"me":""}"><td>${s.name}</td><td>${s.placement1.from}班</td><td>${s.placement1.to}班</td><td>${s.track==="wen"?"文":"理"}</td></tr>`).join("") || "<tr><td colspan='4'>本班名单未发生跨班调整。</td></tr>"}</tbody></table></div>` : `<p class="notice">还没做第一次分班。用「下一阶段」推到高一上期末后的分班事件即可自动结算。</p>`}
+    <h3>第二次分班（同层同科类均衡）</h3>
+    ${p2done ? `<p class="notice">只在同一层次、同一科类的原有班级之间蛇形重组，不重新分文理，也不跨到凌霄或笃学。全年级同层换班 ${p2moves.length} 人；进入本班 ${p2in.length} 人，调出 ${p2out.length} 人。0/1 班保持不动。</p>
+      ${sameTier.length ? `<div class="paper"><p class="muted">同层次班级对照（最近一场考试均分，由个人成绩加总）</p>
+        <table><thead><tr><th>班</th><th>人数</th><th>均分</th><th>最高</th></tr></thead>
+        <tbody>${sameTier.map((x)=>`<tr class="${x.classNo===state.player.classNo?"me":""}"><td>${x.name||x.classNo+"班"}</td><td>${x.count}</td><td>${x.avg}</td><td>${x.max}</td></tr>`).join("")}</tbody></table></div>` : ""}
+      <div class="scroll-table paper"><table><thead><tr><th>姓名</th><th>原班</th><th>新班</th><th>层次</th><th>科类</th></tr></thead>
+      <tbody>${[...p2in, ...p2out].map((s)=>`<tr class="${s.classNo===state.player.classNo?"me":""}"><td>${s.name}</td><td>${s.placement2.from}班</td><td>${s.placement2.to}班</td><td>${tierLabel(s.tier)}</td><td>${s.track==="wen"?"文":"理"}</td></tr>`).join("") || "<tr><td colspan='5'>本班在第二次分班中没有换到其他卓行班。</td></tr>"}</tbody></table></div>` : `<p class="notice">第二次分班要等第一次完成、并且高一下学期期末之后。推进校历时会按规则自动重组，可在本页查看换班名单和同层对照，不会与第一次的文理分科、跨梯队调整混在一起。</p>`}`;
 }
 
 function examOptions() {
