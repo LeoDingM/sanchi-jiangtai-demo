@@ -45,32 +45,38 @@ import {
   isGroupPrepOpen, isGroupPrepWindow, groupPrepUnavailableReason,
   ensureGroupPrepState, hasGroupPrepThisWeek, latestGroupPrepThisWeek,
   GROUP_PREP_ACTIONS, GROUP_PREP_SOURCE_NOTE, GROUP_PREP_WEEK_CAP, GROUP_PREP_TERM_CAP,
-} from "../domain/simulation.js?v=t63u1";
-import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t63u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t63u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t63u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t63u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t63u1";
-import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t63u1";
-import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t63u1";
-import { hydrateReport } from "../domain/simulation.js?v=t63u1";
-import { renderSeating } from "./classroom.js?v=t63u1";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t63u1";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t63u1";
-import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t63u1";
-import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t63u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t63u1";
-import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t63u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t63u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t63u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t63u1";
+  handleOpeningDay, composeOpeningDayBrief, openingDayOptionsFor,
+  isOpeningDayOpen, isOpeningDayWindow, openingDayUnavailableReason,
+  ensureOpeningDayState, hasOpeningDayRecord, latestOpeningDayMinutes,
+  isOpeningDayPlayDate, openingPlayDate, openingEventForPlayDate,
+  isFallOpeningEvent, openingEventKindName,
+  FALL_OPENING_ACTIONS, SPRING_OPENING_ACTIONS, OPENING_DAY_SOURCE_NOTE,
+} from "../domain/simulation.js?v=t64u1";
+import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t64u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t64u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t64u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t64u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t64u1";
+import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t64u1";
+import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t64u1";
+import { hydrateReport } from "../domain/simulation.js?v=t64u1";
+import { renderSeating } from "./classroom.js?v=t64u1";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t64u1";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t64u1";
+import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t64u1";
+import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t64u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t64u1";
+import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t64u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t64u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t64u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t64u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
   parseAiCommentary, emptyAiCommentary,
-} from "../domain/examAi.js?v=t63u1";
+} from "../domain/examAi.js?v=t64u1";
 
 let state = null;
 let view = "classroom";
@@ -987,6 +993,7 @@ function viewClassroom(host) {
   else if (isSchoolActivityOpen(state) || slot?.isActivityPeriod) slotLine += `（今日学校活动「${state.schoolActivity?.name || slot?.eventName || ""}」，可带队、看班或写记录；日期为校内安排）`;
   else if (isCalendarExamDay(state.date)) slotLine += `（今日${examEventOn(state.date)?.name || "考试"}，全日停课，按宁川中学校内考务安排监考）`;
   else if (slot?.isExamDay) slotLine += "（今日停课）";
+  else if (isOpeningDayPlayDate(state.date)) slotLine += `（今日是宁川中学校内${openingEventKindName(openingEventForPlayDate(state.date)) || "开学安排"}，可在办公室坐班或日常教学里参加；不是全日停课活动，数学正课仍可上）`;
   else if (slot && !slot.isMath && slot.kind !== "break" && slot.id !== "rest") slotLine += "。这节不是数学课，谈话请到走廊门口简短说";
   if (nxtT && !slot?.isTutoring) slotLine += `。下一节可答疑：${nxtT.sameDay ? "" : nxtT.date + " "}${formatSlotLabel(nxtT.slot)}`;
   const seatNote = placementSeatNotice(state);
@@ -1845,6 +1852,59 @@ function bindGroupPrepActions(host) {
   });
 }
 
+function openingDayPanelHtml() {
+  if (!state) return "";
+  if (!isOpeningDayPlayDate(state.date)) return "";
+  ensureOpeningDayState(state);
+  const ev = openingEventForPlayDate(state.date);
+  const rec = state.openingDay || {};
+  const kindName = openingEventKindName(ev) || (rec.kind === "report" ? "报到" : "开学典礼");
+  const play = ev ? openingPlayDate(ev) : rec.playDate;
+  const nominal = ev?.date;
+  const dateNote = play && nominal && play !== nominal
+    ? `校历上的日期仍是 ${nominal}，今年适逢周末，改在 ${play} 进行。`
+    : (nominal ? `校历上的日期是 ${nominal}，今年就在当天进行。` : "");
+  const done = ev && hasOpeningDayRecord(state, ev);
+  if (!isOpeningDayOpen(state) && !done) {
+    return `<div class="paper visit-panel opening-day-panel" data-opening-day-panel="1">
+      <h3>${kindName}</h3>
+      <p class="muted">${openingDayUnavailableReason(state)} ${OPENING_DAY_SOURCE_NOTE}</p>
+    </div>`;
+  }
+  if (done) {
+    const minutes = rec.lastMinutes?.minutes || latestOpeningDayMinutes(state, ev)?.minutes || (state.openingDays || [])[0]?.minutes || "";
+    return `<div class="paper visit-panel opening-day-panel" data-opening-day-panel="1">
+      <h3>${kindName}</h3>
+      <p class="muted">这次${kindName}已经参加过。下面是纪要，也可在学校日志里查阅。每个开学事件只能参加一次。${OPENING_DAY_SOURCE_NOTE}</p>
+      <p>${minutes}</p>
+    </div>`;
+  }
+  const brief = composeOpeningDayBrief(state, ev);
+  const options = openingDayOptionsFor(state);
+  const fallback = ev && !isFallOpeningEvent(ev) ? SPRING_OPENING_ACTIONS : FALL_OPENING_ACTIONS;
+  const btns = (options.length ? options : fallback).map((o) => `<button type="button" data-opening-day="${o.id}">${o.label}</button>`).join("");
+  const intro = kindName === "报到"
+    ? `办公室坐班可以参加本班报到：到教室看返校情况、协助清点人数，或记下本学期安排。这不是第二场全校典礼。班主任赵映秋在场，你不是班主任。`
+    : `办公室坐班可以随卓行16班参加开学典礼：随班站队听完、记下讲话里对本学年的要求，或协助赵映秋清点本班到校。典礼由校领导主持，你不是主持人，也不是班主任。`;
+  return `<div class="paper visit-panel opening-day-panel" data-opening-day-panel="1">
+      <h3>${kindName}</h3>
+      <p class="muted">${intro}${dateNote}当天数学正课仍可上，不是全日停课活动。${OPENING_DAY_SOURCE_NOTE}</p>
+      <p>${brief?.shortPoints || "按宁川中学校内安排参加。"}</p>
+      <div class="row-actions">${btns}</div>
+    </div>`;
+}
+
+function bindOpeningDayActions(host) {
+  host.querySelectorAll("[data-opening-day]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const r = handleOpeningDay(state, b.dataset.openingDay);
+      toast(r.ok ? r.text : r.reason);
+      persist(); render();
+    };
+  });
+}
+
 function officeCollabHtml() {
 
   const watch = homeworkWatchlist(state.homework, state);
@@ -1871,6 +1931,7 @@ function officeCollabHtml() {
     ${teachersDayPanelHtml({ place: "office" })}
     ${qualityMeetPanelHtml()}
     ${groupPrepPanelHtml()}
+    ${openingDayPanelHtml()}
     ${tiaokePanelHtml()}`;
 }
 
@@ -1888,6 +1949,7 @@ function bindOfficeActions(host) {
   bindTeachersDayActions(host);
   bindQualityMeetActions(host);
   bindGroupPrepActions(host);
+  bindOpeningDayActions(host);
   bindObserveActions(host);
   bindProctorActions(host);
   bindMarkingActions(host);
@@ -2054,7 +2116,7 @@ function viewTeach(host) {
   const nxt = upcomingMath(state, { skipTaught: true });
   const examBit = isCalendarExamDay(state.date)
     ? `，今日${examEventOn(state.date)?.name || "考试"}全日停课，按宁川中学校内考务安排监考，不能上课、不能调课`
-    : (isOpenClassPeriod(state) ? "，本节是校内公开课，备课组长等组内老师来听，按平时规则上课即可" : slot?.isTutoring ? "，可以做晚自习答疑" : slot?.isMath ? "，可以进教室上课" : "。等到数学课再进教室，或先在办公室处理作业、在座位上谈话");
+    : (isOpenClassPeriod(state) ? "，本节是校内公开课，备课组长等组内老师来听，按平时规则上课即可" : slot?.isTutoring ? "，可以做晚自习答疑" : slot?.isMath ? "，可以进教室上课" : isOpeningDayPlayDate(state.date) ? `。今日是宁川中学校内${openingEventKindName(openingEventForPlayDate(state.date)) || "开学安排"}，可在办公室坐班参加；不是全日停课活动，等到数学课再进教室，或先在办公室处理作业` : "。等到数学课再进教室，或先在办公室处理作业、在座位上谈话");
   host.innerHTML = `<h3>日常教学 · 数学课</h3>
     <p class="notice">现在是${slot ? formatSlotLabel(slot) : formatDateCn(state.date)}${examBit}。${!isCalendarExamDay(state.date) && nxt && !slot?.isMath && !slot?.isTutoring ? `下一节数学：${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}。` : ""}先写教案，再上课；晚自习另做答疑，不另开课题。课后从缺交、错题跟到订正和复查。</p>
     ${openClassPanelHtml()}
@@ -2964,9 +3026,12 @@ function viewLog(host) {
   }).join("");
   const qualityMinutes = (state.qualityMeetings || []).map((m) => `<div class="log-item"><b>${m.date}</b> ${m.examName || "质量分析会"}　${m.minutes}</div>`);
   const groupMinutes = (state.groupPreps || []).map((m) => `<div class="log-item"><b>${m.date}</b> 集体备课${m.topic ? "「" + m.topic + "」" : ""}　${m.minutes}</div>`);
+  const openingMinutes = (state.openingDays || []).map((m) => `<div class="log-item"><b>${m.date}</b> ${m.kindName || "开学安排"}　${m.minutes}</div>`);
   const minutes = qualityMinutes.concat(groupMinutes).join("");
+  const openingBlock = openingMinutes.join("");
   host.innerHTML = `<h3>近期校历</h3>${cal || "<p class=\"muted\">暂无后续安排</p>"}
     ${minutes ? `<h3>备课组会议纪要</h3>${minutes}` : ""}
+    ${openingBlock ? `<h3>开学纪要</h3>${openingBlock}` : ""}
     <h3>日志</h3>${(state.log||[]).slice(0,40).map((l)=>`<div class="log-item"><b>${l.date}</b> ${l.text}</div>`).join("")}`;
 }
 
@@ -3033,7 +3098,8 @@ function renderAgenda() {
     ${(() => { const req = pendingTimetableRequest(state); return req && req.status === "pending" ? `<p class="notice">有调课或借课请求：${req.peer}想${req.type === "borrow-out" ? "借走一节数学课" : "对调一节课"}。可在「日常教学」或「教务处」里处理。</p>` : ""; })()}
     <p class="notice">下一件大事：${next ? `${next.date} ${next.name}` : "（暂无）"}</p>
     <p class="notice">${openClassLine()}</p>
-    ${isCalendarExamDay(state.date) ? `<p class="notice">今日${examEventOn(state.date)?.name || "考试"}全日停课，按宁川中学校内考务安排监考。${PROCTOR_SOURCE_NOTE}</p>` : ""}`;
+    ${isCalendarExamDay(state.date) ? `<p class="notice">今日${examEventOn(state.date)?.name || "考试"}全日停课，按宁川中学校内考务安排监考。${PROCTOR_SOURCE_NOTE}</p>` : ""}
+    ${isOpeningDayPlayDate(state.date) ? `<p class="notice">今日是宁川中学校内${openingEventKindName(openingEventForPlayDate(state.date)) || "开学安排"}，可在办公室坐班或日常教学里参加。不是全日停课活动，数学正课仍可上。</p>` : ""}`;
   const narrow = window.matchMedia("(max-width: 600px)").matches;
   lastNarrowAgenda = narrow;
   const schedBlock = narrow
