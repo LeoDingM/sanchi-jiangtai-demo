@@ -2,10 +2,13 @@
 import {
   CLASS_BLUEPRINT, TIER, SUBJECT_IDS, PERSONALITIES, FAMILY_TYPES,
   PLAYER_CLASS_NO, GRADE_YEAR, LI_SUBJECTS, WEN_SUBJECTS,
-  REPEAT_CLASS_SIZE, REPEAT_WEN_NOS, REPEAT_LI_NOS,
+  REPEAT_CLASS_SIZE, REPEAT_WEN_NOS, REPEAT_LI_NOS, INSERT_REPEAT_CLASS_NOS,
 } from "./config.js";
 import { clamp, gauss, hash01, pick, rngFrom, shuffle } from "./prng.js";
 import { generateName } from "./names.js";
+import { gradeStudent, scaleOf } from "./scores.js";
+import { provincialLines } from "./jiangxi.js";
+import { canInsertRepeat } from "./admission.js";
 
 export const ALL_SUBJECTS = [...SUBJECT_IDS, "biology"];
 
@@ -161,7 +164,7 @@ export function generateCohort(entryYear, seed, { quality = 0, alreadySplit = fa
     classes.push({ no: bp.no, name: bp.name, short: bp.short, tier: bp.tier, size: list.length, studentIds: list.map((s) => s.id) });
   }
   if (withRepeat) {
-    const repeatStudents = generateRepeaters(entryYear, seed, usedNames, quality);
+    const repeatStudents = generateRepeaters(entryYear, seed, usedNames, quality, { regulars: students });
     students.push(...repeatStudents);
     for (const st of repeatStudents) {
       let cls = classes.find((c) => c.no === st.classNo);
@@ -173,15 +176,158 @@ export function generateCohort(entryYear, seed, { quality = 0, alreadySplit = fa
       cls.studentIds.push(st.id);
       cls.size = cls.studentIds.length;
     }
+    return { entryYear, students: applyRepeaterSeating(students), classes };
   }
   return { entryYear, students, classes };
 }
 
+export function isTutoringClass(no) {
+  return REPEAT_WEN_NOS.includes(Number(no)) || REPEAT_LI_NOS.includes(Number(no));
+}
+
+export function compareLastGaokao(a, b) {
+  const ta = a?.lastGaokao?.total ?? -Infinity;
+  const tb = b?.lastGaokao?.total ?? -Infinity;
+  if (tb !== ta) return tb - ta;
+  const ma = a?.lastGaokao?.math ?? 0;
+  const mb = b?.lastGaokao?.math ?? 0;
+  if (mb !== ma) return mb - ma;
+  const ca = a?.lastGaokao?.chinese ?? 0;
+  const cb = b?.lastGaokao?.chinese ?? 0;
+  if (cb !== ca) return cb - ca;
+  return String(a?.id || "").localeCompare(String(b?.id || ""));
+}
+
+function priorGaokaoYear(forSeniorEntryYear) {
+  // 插班/补习生来自上一届：入学年 forSeniorEntryYear-1，高考在入学后第三年。
+  return Number(forSeniorEntryYear) + 2;
+}
+
+function lastGaokaoExam(year) {
+  return {
+    id: `prior-gaokao-${year}`,
+    name: "上次高考",
+    examKind: "gaokao",
+    difficulty: 1.003,
+    dispersion: 1,
+    date: `${year}-06-07`,
+    grade: 3,
+    year,
+  };
+}
+
+/** 为开局合成的复读生补上上次高考总分；必要时压到省控一本以下，表示发挥失常。 */
+export function synthesizeLastGaokao(student, gaokaoYear, { forceMissFirst = false, rng = null } = {}) {
+  const track = student.track === "wen" ? "wen" : "li";
+  const lines = provincialLines(gaokaoYear, track) || provincialLines(2020, track);
+  const sc = gradeStudent(student, lastGaokaoExam(gaokaoYear), scaleOf(3, "gaokao"), 0);
+  let total = sc.total;
+  if (forceMissFirst && lines && total >= lines.first) {
+    const gap = rng ? 1 + Math.floor(rng() * 22) : 8;
+    total = lines.first - gap;
+  }
+  return {
+    total,
+    year: gaokaoYear,
+    track,
+    math: sc.math ?? 0,
+    chinese: sc.chinese ?? 0,
+    firstLine: lines?.first ?? null,
+  };
+}
+
+function rollInsertCount(rng, n, rate, cap) {
+  let k = 0;
+  for (let i = 0; i < n; i++) if (rng() < rate) k += 1;
+  return Math.min(k, cap);
+}
+
+const INSERT_PLAN = [
+  { no: 0, tier: "yunxiu_exp", hint: "li", track: "li", sizeHint: 36, rate: 0.04, cap: 3 },
+  { no: 2, tier: "yunxiu_key", hint: "li", track: "li", sizeHint: 54, rate: 0.035, cap: 5 },
+  { no: 3, tier: "yunxiu_key", hint: "li", track: "li", sizeHint: 51, rate: 0.035, cap: 5 },
+  { no: 4, tier: "yunxiu_key", hint: "li", track: "li", sizeHint: 50, rate: 0.035, cap: 5 },
+];
+
+/** 补习班按上次高考总分从高到低排座，1 号最高。0/2/3/4 的插班生座号接在应届后面。 */
+export function applyRepeaterSeating(students) {
+  const groups = new Map();
+  for (const s of students) {
+    if (!groups.has(s.classNo)) groups.set(s.classNo, []);
+    groups.get(s.classNo).push(s);
+  }
+  const byId = new Map();
+  for (const [no, list] of groups) {
+    const tutoring = isTutoringClass(no) || (list.length > 0 && list.every((s) => s.repeat));
+    if (tutoring) {
+      numberClassSeats(list.slice().sort(compareLastGaokao)).forEach((s) => byId.set(s.id, s));
+      continue;
+    }
+    if (!list.some((s) => s.repeat)) continue;
+    const regulars = list.filter((s) => !s.repeat);
+    const inserts = list.filter((s) => s.repeat).slice().sort(compareLastGaokao);
+    const size = list.length;
+    const seqs = regulars.map((s) => s.seq);
+    const regOk = regulars.length > 0
+      && new Set(seqs).size === regulars.length
+      && seqs.every((n) => n >= 1 && n <= regulars.length);
+    const seatedReg = regOk
+      ? regulars.map((s) => ({ ...s, seat: seatFromSeq(no, s.seq, size) }))
+      : regulars.slice().sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0) || String(a.id).localeCompare(String(b.id)))
+        .map((s, i) => {
+          const seq = i + 1;
+          return { ...s, seq, seat: seatFromSeq(no, seq, size) };
+        });
+    seatedReg.forEach((s) => byId.set(s.id, s));
+    const start = seatedReg.length;
+    inserts.forEach((s, i) => {
+      const seq = start + i + 1;
+      byId.set(s.id, { ...s, seq, seat: seatFromSeq(no, seq, size) });
+    });
+  }
+  return students.map((s) => byId.get(s.id) || s);
+}
+
+function assignTutoringClasses(students) {
+  const out = [];
+  const plans = [
+    { track: "wen", nos: REPEAT_WEN_NOS },
+    { track: "li", nos: REPEAT_LI_NOS },
+  ];
+  for (const p of plans) {
+    const arr = students.filter((s) => p.track === "wen" ? s.track === "wen" : s.track !== "wen")
+      .slice()
+      .sort(compareLastGaokao);
+    arr.forEach((s, i) => {
+      const idx = Math.min(p.nos.length - 1, Math.floor(i / REPEAT_CLASS_SIZE));
+      out.push({ ...s, classNo: p.nos[idx], tier: "fuzhuo" });
+    });
+  }
+  return applyRepeaterSeating(out);
+}
+
+/** 毕业留下的复读生：失常的原 0/翠微插回对应班，其余编入补习班并按上次高考分排座。 */
+export function placeGraduatingRepeaters(staying, admissionById = {}) {
+  const inserts = [];
+  const tutoring = [];
+  for (const s of staying) {
+    const a = admissionById[s.id];
+    if (canInsertRepeat(s, a)) {
+      const destTier = Number(s.classNo) === 0 ? "yunxiu_exp" : "yunxiu_key";
+      inserts.push({ ...s, classNo: s.classNo, tier: destTier, insertedRepeat: true });
+    } else {
+      tutoring.push({ ...s, tier: "fuzhuo", insertedRepeat: false });
+    }
+  }
+  return [...assignTutoringClasses(tutoring), ...inserts];
+}
+
 /** 高三复读生：能力略高于原梯队均值，但仍是重点中学复读画像，不是人人清北。 */
-export function generateRepeaters(forSeniorEntryYear, seed, usedNames, quality = 0) {
-  // 高三补习班：文科 31–36、理科 37–42，每班 70 人。序号按班从 1 计。
+export function generateRepeaters(forSeniorEntryYear, seed, usedNames, quality = 0, { regulars = [] } = {}) {
+  // 高三补习班：文科 31–36、理科 37–42，每班 70 人。班内序号按上次高考总分降序，最高为 1 号。
   const rng = rngFrom(seed, "repeaters", forSeniorEntryYear);
   const students = [];
+  const gaokaoYear = priorGaokaoYear(forSeniorEntryYear);
   const plan = [
     ...REPEAT_WEN_NOS.map((no) => ({ no, track: "wen", size: REPEAT_CLASS_SIZE, hint: "wen" })),
     ...REPEAT_LI_NOS.map((no) => ({ no, track: "li", size: REPEAT_CLASS_SIZE, hint: "li" })),
@@ -199,10 +345,31 @@ export function generateRepeaters(forSeniorEntryYear, seed, usedNames, quality =
       st.track = p.track;
       st.tier = "fuzhuo";
       st.originTier = tierSrc;
+      st.insertedRepeat = false;
+      st.lastGaokao = synthesizeLastGaokao(st, gaokaoYear);
       students.push(st);
     }
   }
-  return students;
+  const insertRng = rngFrom(seed, "repeat-inserts", forSeniorEntryYear);
+  for (const p of INSERT_PLAN) {
+    const regularCount = regulars.filter((s) => s.classNo === p.no).length || p.sizeHint;
+    const n = rollInsertCount(insertRng, regularCount, p.rate, p.cap);
+    for (let i = 0; i < n; i++) {
+      const st = makeStudent({
+        rng: insertRng, usedNames, entryYear: forSeniorEntryYear - 1,
+        classNo: p.no, seq: regularCount + i + 1, tier: p.tier, hint: p.hint, repeat: true,
+        quality,
+      });
+      st.track = p.track;
+      st.tier = p.tier;
+      st.originClassNo = p.no;
+      st.originTier = p.tier;
+      st.insertedRepeat = true;
+      st.lastGaokao = synthesizeLastGaokao(st, gaokaoYear, { forceMissFirst: true, rng: insertRng });
+      students.push(st);
+    }
+  }
+  return applyRepeaterSeating(students.concat(regulars)).filter((s) => s.repeat);
 }
 
 export function generateOpeningSchool(seed, playerEntryYear = GRADE_YEAR) {

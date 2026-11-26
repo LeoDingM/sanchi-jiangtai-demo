@@ -156,7 +156,7 @@ export function summarizeAllClasses(cohort, scoreMap, cut, split) {
       name: cls.name,
       tier: cls.tier || sts[0].tier,
       track: split ? track : "mixed",
-      repeat: !!cls.repeat || sts.some((s) => s.repeat),
+      repeat: !!cls.repeat || (sts.length > 0 && sts.every((s) => s.repeat)),
       ...sum,
     });
   }

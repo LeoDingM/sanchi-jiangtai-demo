@@ -6,7 +6,7 @@
 import { FIRST_PLACEMENT_TARGETS, CLASS_BLUEPRINT } from "./config.js";
 import { compareScoreRows } from "./scores.js";
 import { rngFrom, shuffle } from "./prng.js";
-import { reseatClasses, syncSeatsToSeq, seatFromSeq } from "./school.js";
+import { reseatClasses, syncSeatsToSeq, seatFromSeq, applyRepeaterSeating } from "./school.js";
 
 export function firstPlacement(students, scoreMap, { overrides = {}, seed = 1 } = {}) {
   const movable = [];
@@ -89,7 +89,10 @@ export function firstPlacement(students, scoreMap, { overrides = {}, seed = 1 } 
       placement1: { from: s.classNo, to: a.classNo, track: a.track },
     };
   });
-  return { students: reseatClasses(next, { seed, tag: "place1-seats" }), assignments: assign, type: "first" };
+  // 只重排应届座号，避免把补习班按分排好的座次、以及 0/2/3/4 插班生冲掉。
+  const regulars = next.filter((s) => !s.repeat);
+  const repeaters = next.filter((s) => s.repeat);
+  return { students: [...reseatClasses(regulars, { seed, tag: "place1-seats" }), ...repeaters], assignments: assign, type: "first" };
 }
 
 
@@ -232,7 +235,8 @@ export function secondPlacement(students, scoreMap, { seed = 1 } = {}) {
   const keptNos = [...new Set(kept.map((s) => s.classNo))];
   const reshuffled = next.filter((s) => !keptIds.has(s.id));
   const syncedKept = syncSeatsToSeq(next.filter((s) => keptIds.has(s.id)), { classNos: keptNos });
-  return { students: [...syncedKept, ...reshuffled], type: "second" };
+  const merged = [...syncedKept, ...reshuffled];
+  return { students: merged.some((s) => s.repeat) ? applyRepeaterSeating(merged) : merged, type: "second" };
 }
 
 export function rebuildClasses(students) {
@@ -247,7 +251,8 @@ export function rebuildClasses(students) {
         tier: s.tier,
         studentIds: [],
         size: 0,
-        repeat: !!s.repeat,
+        // 只把整班补习班标成复读班；0/2/3/4 有插班生时仍是原层次班。
+        repeat: !!(bp?.repeat || s.classNo >= 31),
       });
     }
     const c = map.get(s.classNo);

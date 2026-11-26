@@ -1,10 +1,9 @@
 /** 游戏状态机：上课/考试/分班/高考录取/毕业升学与自动跳阶段。 */
 import {
   PLAYER_CLASS_NO, PLAYER_DEFAULT_NAME, PLAYER_ROLE, START_DATE, GRADE_YEAR, HOMEROOM_NAME, MENTOR_NAME,
-  REPEAT_CLASS_SIZE, REPEAT_WEN_NOS, REPEAT_LI_NOS,
 } from "./config.js";
 import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById, examParams, formatGradeTerm, formatCohortGrade, termOf } from "./calendar.js";
-import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf, reseatClasses, eraQuality } from "./school.js";
+import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf, eraQuality, placeGraduatingRepeaters, applyRepeaterSeating } from "./school.js";
 import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js";
 import { runExam } from "./examService.js";
 import { provincialPassCounts, schoolQuotaFromPrior, fallbackSchoolQuota, examResultLogText } from "./schoolLines.js";
@@ -335,8 +334,15 @@ export function doPromote(state, ev) {
         staying.push({
           ...s,
           repeat: true,
-          tier: "fuzhuo",
           originClassNo: s.classNo,
+          lastGaokao: {
+            total: a.total,
+            year: a.year,
+            track: a.track,
+            math: a.math ?? 0,
+            chinese: a.chinese ?? 0,
+            firstLine: a.firstLine ?? null,
+          },
           // 复读一年能力微增，但压力上升
           ability: Object.fromEntries(Object.entries(s.ability).map(([k, v]) => [k, clamp(v + 1.6, 0, 99)])),
           stress: clamp((s.stress || 40) + 8, 0, 95),
@@ -349,18 +355,11 @@ export function doPromote(state, ev) {
         });
       }
     }
-    // 把复读生编入补习班：文科 31–36、理科 37–42，每班按 70 人编制
-    const wen = staying.filter((s) => s.track === "wen");
-    const liS = staying.filter((s) => s.track !== "wen");
-    const assignNos = (arr, nos, cap = REPEAT_CLASS_SIZE) => {
-      arr.forEach((s, i) => { s.classNo = nos[Math.min(nos.length - 1, Math.floor(i / cap))]; });
-    };
-    assignNos(wen, REPEAT_WEN_NOS);
-    assignNos(liS, REPEAT_LI_NOS);
-    staying.splice(0, staying.length, ...reseatClasses(staying, { seed: state.seed + newEntry, tag: "repeat-seats" }));
+    // 失常的原 0/翠微插回对应班；其余进补习班，按上次高考总分排座，不再洗牌。
+    const placed = placeGraduatingRepeaters(staying, byId);
     delete state.cohorts[graduatedCohort];
     // 复读生挂到“下一届高三”所属：他们与新高三同一学年上课，单独保留在 repeatPool 直到合并
-    state.pendingRepeat = staying;
+    state.pendingRepeat = placed;
   } else if (c) {
     delete state.cohorts[graduatedCohort];
   }
@@ -374,9 +373,7 @@ export function doPromote(state, ev) {
   const seniorYear = newEntry - 2;
   if (state.pendingRepeat?.length && state.cohorts[seniorYear]) {
     const sen = state.cohorts[seniorYear];
-    const repeatNos = [...new Set(state.pendingRepeat.map((x) => x.classNo))];
-    sen.students = sen.students.concat(state.pendingRepeat);
-    sen.students = reseatClasses(sen.students, { seed: state.seed + newEntry, tag: "repeat-merge-seats", classNos: repeatNos });
+    sen.students = applyRepeaterSeating(sen.students.concat(state.pendingRepeat));
     sen.classes = rebuildClasses(sen.students);
     state.pendingRepeat = [];
   }

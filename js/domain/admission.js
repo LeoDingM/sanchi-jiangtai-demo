@@ -1,5 +1,6 @@
 /** 按江西公开投档线/位次将高考分数对应到真实大学，文理、年份、批次分开。 */
 import { provincialLines, provincialRank, universities, uniTier, QINGBEI } from "./jiangxi.js";
+import { INSERT_REPEAT_CLASS_NOS } from "./config.js";
 import { hash01 } from "./prng.js";
 
 export function lineShift(year, track, batch) {
@@ -89,6 +90,20 @@ export function admitStudent(student, total, year) {
       ? "2020年江西公开投档或录取最低分整理"
       : "院校线按当年省控相对2020年的分差平移2020投档结构，不是当年完整投档表",
   };
+}
+
+export function missedProvincialFirst(admission) {
+  if (admission == null || admission.total == null || admission.firstLine == null) return false;
+  return Number(admission.total) < Number(admission.firstLine);
+}
+
+/** 原 0 班或翠微（2/3/4）应届，高考未达官方省控一本且选择复读，可插回本届对应班级。已达一本仍复读的人进补习班。不做 1 班插班。 */
+export function canInsertRepeat(student, admission) {
+  if (!student) return false;
+  if (!admission?.repeatIntent) return false;
+  // 按毕业时班级判断（晋升流程里会先把 repeat 标上，再分到插班或补习班）。
+  if (!INSERT_REPEAT_CLASS_NOS.includes(Number(student.classNo))) return false;
+  return missedProvincialFirst(admission);
 }
 
 export function willRepeat(student, admission, year) {

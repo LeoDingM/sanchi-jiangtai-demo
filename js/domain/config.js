@@ -50,6 +50,9 @@ export const REPEAT_CLASS_SIZE = 70;
 export const REPEAT_WEN_NOS = [31, 32, 33, 34, 35, 36];
 export const REPEAT_LI_NOS = [37, 38, 39, 40, 41, 42];
 
+/** 发挥失常且选择复读时，可插回本届对应班级：0 班与云岫重点（翠微）2–4 班。文科 1 班不做插班。 */
+export const INSERT_REPEAT_CLASS_NOS = [0, 2, 3, 4];
+
 
 export const LI_SUBJECTS = ["physics", "chemistry", "math"];
 export const WEN_SUBJECTS = ["politics", "history", "geography"];
