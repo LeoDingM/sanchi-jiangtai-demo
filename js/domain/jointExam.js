@@ -261,7 +261,7 @@ function buildLayer(track, difficulty, dispersion, schoolScores, meta, { shift =
 
 /**
  * 为市联考/省联考的本校考生写入市/县（及省）位次，并返回各层划线。
- * 校内第 400/1000 名模拟线仍由 examService 单独计算，不用来冒充市线或省线。
+ * 校内线仍由 examService 按上一届高考省控实际人数单独计算，不用来冒充市线或省线。
  */
 export function attachJointExam(rows, exam) {
   const kind = exam.examKind;

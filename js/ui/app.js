@@ -14,6 +14,7 @@ import { filterRows, sameTierCompare } from "../domain/examService.js";
 import { hydrateReport } from "../domain/simulation.js";
 import { renderSeating } from "./classroom.js";
 import { provincialLines } from "../domain/jiangxi.js";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial } from "../domain/schoolLines.js";
 import { studentExamHistory, tierName, findStudentInState } from "../domain/studentHistory.js";
 import { drawScoreChart, drawRankChart } from "./charts.js";
 
@@ -201,7 +202,7 @@ function examSourceNotice(report) {
     return report.sourceNote || "此为高二学业水平考试的校内合格记载：单科达到卷面满分 60% 记为合格。日期为校历示意，未按某年省教育考试院公告逐条核对；未收录公开会考合格线，不以校内一本/二本线作为本场主要结果。文理交叉科目尚未单独建模。";
   }
   if (report.examKind === "city" || report.examKind === "province") {
-    return report.sourceNote || "按公开高考规模模拟的联考位次/划线，不是当年官方联考一分一段。校内第 400/1000 名仍是校内模拟线，不冒充市线或省线。";
+    return report.sourceNote || "按公开高考规模模拟的联考位次/划线，不是当年官方联考一分一段。校内线按上一届高考本校省控实际人数划线，只作校内对照，不冒充市线或省线。";
   }
   return report.sourceNote || "";
 }
@@ -851,6 +852,20 @@ function currentReport() {
   return list.find((e) => `${e.date}|${e.examId}` === examPick) || list[0] || null;
 }
 
+function lineCompareNotice(report, classNo = state.player.classNo) {
+  if (!report || report.examKind === "huikao") return "";
+  const parts = [
+    describeSchoolCutoff(report.quota, report.split) + "。",
+    describeSchoolProvincial(report) + "。",
+  ];
+  if (classNo != null) {
+    parts.push(`任教班${describeClassProvincial(report, classNo)}。`);
+    const peers = describeZhuoxingPeers(report, classNo);
+    if (peers) parts.push(`同层次平行班对比：${peers}`);
+  }
+  return parts.join("");
+}
+
 function viewGrades(host) {
   const report = currentReport();
   if (!report) {
@@ -886,7 +901,8 @@ function viewGrades(host) {
       <div><span>线差分</span><b>${cut && cut.firstLine-cut.secondLine}</b></div>
       <div><span>年级第一/第二差</span><b>${cut?.topGap ?? "—"}</b></div>`}
     </div>
-    ${!isHk && cutW?`<p class="notice">文科一本线 ${cutW.firstLine}（第${cutW.firstN}名），二本线 ${cutW.secondLine}，分差 ${cutW.firstLine-cutW.secondLine}。分数线由当次个人成绩排序得出，难度变化时会明显波动。</p>`:""}`}
+    ${!isHk && cutW?`<p class="notice">文科校内一本线 ${cutW.firstLine}（第${cutW.firstN}名），二本线 ${cutW.secondLine}，分差 ${cutW.firstLine-cutW.secondLine}。分数线由当次个人成绩排序得出，难度变化时会明显波动。</p>`:""}
+    ${!isHk?`<p class="notice">${lineCompareNotice(report)}</p>`:""}`}
     ${isJoint?`<p class="muted">校内模拟线（第 ${cut?.firstN} / ${cut?.secondN} 名）理科 ${cut?.firstLine??"—"} / ${cut?.secondLine??"—"}，只作校内对照，不是市线或省线。${cutW?`文科校内 ${cutW.firstLine} / ${cutW.secondLine}。`:""}</p>`:""}
     <div class="paper"><table><thead><tr>${head.map((h)=>`<th>${h}</th>`).join("")}</tr></thead>
     <tbody>${mine.map((r,i)=>`<tr data-id="${r.studentId}">${rowCells(r,i)}</tr>`).join("")}</tbody></table></div>`;
@@ -947,7 +963,8 @@ function viewOffice(host) {
     }).filter(Boolean).join("　");
     const classTable = (live.classes||[]).filter((c)=> (tier==="all"||c.tier===tier) && !c.repeat);
     body.innerHTML = `
-      <p class="notice">难度 ${(live.difficulty||1).toFixed(3)}　离散 ${(live.dispersion||1).toFixed(3)}。${live.examKind==="city"||live.examKind==="province"?"市/省/县线由模拟考生池位次算出，校内第400/1000名只作校内对照。":(live.split?"文理分列划线。":"分科前按全年级第400/1000名划线。")}班级汇总全部由个人成绩加总，不另造统计。${examSourceNotice(live)?" "+examSourceNotice(live):""}</p>
+      <p class="notice">难度 ${(live.difficulty||1).toFixed(3)}　离散 ${(live.dispersion||1).toFixed(3)}。${live.examKind==="city"||live.examKind==="province"?"市/省/县线由模拟考生池位次算出，校内线只作校内对照。":"校内线按上一届高考本校省控实际人数划线，分数由当次排序得出。"}班级汇总全部由个人成绩加总，不另造统计。${examSourceNotice(live)?" "+examSourceNotice(live):""}</p>
+      ${live.examKind==="huikao"?"":`<p class="notice">${lineCompareNotice(live, state.player.classNo)}</p>`}
       ${live.examKind==="huikao"?`<div class="kpi"><div><span>校内合格标准</span><b>卷面 60%</b></div><div><span>合格人数</span><b>${(live.rows||[]).filter((r)=>!r.repeat && r.huikaoPass).length}</b></div><div><span>第一名</span><b>${cut?.top??"—"}</b></div></div>`:(live.examKind==="city"||live.examKind==="province"?jointLinesBlock(live)+`<p class="muted">校内模拟线（第 ${cut?.firstN} / ${cut?.secondN} 名）${cut?.firstLine??"—"} / ${cut?.secondLine??"—"}，不是市线或省线。</p>`:`<div class="kpi"><div><span>一本线</span><b>${cut?.firstLine??"—"}</b></div><div><span>二本线</span><b>${cut?.secondLine??"—"}</b></div><div><span>分差</span><b>${cut?cut.firstLine-cut.secondLine:"—"}</b></div><div><span>第一名</span><b>${cut?.top??"—"}</b></div></div>`)}
       <p class="notice">${topLine}</p>
       <h3>各班对照</h3>

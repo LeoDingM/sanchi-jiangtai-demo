@@ -7,6 +7,7 @@ import {
   LI_SUBJECTS, WEN_SUBJECTS, TIER, examById,
 } from "./config.js";
 import { clamp, gauss, hash01, rngFrom, round1, round2 } from "./prng.js";
+import { resolveSchoolQuota } from "./schoolLines.js";
 
 export const SCALE_G1 = "g1-950";
 export const SCALE_G2 = "g2-750";
@@ -193,24 +194,22 @@ export function subjectRanks(rows, subjectId) {
 }
 
 /**
- * 校内一本/二本模拟线。
- * 文理分科后按科类分别排名，名额按应届人数比例分摊，使全校合计约 400 / 1000。
- * 分科前（高一上）按全年级第 400、第 1000 名。
- * 复读单独统计，不占应届 400/1000 名额，以免破坏学校画像。
+ * 校内一本/二本名额。不再按全校 400/1000 分摊。
+ * 分科前：一本取上一届文理合计省控一本人数，二本取全年级前 1000 名。
+ * 分科后：理科一本取上一届理科省控一本实际人数（无数据时约 450），二本取前 1000 名（不超过理科应届人数）；
+ * 文科取上一届该科类省控实际一本/二本人数，绝不用 1000。
+ * 复读不占应届名额（调用方只传入应届人数）。
+ * 第四个参数可以是 { track, quotas }；仍接受旧的 (n, split, trackSize) 调用，此时用兜底名额。
  */
-export function cutoffRanks(n, split, trackSize, firstTarget = CUTOFF_FIRST_RANK, secondTarget = CUTOFF_SECOND_RANK) {
-  if (!split) {
-    return {
-      firstN: Math.min(firstTarget, Math.max(1, n)),
-      secondN: Math.min(secondTarget, Math.max(1, n)),
-    };
-  }
-  const share = trackSize / Math.max(1, n);
-  // n here is 应届全年级人数，trackSize 是该科类应届人数
-  return {
-    firstN: Math.max(1, Math.round(firstTarget * share)),
-    secondN: Math.max(2, Math.round(secondTarget * share)),
-  };
+export function cutoffRanks(n, split, trackSize, firstOrOpts, secondTarget) {
+  const opts = firstOrOpts && typeof firstOrOpts === "object" ? firstOrOpts : {};
+  return resolveSchoolQuota({
+    split: !!split,
+    track: opts.track || (split ? "li" : "mixed"),
+    regularN: n,
+    trackN: trackSize ?? n,
+    quotas: opts.quotas,
+  });
 }
 
 export function cutoffsFromRanked(ranked, firstN, secondN) {
@@ -272,6 +271,7 @@ export function attachStudentMeta(row, student) {
     classNo: student.classNo,
     tier: student.tier,
     track: student.track,
+    trackPref: student.trackPref || student.track,
     repeat: !!student.repeat,
     entryYear: student.entryYear,
     gender: student.gender,

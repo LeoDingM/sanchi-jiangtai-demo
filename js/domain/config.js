@@ -31,8 +31,19 @@ export const BIOLOGY_STARTS = "高二";
 export const GAOKAO_LI = { chinese: 150, math: 150, english: 150, physics: 110, chemistry: 100, biology: 90, total: 750 };
 export const GAOKAO_WEN = { chinese: 150, math: 150, english: 150, politics: 100, history: 100, geography: 100, total: 750 };
 
+/** 旧校内名额常量，仅作文档对照。现行校内一本按上一届高考省控实际人数，不再用 400 分摊。 */
 export const CUTOFF_FIRST_RANK = 400;
 export const CUTOFF_SECOND_RANK = 1000;
+
+/**
+ * 无上一届高考数据时的校内名额近似兜底，不是官方精确名额。
+ * 理科一本约 450、二本取前 1000；文科一本约 40–90 取 60，二本累计约 200–300 取 250。
+ */
+export const FALLBACK_SCHOOL_QUOTA = {
+  li: { firstN: 450, secondN: 1000 },
+  wen: { firstN: 60, secondN: 250 },
+  mixed: { firstN: 510, secondN: 1000 },
+};
 
 export const LI_SUBJECTS = ["physics", "chemistry", "math"];
 export const WEN_SUBJECTS = ["politics", "history", "geography"];

@@ -6,13 +6,14 @@ import {
 } from "./scores.js";
 import { provincialLines } from "./jiangxi.js";
 import { attachJointExam, JOINT_SOURCE_NOTE } from "./jointExam.js";
+import { fallbackSchoolQuota } from "./schoolLines.js";
 
 export function studentTrackForExam(student, split) {
   if (!split || student.track === "mixed" || !student.track) return "mixed";
   return student.track === "wen" ? "wen" : "li";
 }
 
-export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0 }) {
+export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0, schoolQuota = null } = {}) {
   const scale = scaleOf(grade, exam.examKind);
   const rows = [];
   for (const s of cohort.students) {
@@ -22,15 +23,16 @@ export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0
   }
   const regular = rows.filter((r) => !r.repeat);
   const repeaters = rows.filter((r) => r.repeat);
-  // 分科前按全年级第400/1000名划线；分科后文理分列，名额按人数比例分摊。
+  // 校内线按上一届高考本校省控实际人数（或兜底名额）划线，不再按 400/1000 分摊。
   const reallySplit = !!split;
+  const quota = schoolQuota?.li ? schoolQuota : fallbackSchoolQuota();
 
   const byTrack = { mixed: regular, li: regular.filter((r) => r.track === "li"), wen: regular.filter((r) => r.track === "wen") };
-  const cut = { split: reallySplit };
+  const cut = { split: reallySplit, quota };
   if (!reallySplit) {
     const ranked = rankRows(regular);
     const n = regular.length;
-    const { firstN, secondN } = cutoffRanks(n, false, n);
+    const { firstN, secondN } = cutoffRanks(n, false, n, { track: "mixed", quotas: quota });
     cut.mixed = { ...cutoffsFromRanked(ranked, firstN, secondN), track: "mixed", firstN, secondN, count: n };
     applyLineFlags(ranked, cut.mixed);
     cut.ranked = { mixed: ranked };
@@ -40,7 +42,7 @@ export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0
     for (const track of ["li", "wen"]) {
       const list = byTrack[track];
       const ranked = rankRows(list);
-      const { firstN, secondN } = cutoffRanks(totalN, true, list.length);
+      const { firstN, secondN } = cutoffRanks(totalN, true, list.length, { track, quotas: quota });
       const c = { ...cutoffsFromRanked(ranked, firstN, secondN), track, firstN, secondN, count: list.length };
       applyLineFlags(ranked, c);
       cut[track] = c;
@@ -114,6 +116,7 @@ export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0
     scoreMap,
     rows,
     cutoffs: cut,
+    quota,
     huikao,
     sourceNote,
     joint,

@@ -2,10 +2,11 @@
 import {
   PLAYER_CLASS_NO, PLAYER_DEFAULT_NAME, PLAYER_ROLE, START_DATE, GRADE_YEAR, HOMEROOM_NAME, MENTOR_NAME,
 } from "./config.js";
-import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById } from "./calendar.js";
+import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById, examParams } from "./calendar.js";
 import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf, reseatClasses } from "./school.js";
 import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js";
 import { runExam } from "./examService.js";
+import { provincialPassCounts, schoolQuotaFromPrior, fallbackSchoolQuota, examResultLogText } from "./schoolLines.js";
 import { admitCohort } from "./admission.js";
 import { rngFrom, clamp } from "./prng.js";
 import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands, homeroomEveningRoll as homeroomEveningRollCore, compileEveningRoll, studentRecentStatus, rollCallStatusLine } from "./teaching.js";
@@ -33,6 +34,39 @@ function snapshotPlayerClass(state) {
 function bonusFor(state, student) {
   if (student.entryYear !== state.player.cohortYear || student.classNo !== state.player.classNo) return 0;
   return (state.player.mathTeaching || 0) * 0.35;
+}
+
+/** 按同一套确定性规则结算某届高考应届省控上线人数，只保留统计，不把该届放入可玩年级。 */
+export function simulatePriorGaokaoStats(seed, entryYear, gaokaoYear) {
+  const c = generateCohort(entryYear, seed, { alreadySplit: false, quality: 0 });
+  const pre = runExam(c, { id: `prior-final-${entryYear}`, name: "历史期末", examKind: "final", difficulty: 0.99, dispersion: 1.02, date: `${entryYear + 1}-01-16` }, { grade: 1, split: false });
+  const p1 = firstPlacement(c.students, pre.scoreMap, { seed: seed + entryYear });
+  c.students = p1.students;
+  c.classes = rebuildClasses(c.students);
+  c.trackSplit = true;
+  const pre2 = runExam(c, { id: `prior-final2-${entryYear}`, name: "历史下学期期末", examKind: "final", difficulty: 1.0, dispersion: 1.0, date: `${entryYear + 1}-06-25` }, { grade: 1, split: true });
+  const p2 = secondPlacement(c.students, pre2.scoreMap, { seed: seed + entryYear + 1 });
+  c.students = p2.students;
+  c.classes = rebuildClasses(c.students);
+  const gkEv = { id: `gaokao-${gaokaoYear}`, name: `${gaokaoYear}年普通高考`, examKind: "gaokao", date: `${gaokaoYear}-06-07`, year: gaokaoYear };
+  const params = examParams(gkEv);
+  const gk = runExam(c, { ...gkEv, difficulty: params.difficulty, dispersion: params.dispersion }, { grade: 3, split: true });
+  const counts = provincialPassCounts(c.students, gk.scoreMap, gaokaoYear);
+  counts.entryYear = entryYear;
+  counts.source = `${entryYear}级${gaokaoYear}年高考本校省控实际上线人数（应届，不含复读）。开局按同一套规则结算，只保留统计，该届不进入可玩年级。`;
+  return counts;
+}
+
+export function currentSchoolQuota(state) {
+  const hist = state?.schoolLineHistory;
+  if (hist?.length) return schoolQuotaFromPrior(hist[hist.length - 1]);
+  return fallbackSchoolQuota();
+}
+
+export function recordPriorGaokaoCounts(state, counts) {
+  if (!counts) return currentSchoolQuota(state);
+  state.schoolLineHistory = [...(state.schoolLineHistory || []), counts];
+  return schoolQuotaFromPrior(counts);
 }
 
 export function createGame(seed = 20170901, playerName = PLAYER_DEFAULT_NAME) {
@@ -81,7 +115,11 @@ export function createGame(seed = 20170901, playerName = PLAYER_DEFAULT_NAME) {
     log: [{ date, text: `${playerName}到江西省宁川中学报到，担任${GRADE_YEAR}级卓行16班数学实习教师。班主任${HOMEROOM_NAME}，备课组长${MENTOR_NAME}。` }],
     talksToday: 0,
     flags: {},
+    schoolLineHistory: [],
   };
+  const prior = simulatePriorGaokaoStats(seed, GRADE_YEAR - 3, GRADE_YEAR);
+  state.schoolLineHistory = [prior];
+  addLog(state, `校内划线按上一届高考本校省控实际上线人数滚动。开局已结算${prior.entryYear}级${prior.gaokaoYear}年高考应届上线：理科一本${prior.li.firstN}人、二本累计${prior.li.secondN}人；文科一本${prior.wen.firstN}人、二本累计${prior.wen.secondN}人。该届只保留统计，不进入可玩年级。无上一届数据时才用约理科一本450、文科一本60/二本250的兜底，不是官方精确名额。`, date);
   return state;
 }
 
@@ -119,7 +157,7 @@ export function addLog(state, text, date = state.date) {
 function compactReport(report, entryYear) {
   const rows = report.rows.map((r) => ({
     studentId: r.studentId, name: r.name, classNo: r.classNo, tier: r.tier,
-    track: r.track, repeat: !!r.repeat, total: r.total, maxTotal: r.maxTotal,
+    track: r.track, trackPref: r.trackPref, repeat: !!r.repeat, total: r.total, maxTotal: r.maxTotal,
     scale: r.scale, subjects: r.subjects, line: r.line, rank: r.rank,
     ...Object.fromEntries((r.subjects || []).map((id) => [id, r[id]])),
     huikaoPass: r.huikaoPass, huikaoSubjects: r.huikaoSubjects,
@@ -132,7 +170,7 @@ function compactReport(report, entryYear) {
     date: report.date, difficulty: report.difficulty, dispersion: report.dispersion,
     scale: report.scale, grade: report.grade, split: report.split, entryYear,
     rows, classes: report.classes, subjectIds: report.subjectIds, toppers: report.toppers,
-    cutoffs: cut, huikao: report.huikao || null, sourceNote: report.sourceNote || null, joint: report.joint || null,
+    cutoffs: cut, quota: report.quota || null, huikao: report.huikao || null, sourceNote: report.sourceNote || null, joint: report.joint || null,
   };
 }
 
@@ -202,12 +240,20 @@ export function runScheduledExam(state, ev) {
       grade,
       split: !!c.trackSplit,
       teachingBonusFor: (s) => bonusFor(state, s),
+      schoolQuota: currentSchoolQuota(state),
     });
     storeExam(state, entryYear, report);
     reports.push({ entryYear, grade, report });
+    if (ev.examKind === "gaokao") {
+      const year = ev.year || Number(String(ev.date).slice(0, 4));
+      const counts = provincialPassCounts(c.students, report.scoreMap, year);
+      counts.entryYear = entryYear;
+      counts.source = `${entryYear}级${year}年高考本校省控实际上线人数（应届，不含复读）。`;
+      recordPriorGaokaoCounts(state, counts);
+    }
     if (entryYear === state.player.cohortYear) {
       const cls = report.classes.find((x) => x.classNo === state.player.classNo);
-      if (cls) addLog(state, `${ev.name}结束。任教班均分${cls.avg}，最高${cls.max}，一本上线（校内线）${cls.firstCount}人，二本累计${cls.secondCount}人。`);
+      if (cls) addLog(state, examResultLogText(report, { classSummary: cls, classNo: state.player.classNo, schoolQuota: report.quota || currentSchoolQuota(state) }));
     }
   }
   state.flags.lastExamId = ev.id;
