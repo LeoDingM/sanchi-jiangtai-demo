@@ -2,8 +2,9 @@
  * 日常教学：备课、上课、作业登记、课后面批。
  * 效果写入备课充分度与数学教学积累，并确定性影响任教班学生状态；不用 LLM 编课堂。
  */
-import { clamp, hash01, rngFrom, round1 } from "./prng.js?v=t46u1";
-import { seatLabel } from "./school.js?v=t46u1";
+import { clamp, hash01, rngFrom, round1 } from "./prng.js?v=t47u1";
+import { seatLabel } from "./school.js?v=t47u1";
+import { deskChatPairs, deskMateOf, missingDeskPairs, peerStatusLine } from "./peers.js?v=t47u1";
 
 export const LESSON_TOPICS = {
   1: [
@@ -226,8 +227,17 @@ export function studentRecentStatus(student, state, { placed = false } = {}) {
   if (student.lastClassLate?.date) {
     bits.push(`${student.lastClassLate.date}正课迟到，上课铃后才进教室`);
   }
-  if (!bits.length) return `${seat}。还没有本班课堂或作业记录。`;
-  return `${seat}。带班近况：` + bits.join("；") + "。";
+  const peerLine = peerStatusLine(student, classmatesOf(student, state));
+  const body = !bits.length ? `${seat}。还没有本班课堂或作业记录。` : `${seat}。带班近况：` + bits.join("；") + "。";
+  return peerLine ? `${body} ${peerLine}` : body;
+}
+
+function classmatesOf(student, state) {
+  if (!student || !state?.cohorts) return [];
+  const year = student.entryYear ?? state.player?.cohortYear;
+  const c = state.cohorts[year];
+  if (!c?.students) return [];
+  return c.students.filter((x) => x.classNo === student.classNo);
 }
 
 /** 正课迟到，与晚自习点名名单分开，不写入 eveningLatecomers。 */
@@ -273,6 +283,19 @@ export function teachLesson(state, students, { style = "精讲例题", callId = 
     s.lastClassDate = state.date;
     return { id: s.id, name: s.name, flag: r.flag };
   });
+
+  const chatPairs = deskChatPairs(students, key);
+  for (const { a, b } of chatPairs) {
+    const recs = [reactions.find((r) => r.id === a.id), reactions.find((r) => r.id === b.id)];
+    if (recs.some((r) => r?.flag === "表现突出")) continue;
+    for (const [stu, rec] of [[a, recs[0]], [b, recs[1]]]) {
+      if (!rec || rec.flag === "走神") continue;
+      rec.flag = "走神";
+      stu.lastClassFlag = "走神";
+      stu.energy = clamp((stu.energy || 70) - 1, 20, 98);
+      stu.mood = clamp((stu.mood || 60) - 1, 0, 100);
+    }
+  }
 
   let called = null;
   if (callId) {
@@ -322,6 +345,20 @@ export function teachLesson(state, students, { style = "精讲例题", callId = 
     sleepy.length ? `${sleepy.slice(0, 3).map((x) => x.name).join("、")}有些走神，下节课要盯一盯。` : "大多数人还能跟上节奏。",
     plan.homeworkNote + (missing.length ? ` 收上来后，${missing.slice(0, 3).map((x) => x.name).join("、")}${missing.length > 3 ? "等" : ""}这次没交。` : " 作业基本都交齐了。"),
   ];
+  const chatting = chatPairs.filter(({ a, b }) => {
+    const fa = reactions.find((r) => r.id === a.id)?.flag;
+    const fb = reactions.find((r) => r.id === b.id)?.flag;
+    return fa === "走神" && fb === "走神";
+  });
+  if (chatting.length) {
+    const { a, b, friends } = chatting[0];
+    notes.push(`${a.name}和同桌${b.name}${friends ? "本来就比较要好，" : ""}这节交头接耳，两人都有些走神。`);
+  }
+  const missDesks = missingDeskPairs(missing, students);
+  if (missDesks.length) {
+    const { a, b } = missDesks[0];
+    notes.push(`同桌的${a.name}和${b.name}这次作业都没交，你记下回头一起催。`);
+  }
   if (weakHw.length) {
     notes.push(`订正或错题需要盯的有${weakHw.slice(0, 4).map((x) => x.name).join("、")}${weakHw.length > 4 ? "等" : ""}，适合课后面批。`);
   }
@@ -544,7 +581,17 @@ export function consultHomeroom(state, students, student = null) {
     student.homeroomWatch = true;
     student.stress = clamp((student.stress || 40) - 1, 0, 95);
     state.homeroomTalksToday = (state.homeroomTalksToday || 0) + 1;
-    const text = `你把${student.name}${issue}的情况告诉了班主任${home}。她记下了，晚自习会先看这名学生，也让你把订正落实到位。`;
+    const mate = deskMateOf(student, students);
+    let peerBit = "";
+    if (mate) {
+      const mateRow = allHomeworkRows(state).find((r) => r.id === mate.id && isOpenHomework(r));
+      if (mateRow || mate.lastClassFlag === "走神") {
+        peerBit = `你也提到同桌${mate.name}最近${mateRow ? "作业也要盯" : "课堂上也有些走神"}。`;
+      } else {
+        peerBit = `同桌是${mate.name}。`;
+      }
+    }
+    const text = `你把${student.name}${issue}的情况告诉了班主任${home}。${peerBit}她记下了，晚自习会先看这名学生，也让你把订正落实到位。`;
     student.talks = [...(student.talks || []), { date: state.date, topic: "通报班主任", text }];
     return { ok: true, text };
   }
@@ -744,6 +791,22 @@ export function tutorEvening(state, students, { mode = "巡视", studentId = nul
       picks.push(s);
       if (picks.length >= 3) break;
     }
+    if (picks[0]) {
+      const related = [];
+      const mate0 = deskMateOf(picks[0], list);
+      if (mate0) related.push(mate0);
+      for (const id of picks[0].peers?.friendIds || []) {
+        const f = list.find((x) => x.id === id);
+        if (f) related.push(f);
+      }
+      for (const o of related) {
+        if (picks.length >= 3) break;
+        if (seen.has(o.id)) continue;
+        if (!watchIds.has(o.id) && !hands.some((h) => h.id === o.id)) continue;
+        seen.add(o.id);
+        picks.push(o);
+      }
+    }
     if (!picks.length) return { ok: false, reason: "这节没有明显要凑在一起讲的人，改到座位上个别答疑。" };
     state.eveningGroupKey = slotKey;
     const topics = [...new Set(picks.map((s) => studentTeachingContext(s, state)?.topic || state.homework?.topic || state.player.lastTaught?.topic).filter(Boolean))];
@@ -758,7 +821,12 @@ export function tutorEvening(state, students, { mode = "巡视", studentId = nul
         syncStudentHomework(state, row);
       }
     }
-    const text = `${when}你把${picks.map((s) => s.name).join("、")}叫到后面空位，就「${topic}」里卡住的几步一起讲了十来分钟。${picks.map((s) => seatLabel(s)).join("、")}这几处回去还得自己再写一遍。`;
+    let together = "";
+    if (picks.length >= 2) {
+      const mate = deskMateOf(picks[0], list);
+      if (mate && picks.some((p) => p.id === mate.id)) together = `其中${picks[0].name}和同桌${mate.name}坐一块问。`;
+    }
+    const text = `${when}你把${picks.map((s) => s.name).join("、")}叫到后面空位，就「${topic}」里卡住的几步一起讲了十来分钟。${together}${picks.map((s) => seatLabel(s)).join("、")}这几处回去还得自己再写一遍。`;
     return { ok: true, mode, text, students: picks.map((s) => s.id) };
   }
 

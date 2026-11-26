@@ -1,20 +1,21 @@
 /** 游戏状态机：上课/考试/分班/高考录取/毕业升学与自动跳阶段。 */
 import {
   PLAYER_CLASS_NO, PLAYER_DEFAULT_NAME, PLAYER_ROLE, START_DATE, GRADE_YEAR, HOMEROOM_NAME, MENTOR_NAME,
-} from "./config.js?v=t46u1";
-import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById, examParams, formatGradeTerm, formatCohortGrade, termOf } from "./calendar.js?v=t46u1";
-import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf, eraQuality, placeGraduatingRepeaters, applyRepeaterSeating } from "./school.js?v=t46u1";
-import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js?v=t46u1";
-import { runExam } from "./examService.js?v=t46u1";
-import { provincialPassCounts, schoolQuotaFromPrior, fallbackSchoolQuota, examResultLogText } from "./schoolLines.js?v=t46u1";
-import { admitCohort } from "./admission.js?v=t46u1";
-import { rngFrom, clamp } from "./prng.js?v=t46u1";
-import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands, homeroomEveningRoll as homeroomEveningRollCore, compileEveningRoll, studentRecentStatus, rollCallStatusLine, classLatecomers, wrongClassroomThisPeriod } from "./teaching.js?v=t46u1";
-import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, upcomingTutoring, formatSlotLabel, isTutoringSlot, weekMathCount, weekSchedule, weekStart } from "./timetable.js?v=t46u1";
-import { swapPeriods as swapPeriodsCore, borrowIn as borrowInCore, borrowOut as borrowOutCore, respondTimetableRequest as respondTimetableRequestCore, ensureIncomingRequest, pendingTimetableRequest, weekBorrowCounts, weekTiaokeSummary, canAlterSlot, shortSlotLabel, teacherOf, ensureTiaokeState } from "./tiaoke.js?v=t46u1";
-import { openParentsMeeting as openParentsMeetingCore, meetParent as meetParentCore, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE } from "./parents.js?v=t46u1";
-import { openSchoolActivity as openSchoolActivityCore, doActivityAction as doActivityActionCore, isSchoolActivityOpen, upcomingSchoolActivity, ACTIVITY_SOURCE_NOTE, playerStageLine } from "./activities.js?v=t46u1";
-import { classCommittee, dutyStudents, weekDuty, classBrief, isHomeroomMeetingSlot, attendClassMeeting as attendClassMeetingCore, hostClassMeeting as hostClassMeetingCore, committeeTitleOf, upcomingClassMeeting, formatStudentShort, DUTY_PER_DAY, COMMITTEE_ROLES } from "./classManage.js?v=t46u1";
+} from "./config.js?v=t47u1";
+import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById, examParams, formatGradeTerm, formatCohortGrade, termOf } from "./calendar.js?v=t47u1";
+import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf, eraQuality, placeGraduatingRepeaters, applyRepeaterSeating } from "./school.js?v=t47u1";
+import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js?v=t47u1";
+import { runExam } from "./examService.js?v=t47u1";
+import { provincialPassCounts, schoolQuotaFromPrior, fallbackSchoolQuota, examResultLogText } from "./schoolLines.js?v=t47u1";
+import { admitCohort } from "./admission.js?v=t47u1";
+import { rngFrom, clamp } from "./prng.js?v=t47u1";
+import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands, homeroomEveningRoll as homeroomEveningRollCore, compileEveningRoll, studentRecentStatus, rollCallStatusLine, classLatecomers, wrongClassroomThisPeriod } from "./teaching.js?v=t47u1";
+import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, upcomingTutoring, formatSlotLabel, isTutoringSlot, weekMathCount, weekSchedule, weekStart } from "./timetable.js?v=t47u1";
+import { swapPeriods as swapPeriodsCore, borrowIn as borrowInCore, borrowOut as borrowOutCore, respondTimetableRequest as respondTimetableRequestCore, ensureIncomingRequest, pendingTimetableRequest, weekBorrowCounts, weekTiaokeSummary, canAlterSlot, shortSlotLabel, teacherOf, ensureTiaokeState } from "./tiaoke.js?v=t47u1";
+import { openParentsMeeting as openParentsMeetingCore, meetParent as meetParentCore, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE } from "./parents.js?v=t47u1";
+import { openSchoolActivity as openSchoolActivityCore, doActivityAction as doActivityActionCore, isSchoolActivityOpen, upcomingSchoolActivity, ACTIVITY_SOURCE_NOTE, playerStageLine } from "./activities.js?v=t47u1";
+import { classCommittee, dutyStudents, weekDuty, classBrief, isHomeroomMeetingSlot, attendClassMeeting as attendClassMeetingCore, hostClassMeeting as hostClassMeetingCore, committeeTitleOf, upcomingClassMeeting, formatStudentShort, DUTY_PER_DAY, COMMITTEE_ROLES } from "./classManage.js?v=t47u1";
+import { ensureStatePeers, ensureCohortPeers, classPeersOf } from "./peers.js?v=t47u1";
 
 export const SAVE_VERSION = 1;
 
@@ -148,6 +149,7 @@ function assembleNewGameState(seed, playerName, cohorts) {
   const prior = simulatePriorGaokaoStats(seed, GRADE_YEAR - 3, GRADE_YEAR);
   state.schoolLineHistory = [prior];
   addLog(state, `校内划线按上一届高考本校省控实际上线人数滚动。开局已结算${prior.entryYear}级${prior.gaokaoYear}年高考应届上线：理科一本${prior.li.firstN}人、二本累计${prior.li.secondN}人；文科一本${prior.wen.firstN}人、二本累计${prior.wen.secondN}人。该届只保留统计，不进入可玩年级。高三校内线按应届与补习班同一池划（理科二本取前1000名），应届省控上线人数不含复读。无上一届数据时才用约理科一本460、文科一本60/二本250的兜底，不是官方精确名额。`, date);
+  ensureStatePeers(state);
   return state;
 }
 
@@ -359,6 +361,7 @@ export function doFirstPlacement(state, entryYear, overrides = {}) {
   addLog(state, `${entryYear}级完成第一次分班：文理分科并按期末成绩调整梯队。云岫0/1班不参与普通淘汰，2—4班保持顶尖梯队。`);
   state.flags[`place1-${entryYear}`] = true;
   c.placed1 = true;
+  ensureCohortPeers(c, state.seed, "peers");
   return { ok: true, placement: p };
 }
 
@@ -375,6 +378,7 @@ export function doSecondPlacement(state, entryYear) {
   c.placed2 = true;
   addLog(state, `${entryYear}级完成第二次分班：不再分文理、不跨梯队，只在同科类同层次内部均衡重组。0/1班保持稳定。`);
   state.flags[`place2-${entryYear}`] = true;
+  ensureCohortPeers(c, state.seed, "peers");
   return { ok: true, placement: p };
 }
 
@@ -474,6 +478,7 @@ export function doPromote(state, ev) {
   state.player.prep = 1;
   state.schoolYear = newEntry;
   state.flags[`promoted-${newEntry}`] = true;
+  ensureStatePeers(state);
   return { ok: true, newEntry };
 }
 
@@ -999,8 +1004,9 @@ function latestMathExam(state, studentId) {
   return null;
 }
 
-function talkText(topic, s, ctx, exam) {
+function talkText(topic, s, ctx, exam, classmates = []) {
   const n = s.name;
+  const { deskMate, friends, tense } = classPeersOf(s, classmates);
   if (topic === "询问学习") {
     const bits = [];
     if (ctx?.hw) {
@@ -1021,12 +1027,17 @@ function talkText(topic, s, ctx, exam) {
     return `你鼓励${n}再坚持一阵，注意方法，别只盯着一次分数。`;
   }
   if (topic === "关注状态") {
+    if (ctx?.flag === "走神" && deskMate && deskMate.lastClassFlag === "走神") {
+      return `你提起${n}这堂课有些走神，也看到同桌${deskMate.name}一块交头接耳，关心最近休息和心情，提醒劳逸结合。`;
+    }
     if (ctx?.flag === "走神") return `你提起${n}这堂课有些走神，关心最近休息和心情，提醒劳逸结合。`;
+    if (tense) return `你关心${n}最近的休息和心情，也听出来和${tense.name}有些别扭，提醒劳逸结合。`;
     if ((s.energy ?? 70) < 50 || (s.stress ?? 40) > 70) return `你看${n}最近精力或压力不太对，关心休息和心情，提醒劳逸结合。`;
     return `你关心${n}最近的休息和心情，提醒劳逸结合。`;
   }
-  if (ctx?.topic) return `你和${n}谈了家里和将来的打算，也顺口问起「${ctx.topic}」跟得是否吃力，师生关系近了一些。`;
-  return `你和${n}谈了家里和将来的打算，师生关系近了一些。`;
+  const peerBit = deskMate ? `问起同桌${deskMate.name}处得怎样` : (friends[0] ? `问起和${friends[0].name}处得怎样` : null);
+  if (ctx?.topic) return `你和${n}谈了家里和将来的打算，也顺口问起「${ctx.topic}」跟得是否吃力${peerBit ? "，还" + peerBit : ""}，师生关系近了一些。`;
+  return `你和${n}谈了家里和将来的打算${peerBit ? "，也" + peerBit : ""}，师生关系近了一些。`;
 }
 
 export function periodTalkScene(state) {
@@ -1078,7 +1089,8 @@ export function talkTo(state, studentId, topic = "鼓励") {
   s.stress = clamp((s.stress || 40) + a.stress, 0, 100);
   const ctx = studentTeachingContext(s, state);
   const exam = latestMathExam(state, s.id);
-  const body = talkText(topic, s, ctx, exam);
+  const classmates = snapshotPlayerClass(state);
+  const body = talkText(topic, s, ctx, exam, classmates);
   const stamp = talkSceneStamp(state, s);
   const text = stamp ? `${stamp}${body}` : body;
   s.talks = [...(s.talks || []), { date: state.date, topic, text, periodId: state.periodId, seat: seatLabel(s) }];

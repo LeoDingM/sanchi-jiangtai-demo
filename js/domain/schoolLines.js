@@ -3,8 +3,8 @@
  * 不再把全校 400/1000 按文理人数分摊。
  * 高三校内线按「应届 + 补习班」同一池取名次；应届省控上线统计仍不含复读/补习班。
  */
-import { FALLBACK_SCHOOL_QUOTA } from "./config.js?v=t46u1";
-import { provincialLines, officialProvincialPack } from "./jiangxi.js?v=t46u1";
+import { FALLBACK_SCHOOL_QUOTA } from "./config.js?v=t47u1";
+import { provincialLines, officialProvincialPack } from "./jiangxi.js?v=t47u1";
 
 function clampRank(want, n) {
   const cap = Math.max(1, n);

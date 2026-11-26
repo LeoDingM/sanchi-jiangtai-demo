@@ -527,3 +527,16 @@ button.linkish {
   border-radius: 99px;
 }
 .loading-hint { margin: 12px 0 0; font-size: 12px; line-height: 1.65; color: var(--chalk-dim); }
+
+button.peer-link {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  color: var(--seal);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

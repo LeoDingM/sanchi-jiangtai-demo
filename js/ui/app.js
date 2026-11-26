@@ -15,28 +15,29 @@ import {
   attendClassMeeting, hostClassMeeting, playerClassCommittee, playerClassBrief,
   playerDutyToday, playerWeekDuty, isHomeroomMeetingSlot, upcomingClassMeeting,
   committeeTitleOf, formatStudentShort,
-} from "../domain/simulation.js?v=t46u1";
-import { addDays } from "../domain/calendar.js?v=t46u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t46u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t46u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t46u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t46u1";
-import { rankRows } from "../domain/scores.js?v=t46u1";
-import { filterRows, sameTierCompare, classStandings, classCompareRows, examReportKey, pickExamReport } from "../domain/examService.js?v=t46u1";
-import { hydrateReport } from "../domain/simulation.js?v=t46u1";
-import { renderSeating } from "./classroom.js?v=t46u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t46u1";
-import { formatAdmissionBatch, formatAdmissionDest } from "../domain/admission.js?v=t46u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t46u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t46u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t46u1";
+} from "../domain/simulation.js?v=t47u1";
+import { addDays } from "../domain/calendar.js?v=t47u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t47u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t47u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t47u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t47u1";
+import { rankRows } from "../domain/scores.js?v=t47u1";
+import { filterRows, sameTierCompare, classStandings, classCompareRows, examReportKey, pickExamReport } from "../domain/examService.js?v=t47u1";
+import { hydrateReport } from "../domain/simulation.js?v=t47u1";
+import { renderSeating } from "./classroom.js?v=t47u1";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t47u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t47u1";
+import { formatAdmissionBatch, formatAdmissionDest } from "../domain/admission.js?v=t47u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t47u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t47u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t47u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
   parseAiCommentary, emptyAiCommentary,
-} from "../domain/examAi.js?v=t46u1";
+} from "../domain/examAi.js?v=t47u1";
 
 let state = null;
 let view = "classroom";
@@ -444,6 +445,9 @@ function seatMarks(students) {
   const lateSet = slot?.isMath && !slot?.isTutoring
     ? new Set(classLatecomers(state, students).map((s) => s.id))
     : new Set();
+  const picked = students.find((x) => x.id === selectedId) || null;
+  const peers = picked ? classPeersOf(picked, students) : { deskMate: null, friends: [], tense: null };
+  const friendIds = new Set((peers.friends || []).map((f) => f.id));
   for (const s of students) {
     const lateNow = slot?.isMath && !slot?.isTutoring && lateSet.has(s.id);
     marks[s.id] = {
@@ -451,9 +455,24 @@ function seatMarks(students) {
       watch: watch.has(s.id),
       drowsy: s.lastClassFlag === "走神" || (s.energy ?? 70) < 48,
       late: lateNow,
+      desk: !!(peers.deskMate && s.id === peers.deskMate.id),
+      friend: friendIds.has(s.id),
+      tense: !!(peers.tense && s.id === peers.tense.id),
     };
   }
   return marks;
+}
+
+function peerLinksHtml(student, classmates) {
+  if (!student) return "";
+  const { deskMate, friends, tense } = classPeersOf(student, classmates);
+  const link = (x) => `<button type="button" class="peer-link" data-peer="${x.id}">${x.name}</button>`;
+  const bits = [];
+  if (deskMate) bits.push(`同桌 ${link(deskMate)}`);
+  else bits.push("这排边上没有同桌");
+  if (friends.length) bits.push(`要好 ${friends.map(link).join("、")}`);
+  if (tense) bits.push(`别扭 ${link(tense)}`);
+  return `<p class="muted">同伴关系：${bits.join("　")}</p>`;
 }
 
 function eveningRollPanel() {
@@ -499,6 +518,7 @@ function deskPanelHtml(student, slot, scene) {
   const talks = ["鼓励", "询问学习", "关注状态", "谈心"].map((x) => `<button type="button" data-talk="${x}">${x}</button>`).join("");
   return `<h3>${student.name}</h3>
     <p>${seatLabel(student)}　${student.personality || ""}　师生关系 ${student.relation || 0}</p>
+    ${peerLinksHtml(student, clsStudents())}
     <p class="muted">${teachingStatus(student)}</p>
     <p class="muted">作业：${hwLine}${ctx?.flag ? "　课堂：" + ctx.flag : ""}</p>
     ${tutorBtns}
@@ -549,6 +569,9 @@ function bindDeskAndTutor(host) {
   });
   const to = host.querySelector("#to-profile");
   if (to) to.onclick = () => { view = "profile"; render(); };
+  host.querySelectorAll("[data-peer]").forEach((b) => {
+    b.onclick = (ev) => { ev.stopPropagation(); selectedId = b.dataset.peer; render(); };
+  });
 }
 
 function viewClassroom(host) {
@@ -569,7 +592,7 @@ function viewClassroom(host) {
   const seatNote = placementSeatNotice(state);
   host.innerHTML = `<h3>教室座位表</h3>
     ${seatNote ? `<p class="notice">${seatNote}</p>` : ""}
-    <p class="notice">现在是${slotLine}。金圈是举手，红点是作业还要盯，颜色偏暗的是走神或精力不足，橙点是这节正课迟到。点击座位按当前课时处理，不必先跳到档案。任教班为卓行16班，74 人。</p>
+    <p class="notice">现在是${slotLine}。金圈是举手，红点是作业还要盯，颜色偏暗的是走神或精力不足，橙点是这节正课迟到。点开座位后，浅金圈是同桌，淡绿圈是要好的同学。点击座位按当前课时处理，不必先跳到档案。任教班为卓行16班，74 人。</p>
     <div class="classroom-layout">
       <canvas id="classroom"></canvas>
       <div class="desk-panel paper">${deskPanelHtml(sel, slot, scene)}</div>
@@ -587,8 +610,8 @@ function viewRoster(host) {
   const seatNote = placementSeatNotice(state);
   host.innerHTML = `<h3>学生名册 · ${sts.length}人</h3>
     ${seatNote ? `<p class="notice">${seatNote} 下表座号为当前编制。</p>` : ""}
-    <table><thead><tr><th>座号</th><th>姓名</th><th>职务</th><th>性别</th><th>性格</th><th>家庭</th><th>文理意向</th><th>师生关系</th></tr></thead>
-    <tbody>${sts.map((s) => `<tr data-id="${s.id}" class="${s.id===selectedId?"me":""}"><td>${s.seq}</td><td>${s.name}</td><td>${committeeTitleOf(playerClassCommittee(state), s.id) || ""}</td><td>${s.gender==="F"?"女":"男"}</td><td>${s.personality}</td><td>${s.family.type}</td><td>${s.trackPref==="wen"?"文":"理"}</td><td>${s.relation||0}</td></tr>`).join("")}</tbody></table>`;
+    <table><thead><tr><th>座号</th><th>姓名</th><th>职务</th><th>同桌</th><th>性别</th><th>性格</th><th>家庭</th><th>文理意向</th><th>师生关系</th></tr></thead>
+    <tbody>${sts.map((s) => `<tr data-id="${s.id}" class="${s.id===selectedId?"me":""}"><td>${s.seq}</td><td>${s.name}</td><td>${committeeTitleOf(playerClassCommittee(state), s.id) || ""}</td><td>${deskMateOf(s, sts)?.name || "—"}</td><td>${s.gender==="F"?"女":"男"}</td><td>${s.personality}</td><td>${s.family.type}</td><td>${s.trackPref==="wen"?"文":"理"}</td><td>${s.relation||0}</td></tr>`).join("")}</tbody></table>`;
   host.querySelectorAll("tr[data-id]").forEach((tr) => tr.onclick = () => { selectedId = tr.dataset.id; view = "profile"; render(); });
 }
 
@@ -687,6 +710,7 @@ function viewProfile(host) {
       <div class="paper">
         <p><b>学号</b> ${s.id}　<b>性别</b> ${s.gender==="F"?"女":"男"}　<b>性格</b> ${s.personality || "—"}　<b>班委</b> ${committeeTitleOf(playerClassCommittee(state), s.id) || "—"}　<b>班级</b> ${tierLabel(s.tier)}${s.classNo ?? ""}班</p>
         <p><b>家庭</b> ${family}</p>
+        ${peerLinksHtml(s, (state.cohorts[s.entryYear]?.students || []).filter((x) => x.classNo === s.classNo))}
         <p><b>文理意向</b> ${trackLabel}　<b>专业倾向</b> ${s.majorPref||"—"}</p>
         ${admissionProfileHtml(s.id)}
         <p><b>心情</b> ${s.mood ?? "—"}　<b>压力</b> ${s.stress ?? "—"}　<b>精力</b> ${s.energy ?? "—"}　<b>师生关系</b> ${s.relation||0}</p>
@@ -769,6 +793,9 @@ function viewProfile(host) {
       toast(r.ok ? r.text : r.reason);
       persist(); render();
     };
+  });
+  host.querySelectorAll("[data-peer]").forEach((b) => {
+    b.onclick = () => { selectedId = b.dataset.peer; render(); };
   });
   host.querySelectorAll("[data-subj]").forEach((b) => {
     b.onclick = () => { subjectPick = b.dataset.subj; render(); };

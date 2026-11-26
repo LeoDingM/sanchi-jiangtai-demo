@@ -1,5 +1,6 @@
 /** 存档 / 读档。浏览器走 localStorage，Node 测试走纯 JSON。 */
-import { SAVE_VERSION } from "./simulation.js?v=t46u1";
+import { SAVE_VERSION } from "./simulation.js?v=t47u1";
+import { ensureStatePeers } from "./peers.js?v=t47u1";
 
 export const STORAGE_KEY = "sanchi-jiangtai-v1";
 export const SLOT_KEYS = [0, 1, 2].map((i) => `${STORAGE_KEY}-slot-${i}`);
@@ -13,7 +14,7 @@ export function fromJSON(text) {
   const data = typeof text === "string" ? JSON.parse(text) : text;
   if (!data || !data.state) throw new Error("存档损坏：没有游戏状态");
   if (data.v && data.v > SAVE_VERSION) throw new Error("存档版本过新，当前程序无法读取");
-  return data.state;
+  return ensureStatePeers(data.state);
 }
 
 export function hasLocalStorage() {
