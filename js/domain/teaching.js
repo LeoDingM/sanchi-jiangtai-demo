@@ -2,9 +2,10 @@
  * 日常教学：备课、上课、作业登记、课后面批。
  * 效果写入备课充分度与数学教学积累，并确定性影响任教班学生状态；不用 LLM 编课堂。
  */
-import { clamp, hash01, rngFrom, round1 } from "./prng.js?v=t47u1";
-import { seatLabel } from "./school.js?v=t47u1";
-import { deskChatPairs, deskMateOf, missingDeskPairs, peerStatusLine } from "./peers.js?v=t47u1";
+import { clamp, hash01, rngFrom, round1 } from "./prng.js?v=t48u1";
+import { seatLabel } from "./school.js?v=t48u1";
+import { deskChatPairs, deskMateOf, missingDeskPairs, peerStatusLine } from "./peers.js?v=t48u1";
+import { isAwayFromClass, classAbsences, healthStatusLine } from "./health.js?v=t48u1";
 
 export const LESSON_TOPICS = {
   1: [
@@ -227,6 +228,10 @@ export function studentRecentStatus(student, state, { placed = false } = {}) {
   if (student.lastClassLate?.date) {
     bits.push(`${student.lastClassLate.date}正课迟到，上课铃后才进教室`);
   }
+  if (state) {
+    const health = healthStatusLine(student, state);
+    if (health && health !== "近况平稳。") bits.push(health.replace(/。$/, ""));
+  }
   const peerLine = peerStatusLine(student, classmatesOf(student, state));
   const body = !bits.length ? `${seat}。还没有本班课堂或作业记录。` : `${seat}。带班近况：` + bits.join("；") + "。";
   return peerLine ? `${body} ${peerLine}` : body;
@@ -245,6 +250,7 @@ export function classLatecomers(state, students) {
   if (!state || !students?.length) return [];
   const out = [];
   for (const s of students) {
+    if (isAwayFromClass(s, state)) continue;
     if (hash01(s.id, state.date, state.periodId, "class-late") < 0.04) out.push(s);
   }
   return out;
@@ -269,6 +275,12 @@ export function teachLesson(state, students, { style = "精讲例题", callId = 
   const key = `${state.date}|${plan.topic}|${style}|${state.player.lessons?.length || 0}`;
   const hw = HOMEWORK_LOAD[plan.homework] || HOMEWORK_LOAD.中;
   const reactions = students.map((s) => {
+    if (isAwayFromClass(s, state)) {
+      s.lastClassFlag = "请假";
+      s.lastClassTopic = plan.topic;
+      s.lastClassDate = state.date;
+      return { id: s.id, name: s.name, flag: "请假" };
+    }
     const r = studentReact(s, key, style, prep, plan.depth);
     s.stress = clamp((s.stress || 40) + hw.stress + (prep ? 0 : 1), 0, 95);
     s.energy = clamp((s.energy || 70) + hw.energy + (r.flag === "走神" ? -1 : 0), 20, 98);
@@ -284,7 +296,8 @@ export function teachLesson(state, students, { style = "精讲例题", callId = 
     return { id: s.id, name: s.name, flag: r.flag };
   });
 
-  const chatPairs = deskChatPairs(students, key);
+  const present = students.filter((s) => !isAwayFromClass(s, state));
+  const chatPairs = deskChatPairs(present, key);
   for (const { a, b } of chatPairs) {
     const recs = [reactions.find((r) => r.id === a.id), reactions.find((r) => r.id === b.id)];
     if (recs.some((r) => r?.flag === "表现突出")) continue;
@@ -300,7 +313,9 @@ export function teachLesson(state, students, { style = "精讲例题", callId = 
   let called = null;
   if (callId) {
     const s = students.find((x) => x.id === callId);
-    if (s) {
+    if (s && isAwayFromClass(s, state)) {
+      called = { id: s.id, name: s.name, ok: false, absent: true, text: `${s.name}今天请假，这节不在教室，你改点了别人。` };
+    } else if (s) {
       s.relation = clamp((s.relation || 0) + 2, 0, 100);
       s.ability.math = clamp((s.ability.math || 50) + 0.08, 0, 99);
       const ok = hash01(s.id, key, "call") + prep * 0.08 > 0.48;
@@ -310,7 +325,7 @@ export function teachLesson(state, students, { style = "精讲例题", callId = 
 
   let quiz = null;
   if (style === "随堂小测") {
-    quiz = students.map((s) => {
+    quiz = students.filter((s) => !isAwayFromClass(s, state)).map((s) => {
       const score = quizScore(s, key, prep, plan.depth);
       s.lastQuiz = { date: state.date, topic: plan.topic, score };
       return { id: s.id, name: s.name, score };
@@ -318,6 +333,15 @@ export function teachLesson(state, students, { style = "精讲例题", callId = 
   }
 
   const hwRows = students.map((s, i) => {
+    if (isAwayFromClass(s, state)) {
+      const row = {
+        id: s.id, name: s.name, seq: s.seq, status: "请假", quality: "请假", score: null,
+        flag: "请假", reviewed: true, urged: false, correction: "已闭环",
+        date: state.date, topic: plan.topic,
+      };
+      s.lastHomework = { ...row, load: plan.homework };
+      return row;
+    }
     const row = homeworkRow(s, key, plan.homework, reactions[i], prep, plan.depth);
     row.date = state.date;
     row.topic = plan.topic;
@@ -354,10 +378,14 @@ export function teachLesson(state, students, { style = "精讲例题", callId = 
     const { a, b, friends } = chatting[0];
     notes.push(`${a.name}和同桌${b.name}${friends ? "本来就比较要好，" : ""}这节交头接耳，两人都有些走神。`);
   }
-  const missDesks = missingDeskPairs(missing, students);
+  const missDesks = missingDeskPairs(missing, present);
   if (missDesks.length) {
     const { a, b } = missDesks[0];
     notes.push(`同桌的${a.name}和${b.name}这次作业都没交，你记下回头一起催。`);
+  }
+  const away = classAbsences(students, state);
+  if (away.length) {
+    notes.push(`${away.slice(0, 4).map((x) => x.name).join("、")}${away.length > 4 ? "等" : ""}今天请假，座位空着，这趟作业先不布置。`);
   }
   if (weakHw.length) {
     notes.push(`订正或错题需要盯的有${weakHw.slice(0, 4).map((x) => x.name).join("、")}${weakHw.length > 4 ? "等" : ""}，适合课后面批。`);
@@ -439,6 +467,7 @@ function reviewText(student, row, topic) {
 /** 课后当面批改一名学生的作业。 */
 export function reviewHomework(state, student, topic = "面批作业") {
   if (!student) return { ok: false, reason: "找不到这名学生" };
+  if (isAwayFromClass(student, state)) return { ok: false, reason: `${student.name}今天请假，没有本子可面批，返校后再看。` };
   if ((state.reviewsToday || 0) >= 6) return { ok: false, reason: "今天面批已经不少，其余的改到办公桌上去看。" };
   const row = allHomeworkRows(state).find((r) => r.id === student.id && isOpenHomework(r))
     || (state.homework?.rows || []).find((r) => r.id === student.id)
@@ -508,6 +537,7 @@ export function collectHomeworkFollowups(state, reason = "period") {
 /** 催交缺交作业，提高下一节补交的可能。 */
 export function urgeHomework(state, student) {
   if (!student) return { ok: false, reason: "找不到这名学生" };
+  if (isAwayFromClass(student, state)) return { ok: false, reason: `${student.name}今天请假，先不催作业。` };
   const row = allHomeworkRows(state).find((r) => r.id === student.id && r.correction === "待补交");
   if (!row) return { ok: false, reason: `${student.name}目前没有待补交的作业。` };
   row.urged = true;
@@ -575,7 +605,10 @@ export function consultHomeroom(state, students, student = null) {
     const row = allHomeworkRows(state).find((r) => r.id === student.id && isOpenHomework(r));
     const flag = student.lastClassFlag;
     let issue = "最近的学习状态";
-    if (row?.correction === "待补交") issue = `「${row.topic}」作业缺交`;
+    if (isAwayFromClass(student, state)) {
+      const kind = student.health?.kind;
+      issue = student.health?.status === "事假" ? "今天请事假" : `今天请病假${kind ? "（" + kind + "）" : ""}`;
+    } else if (row?.correction === "待补交") issue = `「${row.topic}」作业缺交`;
     else if (row) issue = `「${row.topic}」作业还要盯（${row.correction}）`;
     else if (flag === "走神") issue = "这堂课有些走神";
     student.homeroomWatch = true;
@@ -598,6 +631,10 @@ export function consultHomeroom(state, students, student = null) {
   if (state.homeroomBriefedOn === state.date) return { ok: false, reason: "今天已经和班主任对过一次班情。" };
   const watch = homeworkWatchlist(state.homework, state);
   const names = [...new Set(watch.map((r) => r.name))];
+  const away = classAbsences(students, state);
+  const absBit = away.length
+    ? `${away.slice(0, 4).map((x) => x.name).join("、")}${away.length > 4 ? "等" : ""}今天请假，假条她已经登记了。`
+    : "";
   state.homeroomBriefedOn = state.date;
   for (const s of students) {
     if (watch.some((r) => r.id === s.id)) s.homeroomWatch = true;
@@ -605,9 +642,11 @@ export function consultHomeroom(state, students, student = null) {
   const isEve = String(state.periodId || "").startsWith("evening");
   const text = names.length
     ? (isEve
-      ? `你把${names.slice(0, 5).join("、")}${names.length > 5 ? "等" : ""}的缺交或课堂情况告诉了班主任${home}。她把人写进今晚的点名名单，过一会点名时先叫。`
-      : `你把${names.slice(0, 5).join("、")}${names.length > 5 ? "等" : ""}的缺交或课堂情况告诉了班主任${home}。她记下了，晚自习点名会先点这几个人。`)
-    : `你和班主任${home}对了一下班里近况。眼下没有特别要盯的人，她嘱咐把作业订正按名单落实。`;
+      ? `你把${names.slice(0, 5).join("、")}${names.length > 5 ? "等" : ""}的缺交或课堂情况告诉了班主任${home}。${absBit}她把人写进今晚的点名名单，过一会点名时先叫。`
+      : `你把${names.slice(0, 5).join("、")}${names.length > 5 ? "等" : ""}的缺交或课堂情况告诉了班主任${home}。${absBit}她记下了，晚自习点名会先点这几个人。`)
+    : (absBit
+      ? `你和班主任${home}对了一下班里近况。${absBit}她嘱咐把作业订正按名单落实。`
+      : `你和班主任${home}对了一下班里近况。眼下没有特别要盯的人，她嘱咐把作业订正按名单落实。`);
   if (isEve && names.length) {
     const slotKey = `${state.date}|${state.periodId}`;
     const prev = state.eveningRoll?.slotKey === slotKey ? (state.eveningRoll.items || []) : [];
@@ -653,6 +692,7 @@ export function consultMentor(state, grade = 1) {
 export function eveningLatecomers(state, students) {
   const out = [];
   for (const s of students || []) {
+    if (isAwayFromClass(s, state)) continue;
     if (hash01(s.id, state.date, state.periodId, "late") < 0.045) out.push(s);
     if (out.length >= 3) break;
   }
@@ -673,9 +713,11 @@ export function compileEveningRoll(state, students) {
   for (const s of raisedHands(state, list)) add(s, "举手");
   for (const r of homeworkWatchlist(state.homework, state)) {
     const s = list.find((x) => x.id === r.id);
+    if (isAwayFromClass(s, state)) continue;
     add(s, r.correction === "待补交" || r.status === "缺交" ? "作业缺交" : "订正未了");
   }
   for (const s of list) {
+    if (isAwayFromClass(s, state)) continue;
     if ((s.energy ?? 70) < 50 || s.lastClassFlag === "走神") add(s, "状态不佳");
     if (s.homeroomWatch) add(s, "白天已通报");
   }
@@ -692,6 +734,7 @@ function pronoun(student) {
 export function raisedHands(state, students) {
   const out = [];
   for (const s of students || []) {
+    if (isAwayFromClass(s, state)) continue;
     const ctx = studentTeachingContext(s, state);
     const hw = ctx?.hw;
     const open = isOpenHomework(hw);
@@ -730,7 +773,8 @@ export function tutorEvening(state, students, { mode = "巡视", studentId = nul
   if (mode === "巡视") {
     if (state.eveningPatrolledKey === slotKey) return { ok: false, reason: "这节晚自习已经巡视过一轮，接下来到座位上答疑、收订正，或请班主任按名单点名。" };
     state.eveningPatrolledKey = slotKey;
-    const sleepy = list.filter((s) => (s.energy ?? 70) < 50 || s.lastClassFlag === "走神");
+    const away = classAbsences(list, state);
+    const sleepy = list.filter((s) => !isAwayFromClass(s, state) && ((s.energy ?? 70) < 50 || s.lastClassFlag === "走神"));
     for (const s of sleepy.slice(0, 3)) {
       s.energy = clamp((s.energy || 70) + 2, 20, 98);
       s.stress = clamp((s.stress || 40) - 1, 0, 95);
@@ -738,6 +782,9 @@ export function tutorEvening(state, students, { mode = "巡视", studentId = nul
     const items = compileEveningRoll(state, list);
     const late = items.filter((x) => x.reasons.includes("还没回到座位"));
     const shots = items.slice(0, 5);
+    const leaveNote = away.length
+      ? `${away.slice(0, 3).map((x) => x.name).join("、")}${away.length > 3 ? "等" : ""}今天请假，座位空着。`
+      : "";
     const detail = shots.length
       ? shots.map((x) => `${x.seat}${x.name}（${x.reasons.join("、")}）`).join("；") + (items.length > 5 ? `。此外还有 ${items.length - 5} 人要盯` : "") + "。"
       : "教室里比较安静，没有特别要停下的座位。";
@@ -755,7 +802,7 @@ export function tutorEvening(state, students, { mode = "巡视", studentId = nul
       called: existing?.called || false,
       patrolled: true,
     };
-    const text = `${when}，你从第1排慢慢走到后排。${detail}${handoff}`;
+    const text = `${when}，你从第1排慢慢走到后排。${leaveNote}${detail}${handoff}`;
     return { ok: true, mode, text, noticed: shots, roll: items, late: late.length };
   }
 
@@ -838,6 +885,7 @@ export function tutorEvening(state, students, { mode = "巡视", studentId = nul
     student = hands[0] || list.find((s) => homeworkWatchlist(state.homework, state).some((r) => r.id === s.id)) || null;
   }
   if (!student) return { ok: false, reason: "先点一个座位，再走到那一排去答疑。" };
+  if (isAwayFromClass(student, state)) return { ok: false, reason: `${student.name}今天请假，座位空着，改到其他人那里答疑。` };
   const ctx = studentTeachingContext(student, state);
   const hw = ctx?.hw;
   const topic = ctx?.topic || hw?.topic || state.homework?.topic || "最近的练习";

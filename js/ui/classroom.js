@@ -1,5 +1,5 @@
 /** 教室座位表（Canvas）：7 列 × 若干排，点击查看档案或当堂处理。 */
-import { seatOf, columnsForClass } from "../domain/school.js?v=t47u1";
+import { seatOf, columnsForClass } from "../domain/school.js?v=t48u1";
 
 function fitText(ctx, text, maxWidth, maxSize, family) {
   let size = maxSize;
@@ -63,6 +63,7 @@ export function renderSeating(canvas, students, selectedId, onPick, opts = {}) {
     ctx.beginPath();
     ctx.fillStyle = sel ? "#c45c4a" : (s.gender === "F" ? "#6b4a5d" : "#3d5c6b");
     if (mk.drowsy && !sel) ctx.fillStyle = "#4a5248";
+    if (mk.absent && !sel) ctx.fillStyle = "#2f3532";
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = sel ? "#f3efe0" : (mk.hand ? "#e8d5a3" : "rgba(243,239,224,.35)");
@@ -101,6 +102,14 @@ export function renderSeating(canvas, students, selectedId, onPick, opts = {}) {
       ctx.fillStyle = "#d08a2a";
       ctx.arc(x - radius * 0.7, y - radius * 0.7, 4, 0, Math.PI * 2);
       ctx.fill();
+    }
+    if (mk.absent) {
+      ctx.beginPath();
+      ctx.strokeStyle = "#8aa0b8";
+      ctx.lineWidth = 2;
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = 1;
     }
     ctx.fillStyle = "#f3efe0";
     ctx.font = "12px sans-serif";

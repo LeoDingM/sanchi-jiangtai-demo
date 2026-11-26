@@ -15,29 +15,30 @@ import {
   attendClassMeeting, hostClassMeeting, playerClassCommittee, playerClassBrief,
   playerDutyToday, playerWeekDuty, isHomeroomMeetingSlot, upcomingClassMeeting,
   committeeTitleOf, formatStudentShort,
-} from "../domain/simulation.js?v=t47u1";
-import { addDays } from "../domain/calendar.js?v=t47u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t47u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t47u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t47u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t47u1";
-import { rankRows } from "../domain/scores.js?v=t47u1";
-import { filterRows, sameTierCompare, classStandings, classCompareRows, examReportKey, pickExamReport } from "../domain/examService.js?v=t47u1";
-import { hydrateReport } from "../domain/simulation.js?v=t47u1";
-import { renderSeating } from "./classroom.js?v=t47u1";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t47u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t47u1";
-import { formatAdmissionBatch, formatAdmissionDest } from "../domain/admission.js?v=t47u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t47u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t47u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t47u1";
+} from "../domain/simulation.js?v=t48u1";
+import { addDays } from "../domain/calendar.js?v=t48u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t48u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t48u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t48u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t48u1";
+import { rankRows } from "../domain/scores.js?v=t48u1";
+import { filterRows, sameTierCompare, classStandings, classCompareRows, examReportKey, pickExamReport } from "../domain/examService.js?v=t48u1";
+import { hydrateReport } from "../domain/simulation.js?v=t48u1";
+import { renderSeating } from "./classroom.js?v=t48u1";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t48u1";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t48u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t48u1";
+import { formatAdmissionBatch, formatAdmissionDest } from "../domain/admission.js?v=t48u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t48u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t48u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t48u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
   parseAiCommentary, emptyAiCommentary,
-} from "../domain/examAi.js?v=t47u1";
+} from "../domain/examAi.js?v=t48u1";
 
 let state = null;
 let view = "classroom";
@@ -453,8 +454,9 @@ function seatMarks(students) {
     marks[s.id] = {
       hand: hands.has(s.id),
       watch: watch.has(s.id),
-      drowsy: s.lastClassFlag === "走神" || (s.energy ?? 70) < 48,
+      drowsy: !isAwayFromClass(s, state) && (s.lastClassFlag === "走神" || (s.energy ?? 70) < 48),
       late: lateNow,
+      absent: isAwayFromClass(s, state),
       desk: !!(peers.deskMate && s.id === peers.deskMate.id),
       friend: friendIds.has(s.id),
       tense: !!(peers.tense && s.id === peers.tense.id),
@@ -463,7 +465,14 @@ function seatMarks(students) {
   return marks;
 }
 
+function absenceNotice(students) {
+  const away = classAbsences(students, state);
+  if (!away.length) return "";
+  return `。今日请假：${away.slice(0, 4).map((s) => s.name).join("、")}${away.length > 4 ? "等" : ""}，座位空着`;
+}
+
 function peerLinksHtml(student, classmates) {
+
   if (!student) return "";
   const { deskMate, friends, tense } = classPeersOf(student, classmates);
   const link = (x) => `<button type="button" class="peer-link" data-peer="${x.id}">${x.name}</button>`;
@@ -519,8 +528,10 @@ function deskPanelHtml(student, slot, scene) {
   return `<h3>${student.name}</h3>
     <p>${seatLabel(student)}　${student.personality || ""}　师生关系 ${student.relation || 0}</p>
     ${peerLinksHtml(student, clsStudents())}
+    <p class="muted">${healthStatusLine(student, state)}</p>
     <p class="muted">${teachingStatus(student)}</p>
     <p class="muted">作业：${hwLine}${ctx?.flag ? "　课堂：" + ctx.flag : ""}</p>
+    ${isAwayFromClass(student, state) ? `<p class="notice">今天不在教室。谈话请用「关注状态」，或改日再谈。</p>` : ""}
     ${tutorBtns}
     <div class="row-actions">${extra.join("")}</div>
     <p>谈话（本时段还可 ${leftTalk} 人，本日余 ${dayLeft} 人）</p>
@@ -592,7 +603,7 @@ function viewClassroom(host) {
   const seatNote = placementSeatNotice(state);
   host.innerHTML = `<h3>教室座位表</h3>
     ${seatNote ? `<p class="notice">${seatNote}</p>` : ""}
-    <p class="notice">现在是${slotLine}。金圈是举手，红点是作业还要盯，颜色偏暗的是走神或精力不足，橙点是这节正课迟到。点开座位后，浅金圈是同桌，淡绿圈是要好的同学。点击座位按当前课时处理，不必先跳到档案。任教班为卓行16班，74 人。</p>
+    <p class="notice">现在是${slotLine}${absenceNotice(sts)}。金圈是举手，红点是作业还要盯，颜色偏暗的是走神或精力不足，橙点是这节正课迟到，空灰位是今天请假。点开座位后，浅金圈是同桌，淡绿圈是要好的同学。点击座位按当前课时处理，不必先跳到档案。任教班为卓行16班，74 人。</p>
     <div class="classroom-layout">
       <canvas id="classroom"></canvas>
       <div class="desk-panel paper">${deskPanelHtml(sel, slot, scene)}</div>
@@ -610,8 +621,8 @@ function viewRoster(host) {
   const seatNote = placementSeatNotice(state);
   host.innerHTML = `<h3>学生名册 · ${sts.length}人</h3>
     ${seatNote ? `<p class="notice">${seatNote} 下表座号为当前编制。</p>` : ""}
-    <table><thead><tr><th>座号</th><th>姓名</th><th>职务</th><th>同桌</th><th>性别</th><th>性格</th><th>家庭</th><th>文理意向</th><th>师生关系</th></tr></thead>
-    <tbody>${sts.map((s) => `<tr data-id="${s.id}" class="${s.id===selectedId?"me":""}"><td>${s.seq}</td><td>${s.name}</td><td>${committeeTitleOf(playerClassCommittee(state), s.id) || ""}</td><td>${deskMateOf(s, sts)?.name || "—"}</td><td>${s.gender==="F"?"女":"男"}</td><td>${s.personality}</td><td>${s.family.type}</td><td>${s.trackPref==="wen"?"文":"理"}</td><td>${s.relation||0}</td></tr>`).join("")}</tbody></table>`;
+    <table><thead><tr><th>座号</th><th>姓名</th><th>职务</th><th>同桌</th><th>出勤</th><th>性别</th><th>性格</th><th>家庭</th><th>文理意向</th><th>师生关系</th></tr></thead>
+    <tbody>${sts.map((s) => `<tr data-id="${s.id}" class="${s.id===selectedId?"me":""}"><td>${s.seq}</td><td>${s.name}</td><td>${committeeTitleOf(playerClassCommittee(state), s.id) || ""}</td><td>${deskMateOf(s, sts)?.name || "—"}</td><td>${isAwayFromClass(s, state) ? (s.health?.status || "请假") : "在"}</td><td>${s.gender==="F"?"女":"男"}</td><td>${s.personality}</td><td>${s.family.type}</td><td>${s.trackPref==="wen"?"文":"理"}</td><td>${s.relation||0}</td></tr>`).join("")}</tbody></table>`;
   host.querySelectorAll("tr[data-id]").forEach((tr) => tr.onclick = () => { selectedId = tr.dataset.id; view = "profile"; render(); });
 }
 
@@ -714,6 +725,8 @@ function viewProfile(host) {
         <p><b>文理意向</b> ${trackLabel}　<b>专业倾向</b> ${s.majorPref||"—"}</p>
         ${admissionProfileHtml(s.id)}
         <p><b>心情</b> ${s.mood ?? "—"}　<b>压力</b> ${s.stress ?? "—"}　<b>精力</b> ${s.energy ?? "—"}　<b>师生关系</b> ${s.relation||0}</p>
+        <p><b>健康心理</b> ${healthStatusLine(s, state)}</p>
+        ${(s.healthLog || []).length ? `<p><b>请假记录</b></p>${(s.healthLog||[]).slice(0, 6).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : ""}
         <p class="muted">${teachingStatus(s)}</p>
         ${(s.rollCalls || []).length ? `<p><b>晚自习点名记录</b></p>${(s.rollCalls||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : ""}
         ${(s.parentMeetings || []).length ? `<p><b>家长会面谈</b></p>${(s.parentMeetings||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : ""}
@@ -1181,6 +1194,12 @@ function bindTiaokeActions(host) {
   });
 }
 
+function officeLeaveLine() {
+  const away = classAbsences(clsStudents(), state);
+  if (!away.length) return "";
+  return `今日请假：${away.slice(0, 4).map((s) => `${s.name}（${s.health?.kind || s.health?.status || "假"}）`).join("、")}${away.length > 4 ? "等" : ""}。假条已由班主任登记。`;
+}
+
 function officeCollabHtml() {
 
   const watch = homeworkWatchlist(state.homework, state);
@@ -1189,7 +1208,7 @@ function officeCollabHtml() {
   const slot = currentSlot(state);
   return `<div class="paper lesson-card office-actions">
       <h3>办公室与班主任</h3>
-      <p class="muted">现在是${slot ? formatSlotLabel(slot) : formatDateCn(state.date)}。${nxt ? `下一节数学：${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}。` : ""}不是空菜单：坐班改作业、向班主任通报、向备课组长请教都会留下记录，并且用确定性规则推进作业订正。</p>
+      <p class="muted">现在是${slot ? formatSlotLabel(slot) : formatDateCn(state.date)}。${nxt ? `下一节数学：${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}。` : ""}${officeLeaveLine()}不是空菜单：坐班改作业、向班主任通报、向备课组长请教都会留下记录，并且用确定性规则推进作业订正。</p>
       <div class="row-actions">
         <button type="button" class="accent" id="do-mark">坐班批改</button>
         <button type="button" id="do-home">向班主任通报本班</button>
