@@ -42,9 +42,11 @@ h1 { margin: 0; font-size: 22px; font-weight: 700; color: var(--gold); }
 .school, .status, .hint, .lead { color: var(--chalk-dim); }
 h1 + .school { margin: 0; font-size: 12px; }
 .status { flex: 1; }
-#clock { font-size: 18px; color: var(--chalk); }
+#clock { font-size: 18px; color: var(--chalk); font-weight: 600; }
+#gradeline { font-size: 13px; color: var(--gold); margin-top: 2px; }
 #periodline { font-size: 13px; color: var(--gold); margin-top: 2px; }
 #roleline { font-size: 13px; color: var(--chalk-dim); }
+#clock, #gradeline { flex-shrink: 0; }
 .top-actions, .boot-btns, .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 button {
   font: inherit; cursor: pointer; color: var(--chalk);
@@ -192,8 +194,11 @@ a { color: var(--gold); }
   .brand { min-width: 0; flex: 0 1 auto; }
   .brand .seal { width: 36px; height: 36px; }
   h1 { font-size: 18px; }
-  .status { flex: 1 1 180px; min-width: 0; }
-  #clock { font-size: 16px; }
+  .status { flex: 1 1 100%; min-width: 0; width: 100%; order: 2; }
+  .brand { order: 1; }
+  .top-actions { order: 3; }
+  #clock { font-size: 16px; font-weight: 700; }
+  #gradeline { font-size: 13px; color: var(--gold); }
   #periodline, #roleline { font-size: 12px; }
   .top-actions {
     flex: 1 1 100%;
@@ -316,6 +321,11 @@ a { color: var(--gold); }
 }
 
 @media (max-width: 600px) {
+  #topbar { flex-direction: column; align-items: stretch; }
+  .brand, .status, .top-actions { width: 100%; flex: 1 1 auto; }
+  #school-sub { font-size: 12px; line-height: 1.45; }
+  #clock { font-size: 17px; }
+  #gradeline { font-size: 13px; }
   .agenda-sched { margin: 0 0 8px; }
   .agenda-sched > summary {
     list-style: none;

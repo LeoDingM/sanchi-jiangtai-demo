@@ -31,6 +31,19 @@ export function currentGrade(entryYear, schoolYear) {
   return schoolYear - entryYear + 1;
 }
 
+/**
+ * 入学年对应的时代实力修正。对标宁都中学 2017–2020 喜报数量级：
+ * 这几年学校明显变强。2017 级（2020 年高考）为当前基准 0，不改现行平行班高考省控标定。
+ * 只用于已有公开喜报对照的年份，不编造 2021 以后的精确官方人数。
+ */
+export function eraQuality(entryYear) {
+  const y = Number(entryYear);
+  if (y <= 2014) return -3.1;
+  if (y === 2015) return -2.5;
+  if (y === 2016) return -0.4;
+  return 0;
+}
+
 function paintAbilities(rng, mean, sd, hint) {
   const ability = {};
   const potential = {};
@@ -199,9 +212,9 @@ export function generateRepeaters(forSeniorEntryYear, seed, usedNames, quality =
 export function generateOpeningSchool(seed, playerEntryYear = GRADE_YEAR) {
   // 开学时：高一=playerEntryYear，高二=year-1（已分科+二次分班），高三=year-2（含复卓）
   const cohorts = {};
-  cohorts[playerEntryYear] = generateCohort(playerEntryYear, seed, { alreadySplit: false, withRepeat: false });
-  cohorts[playerEntryYear - 1] = generateCohort(playerEntryYear - 1, seed, { alreadySplit: true, withRepeat: false, quality: -0.4 });
-  cohorts[playerEntryYear - 2] = generateCohort(playerEntryYear - 2, seed, { alreadySplit: true, withRepeat: true, quality: 0.2 });
+  cohorts[playerEntryYear] = generateCohort(playerEntryYear, seed, { alreadySplit: false, withRepeat: false, quality: eraQuality(playerEntryYear) });
+  cohorts[playerEntryYear - 1] = generateCohort(playerEntryYear - 1, seed, { alreadySplit: true, withRepeat: false, quality: eraQuality(playerEntryYear - 1) });
+  cohorts[playerEntryYear - 2] = generateCohort(playerEntryYear - 2, seed, { alreadySplit: true, withRepeat: true, quality: eraQuality(playerEntryYear - 2) });
   // 高二、高三已分科的班级编号按第一次分班目标靠拢：此处先保留预分班编号，
   // 由 simulation 在开局对旧年级补做分班，保证层次与科类正确。
   return {

@@ -54,6 +54,28 @@ export function schoolYearOf(date) {
   return m >= 8 ? y : y - 1;
 }
 
+/** 2–7 月为下学期，8–1 月为上学期。 */
+export function termOf(date) {
+  const { m } = parseYmd(date);
+  return m >= 2 && m <= 7 ? "下" : "上";
+}
+
+const GRADE_CN = ["一", "二", "三"];
+
+/** grade 为相对入学年的年级：1 高一 … 3 高三；超出则说明尚未入学或已毕业。 */
+export function formatGradeTerm(grade, date) {
+  const g = Number(grade);
+  if (g < 1) return "尚未入学";
+  if (g > 3) return "已毕业";
+  return `高${GRADE_CN[g - 1]}${termOf(date)}学期`;
+}
+
+export function formatCohortGrade(entryYear, date) {
+  const sy = schoolYearOf(date);
+  const grade = sy - Number(entryYear) + 1;
+  return { grade, term: formatGradeTerm(grade, date), schoolYear: sy };
+}
+
 /** 理科一本线相对 2020 年 535 的比例，用于该学年试卷总体难度。 */
 export const YEAR_LINE_FACTOR = {
   2016: 529 / 535,
@@ -113,8 +135,13 @@ export function examParams(exam) {
     ? 0.995 + hash01("exam-diff", exam.id) * 0.01
     : 0.95 + hash01("exam-diff", exam.id) * 0.12; // 非高考场次 0.95–1.07
   const difficulty = clamp(base * yearF * jitter, 0.88, 1.12);
-  const dispJ = 0.9 + hash01("exam-disp", exam.id) * 0.28; // 0.90–1.18
-  const dispersion = clamp((KIND_DISP[kind] ?? 1) * dispJ, 0.94, 1.12);
+  // 高考离散只做很小抖动，避免某年偶发把 600+/660+ 拉成另一量级；非高考场次仍拉开分数线。
+  const dispJ = isGaokao
+    ? 0.99 + hash01("exam-disp", exam.id) * 0.02 // 0.99–1.01
+    : 0.9 + hash01("exam-disp", exam.id) * 0.28; // 0.90–1.18
+  const dispersion = isGaokao
+    ? clamp((KIND_DISP[kind] ?? 1) * dispJ, 0.98, 1.02)
+    : clamp((KIND_DISP[kind] ?? 1) * dispJ, 0.94, 1.12);
   return { difficulty, dispersion };
 }
 

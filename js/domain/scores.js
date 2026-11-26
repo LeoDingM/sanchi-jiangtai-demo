@@ -74,6 +74,29 @@ export function expectedPct(ability) {
   return pts[pts.length - 1][1];
 }
 
+/**
+ * 理科高尾压缩：压住 710 这类头顶，并给 655 以上加一点确定性抖动以拉开拥挤。
+ * 640 分以下不动，以免改动一本/二本省控标定和 600 分上下的主体。
+ * 好年份校最高落在大约 670 几到 680 出头，允许极稀的尾巴摸到清北线附近，但不出现 710。
+ */
+export function compressLiHighTail(total, student, exam) {
+  const t = Number(total);
+  if (!(t >= 640)) return Math.round(t);
+  let out = t;
+  if (t <= 658) {
+    out = t;
+  } else if (t <= 678) {
+    out = 658 + (t - 658) * 0.70; // 678 → 672
+  } else if (t <= 700) {
+    out = 672 + (t - 678) * 0.36; // 696 → 678.5，700 → 680
+  } else {
+    out = 680 + (t - 700) * 0.12; // 710 → 681.2
+  }
+  const span = Math.min(7, Math.max(0, t - 655) * 0.28);
+  const jig = (hash01(student?.id || "x", exam?.id || "exam", "li-tail") - 0.5) * span;
+  return Math.round(out + jig);
+}
+
 function formSigma(stability) {
   // 稳定者约 ±0.7%；中等约 ±1.8%；不稳定可到 ±2.6%（相对满分）
   const s = clamp(stability ?? 60, 10, 99);
@@ -161,6 +184,9 @@ export function gradeStudent(student, exam, scale, teachingBonus = 0) {
     } else {
       total = Math.round(618 + (total - 618) * 0.36);
     }
+  }
+  if ((scale === SCALE_GAOKAO || scale === SCALE_G3 || scale === SCALE_G2) && track === "li") {
+    total = compressLiHighTail(total, student, exam);
   }
   return { ...scores, total, maxTotal, scale, subjects: subjects.map((s) => s.id) };
 }

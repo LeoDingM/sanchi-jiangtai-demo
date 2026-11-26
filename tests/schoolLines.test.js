@@ -77,7 +77,8 @@ test("开局补上 2014 级 2017 年高考统计，不进入可玩年级，且�
   assert.ok(prior, "开局应有上一届统计");
   assert.equal(prior.entryYear, 2014);
   assert.equal(prior.gaokaoYear, 2017);
-  assert.ok(prior.li.firstN >= 380 && prior.li.firstN <= 550, `理科一本名额应接近上一届省控一本量级（约 380–550，2017 年场次难度会晃），实际 ${prior.li.firstN}`);
+  // 2017 年喜报一本 462 为文理合计，口径或含复读；应届理科一本应更低，约 300–450。
+  assert.ok(prior.li.firstN >= 300 && prior.li.firstN <= 480, `2017 年应届理科一本应低于文理合计喜报 462 的量级，实际 ${prior.li.firstN}`);
   assert.ok(prior.wen.firstN >= 20 && prior.wen.firstN <= 120, `文科一本兜底量级，实际 ${prior.wen.firstN}`);
   assert.ok(prior.wen.secondN >= 150 && prior.wen.secondN <= 400, `文科二本不应是 1000，实际 ${prior.wen.secondN}`);
   const q = currentSchoolQuota(state);
@@ -120,7 +121,8 @@ test("2015 级 2018 年高考之后，校内线改用刚结束那届实际人数
   assert.equal(last.entryYear, 2015);
   assert.equal(last.gaokaoYear, 2018);
   assert.equal(after.li.firstN, last.li.firstN);
-  assert.ok(after.li.firstN >= 400 && after.li.firstN <= 550, `滚动后理科一本 ${after.li.firstN}`);
+  // 2018 年喜报一本约 529 为文理合计（口径或含复读），应届理科一本会更低。
+  assert.ok(after.li.firstN >= 300 && after.li.firstN <= 520, `滚动后应届理科一本应向 2018 年喜报合计约 529 的结构靠拢，实际 ${after.li.firstN}`);
   assert.ok(state.schoolLineHistory.length >= 2, "高考后应追加一届统计");
   assert.ok(before.priorYear === 2017 && after.priorYear === 2018, "应改用刚结束的 2018 年高考人数");
   assert.equal(after.li.secondN, 1000);

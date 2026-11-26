@@ -2,6 +2,7 @@ import {
   createGame, playerStudents, skipToNextStage, skipToGaokaoOf, skipToNextCohort,
   advanceDay, advancePeriod, prepareLesson, teach, talkTo, reviewHomework, listExamReports, formatDateCn,
   applyEvent, SCHOOL_CALENDAR, gradeOf, topicsForGrade, LESSON_STYLES,
+  formatGradeTerm, describePlayerStage, describeStageAdvance, describeAdmissionContext,
   suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext,
   urgeHomework, checkCorrection, officeMarking, consultHomeroom, consultMentor,
   daySchedule, currentSlot, formatSlotLabel, upcomingMath, upcomingTutoring,
@@ -47,7 +48,8 @@ function toast(msg) {
   el.textContent = msg;
   el.classList.remove("hidden");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.add("hidden"), 2800);
+  const hold = Math.min(8000, 2800 + String(msg || "").length * 35);
+  toastTimer = setTimeout(() => el.classList.add("hidden"), hold);
 }
 
 function persist() {
@@ -137,7 +139,7 @@ function handleAct(act) {
   }
   if (act === "skip") {
     const r = skipToNextStage(state);
-    toast(r.ok ? `已推进到 ${r.event.name}` : (r.reason || "无法推进"));
+    toast(r.ok ? (r.message || `已推进到 ${r.event.name}`) : (r.reason || "无法推进"));
   }
   persist();
   render();
@@ -145,8 +147,18 @@ function handleAct(act) {
 
 function render() {
   if (!state) return;
+  const grade = gradeOf(state.player.cohortYear, state.date);
+  const term = formatGradeTerm(grade, state.date);
+  const dateShort = formatDateCn(state.date).replace(/ 星期.?$/, "");
+  const sub = $("#school-sub");
+  if (sub) {
+    const gradeBit = grade >= 1 && grade <= 3 ? term.replace("学期", "") : term;
+    sub.textContent = `江西省宁川中学 · ${dateShort} · ${state.player.cohortYear}级${gradeBit}`;
+  }
   syncChrome();
   $("#clock").textContent = formatDateCn(state.date);
+  const gradeEl = $("#gradeline");
+  if (gradeEl) gradeEl.textContent = `你带的${state.player.cohortYear}级 · ${term}`;
   const slot = currentSlot(state);
   const periodEl = $("#periodline");
   if (periodEl) {
@@ -1177,19 +1189,33 @@ function viewOffice(host) {
   draw();
 }
 
+let admissionPick = "";
+
 function viewAdmission(host) {
   const keys = Object.keys(state.admissions||{}).sort().reverse();
   if (!keys.length) { host.innerHTML = "<h3>录取去向</h3><p>还没有走完高考录取。可用自动模式跳到本届高考。</p>"; return; }
-  const key = keys[0];
-  const pack = state.admissions[key];
+  if (!admissionPick || !state.admissions[admissionPick]) admissionPick = keys[0];
+  const pack = state.admissions[admissionPick];
   const list = pack.results || [];
   const qb = list.filter((x)=>x.qingbei);
   const first = list.filter((x)=>x.batch==="一批");
-  host.innerHTML = `<h3>${pack.year}年高考录取</h3>
+  const second = list.filter((x)=>x.batch==="一批" || x.batch==="二批");
+  const opts = keys.map((k) => {
+    const p = state.admissions[k];
+    const mine = p.entryYear === state.player.cohortYear ? "（你带的这届）" : "";
+    return `<option value="${k}" ${k===admissionPick?"selected":""}>${p.year}年 · ${p.entryYear}级${mine}</option>`;
+  }).join("");
+  const picker = keys.length > 1 ? `<div class="filters"><label>查看届次 <select id="adm-year">${opts}</select></label></div>` : "";
+  host.innerHTML = `<h3>${pack.year}年高考录取（${pack.entryYear}级）</h3>
+    <p class="notice">${describeAdmissionContext(state, pack)}</p>
+    ${picker}
     <p class="notice">对照江西${pack.year}年公开省控线。院校投档与省位次以 2020 年公开投档线和一分一段为底；其他年份按当年与 2020 年省控分差平移，表格中会标明，不是当年完整投档表或一分一段。艺体生目前只对照文化课成绩，尚未收录术科专业分，不编造术科分。师范意向只影响在已有院校池中的匹配偏好，没有单独的师范提前批投档表。不随机派校名，也不为喜报虚造清北。</p>
-    <div class="kpi"><div><span>清北</span><b>${qb.length}</b></div><div><span>一批</span><b>${first.length}</b></div><div><span>公布人数</span><b>${list.length}</b></div></div>
+    <div class="kpi"><div><span>清北</span><b>${qb.length}</b></div><div><span>一批</span><b>${first.length}</b></div><div><span>二本以上</span><b>${second.length}</b></div><div><span>公布人数</span><b>${list.length}</b></div></div>
+    <p class="notice">公布人数是本届应届与复读全员（含专科及未达专科线），不是二本以上人数。一批、二本以上按江西${pack.year}年公开省控线统计。</p>
     <div class="filters"><input id="q" placeholder="搜索姓名或大学" /></div>
     <div class="paper" id="adm-table"></div>`;
+  const yearSel = host.querySelector("#adm-year");
+  if (yearSel) yearSel.onchange = () => { admissionPick = yearSel.value; render(); };
   const draw = () => {
     const q = (host.querySelector("#q").value||"").trim();
     const rows = list.filter((a)=>!q || a.name.includes(q) || (a.university||"").includes(q));
@@ -1207,14 +1233,14 @@ function viewAuto(host) {
       <button type="button" id="n2">跳到本届高考录取</button>
       <button type="button" id="n3">再推进到下一届入学</button>
     </div>
-    <p class="notice" id="auto-msg">当前 ${formatDateCn(state.date)}，任教 ${state.player.cohortYear} 级。</p>`;
+    <p class="notice" id="auto-msg">当前 ${formatDateCn(state.date)}。${describePlayerStage(state)}${(() => { const g = gradeOf(state.player.cohortYear, state.date); return g >= 1 && g <= 3 ? "，尚未走完这届高考。" : "。"; })()}下一阶段会写明是哪一届的什么事，避免把其他年级的高考当成你带的班。</p>`;
   host.querySelector("#n1").onclick = () => handleAct("skip");
   host.querySelector("#n2").onclick = () => {
     toast("正在自动推进到高考录取，请稍候…");
     setTimeout(() => {
       skipToGaokaoOf(state, state.player.cohortYear);
       persist(); render();
-      toast("已到达本届高考录取（若校历已过则停在当前）");
+      toast(`已到达你带的${state.player.cohortYear}级高考录取（若校历已过则停在当前）。${describePlayerStage(state)}。`);
     }, 20);
   };
   host.querySelector("#n3").onclick = () => {

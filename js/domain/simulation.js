@@ -2,8 +2,8 @@
 import {
   PLAYER_CLASS_NO, PLAYER_DEFAULT_NAME, PLAYER_ROLE, START_DATE, GRADE_YEAR, HOMEROOM_NAME, MENTOR_NAME,
 } from "./config.js";
-import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById, examParams } from "./calendar.js";
-import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf, reseatClasses } from "./school.js";
+import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById, examParams, formatGradeTerm, formatCohortGrade, termOf } from "./calendar.js";
+import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf, reseatClasses, eraQuality } from "./school.js";
 import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js";
 import { runExam } from "./examService.js";
 import { provincialPassCounts, schoolQuotaFromPrior, fallbackSchoolQuota, examResultLogText } from "./schoolLines.js";
@@ -39,7 +39,7 @@ function bonusFor(state, student) {
 
 /** 按同一套确定性规则结算某届高考应届省控上线人数，只保留统计，不把该届放入可玩年级。 */
 export function simulatePriorGaokaoStats(seed, entryYear, gaokaoYear) {
-  const c = generateCohort(entryYear, seed, { alreadySplit: false, quality: 0 });
+  const c = generateCohort(entryYear, seed, { alreadySplit: false, quality: eraQuality(entryYear) });
   const pre = runExam(c, { id: `prior-final-${entryYear}`, name: "历史期末", examKind: "final", difficulty: 0.99, dispersion: 1.02, date: `${entryYear + 1}-01-16` }, { grade: 1, split: false });
   const p1 = firstPlacement(c.students, pre.scoreMap, { seed: seed + entryYear });
   c.students = p1.students;
@@ -426,6 +426,63 @@ export function applyEvent(state, ev) {
   return { type: ev.kind, ok: true };
 }
 
+export function describePlayerStage(state, date = state.date) {
+  const year = state.player.cohortYear;
+  const { grade, term } = formatCohortGrade(year, date);
+  if (grade >= 1 && grade <= 3) return `你带的${year}级现在是${term}`;
+  if (grade > 3) return `你原先带的${year}级已经毕业`;
+  return `你即将接带的${year}级${term}`;
+}
+
+export function describeEventAudience(ev) {
+  if (!ev) return "";
+  if (ev.examKind === "gaokao") {
+    const cohort = ev.cohortYear;
+    return `${ev.name}（${cohort}级高三的高考）`;
+  }
+  if (ev.kind === "admission") {
+    const cohort = ev.cohortYear;
+    const year = ev.year || Number(String(ev.date).slice(0, 4));
+    return `${year}年高考录取公布（${cohort}级）`;
+  }
+  if (ev.kind === "promote") {
+    const graduated = ev.graduatedCohort;
+    const incoming = ev.newEntryYear;
+    return `${ev.name}（${graduated}级离校，${incoming}级入学）`;
+  }
+  const grades = ev.grades || [1, 2, 3];
+  const labels = [...new Set(grades)].map((g) => `高${"一二三"[g - 1] || g}`).join("、");
+  return `${ev.name}（${labels}）`;
+}
+
+/** 推进后的提示：分清「这次是哪一届的事」和「你带的这届现在高几」。 */
+export function describeStageAdvance(state, ev) {
+  if (!ev) return "无法推进";
+  const when = describeEventAudience(ev);
+  const you = describePlayerStage(state, ev.date);
+  const yourGrade = formatCohortGrade(state.player.cohortYear, ev.date).grade;
+  const evCohort = ev.cohortYear;
+  const isGaokaoLike = ev.examKind === "gaokao" || ev.kind === "admission";
+  if (isGaokaoLike && evCohort === state.player.cohortYear) {
+    const kind = ev.kind === "admission" ? "高考录取" : "高考";
+    return `已推进到${when}。这就是你带的${state.player.cohortYear}级的${kind}。`;
+  }
+  if (isGaokaoLike && evCohort != null && evCohort !== state.player.cohortYear && yourGrade >= 1 && yourGrade <= 3) {
+    return `已推进到${when}。${you}，尚未高考。`;
+  }
+  return `已推进到${when}。${you}。`;
+}
+
+export function describeAdmissionContext(state, pack) {
+  if (!pack) return "";
+  const yours = pack.entryYear === state.player.cohortYear;
+  const you = describePlayerStage(state);
+  const { grade } = formatCohortGrade(state.player.cohortYear, state.date);
+  if (yours) return `这是你带的${pack.entryYear}级的${pack.year}年高考录取。`;
+  const pending = grade >= 1 && grade <= 3 ? "，尚未高考" : "";
+  return `这是${pack.entryYear}级的${pack.year}年高考录取，不是你当前带的${state.player.cohortYear}级。${you}${pending}。`;
+}
+
 /** 一键跳到下一个考试/分班/录取/升学事件，并结算该事件。 */
 export function skipToNextStage(state) {
   const ev = nextExamEvent(state.date, SCHOOL_CALENDAR);
@@ -437,7 +494,8 @@ export function skipToNextStage(state) {
   state.talksThisPeriod = 0;
   state.tutorAnswers = 0;
   const result = applyEvent(state, ev);
-  return { ok: true, event: ev, result };
+  const message = describeStageAdvance(state, ev);
+  return { ok: true, event: ev, result, message };
 }
 
 /** 连续跳过，直到某届高考录取完成，或指定停止条件。 */
@@ -765,4 +823,4 @@ export function setPlacementPref(state, studentId, track) {
   return { ok: true };
 }
 
-export { formatDateCn, SCHOOL_CALENDAR, gradeOf, schoolYearFromDate };
+export { formatDateCn, SCHOOL_CALENDAR, gradeOf, schoolYearFromDate, formatGradeTerm, formatCohortGrade, termOf, eraQuality };

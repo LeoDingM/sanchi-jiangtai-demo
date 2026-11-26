@@ -9,6 +9,25 @@ export function provincialLines(year, track) {
   return y[track];
 }
 
+/**
+ * 一分一段表顶端：跳过与下一档累计人数相同、却跨过缺失分数的封顶行。
+ * 例如理工 [[750,11],[695,11],...] 里 750 不是逐分解析行，最高实际公布分是 695。
+ */
+export function officialRankTableTop(table) {
+  let i = 0;
+  while (i + 1 < table.length && table[i][1] === table[i + 1][1] && table[i][0] > table[i + 1][0] + 1) {
+    i += 1;
+  }
+  return { score: table[i][0], rank: table[i][1], index: i };
+}
+
+/** 表内最高实际公布分以上的稀尾推算：更高分更好，未真正同分不并列。不伪造官方分数行。 */
+export function extrapolateRankAboveOfficial(score, maxOfficialScore, rankAtOfficial) {
+  const s = Math.round(Number(score));
+  if (s <= maxOfficialScore) return rankAtOfficial;
+  return Math.max(1, rankAtOfficial - (s - maxOfficialScore));
+}
+
 /** 用 2020 一分一段查位次；其他年份先按一本线分差平移到 2020 分。 */
 export function provincialRank(score, track, year = 2020) {
   const table = track === "wen" ? JX_DATA.rankWen : JX_DATA.rankLi;
@@ -18,6 +37,8 @@ export function provincialRank(score, track, year = 2020) {
     const base = provincialLines(2020, track);
     s = Math.round(s - (src.first - base.first));
   }
+  const top = officialRankTableTop(table);
+  if (s > top.score) return extrapolateRankAboveOfficial(s, top.score, top.rank);
   let last = table[table.length - 1][1];
   for (const [pt, cum] of table) {
     if (pt <= s) return cum;
