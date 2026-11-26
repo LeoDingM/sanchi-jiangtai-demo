@@ -11,6 +11,7 @@ import { admitCohort } from "./admission.js";
 import { rngFrom, clamp } from "./prng.js";
 import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands, homeroomEveningRoll as homeroomEveningRollCore, compileEveningRoll, studentRecentStatus, rollCallStatusLine } from "./teaching.js";
 import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, upcomingTutoring, formatSlotLabel, isTutoringSlot } from "./timetable.js";
+import { openParentsMeeting as openParentsMeetingCore, meetParent as meetParentCore, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE } from "./parents.js";
 
 export const SAVE_VERSION = 1;
 
@@ -400,12 +401,28 @@ export function doPromote(state, ev) {
   return { ok: true, newEntry };
 }
 
+export function doParentsMeeting(state, ev) {
+  const r = openParentsMeetingCore(state, ev);
+  if (r.ok && r.text && !r.already) addLog(state, r.text);
+  state.flags[`parents-${ev.id}`] = true;
+  return r;
+}
+
+export function meetParent(state, studentId) {
+  const cls = snapshotPlayerClass(state);
+  const s = cls.find((x) => x.id === studentId) || null;
+  const r = meetParentCore(state, s);
+  if (r.ok) addLog(state, r.text);
+  return r;
+}
+
 export function applyEvent(state, ev) {
   if (ev.kind === "exam") return { type: "exam", reports: runScheduledExam(state, ev) };
   if (ev.kind === "placement1") return { type: "placement1", ...doFirstPlacement(state, ev.grades ? schoolYearFromDate(ev.date) : state.player.cohortYear) };
   if (ev.kind === "placement2") return { type: "placement2", ...doSecondPlacement(state, ev.grades ? schoolYearFromDate(ev.date) : state.player.cohortYear) };
   if (ev.kind === "admission") return { type: "admission", ...doAdmission(state, ev) };
   if (ev.kind === "promote") return { type: "promote", ...doPromote(state, ev) };
+  if (ev.kind === "parents") return { type: "parents", ...doParentsMeeting(state, ev) };
   return { type: ev.kind, ok: true };
 }
 
@@ -451,7 +468,7 @@ export function skipToNextCohort(state) {
 export function advanceDay(state) {
   const evs = SCHOOL_CALENDAR.filter((e) => e.date === state.date && !state.flags[`done-${e.id}`]);
   // 若当天有未处理的关键事件，先处理再过天
-  const major = evs.find((e) => ["exam", "placement1", "placement2", "admission", "promote"].includes(e.kind));
+  const major = evs.find((e) => ["exam", "placement1", "placement2", "admission", "promote", "parents"].includes(e.kind));
   if (major) {
     state.flags[`done-${major.id}`] = true;
     return applyEvent(state, major);
@@ -603,7 +620,7 @@ export function reviewHomework(state, studentId) {
   return r;
 }
 
-export { topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, daySchedule, currentSlot, formatSlotLabel, upcomingMath, upcomingTutoring, majorEventOn, pendingMajorEvent, isTutoringSlot, raisedHands, seatLabel, seatOf, compileEveningRoll, studentRecentStatus, rollCallStatusLine };
+export { topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, daySchedule, currentSlot, formatSlotLabel, upcomingMath, upcomingTutoring, majorEventOn, pendingMajorEvent, isTutoringSlot, raisedHands, seatLabel, seatOf, compileEveningRoll, studentRecentStatus, rollCallStatusLine, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE };
 
 function latestMathExam(state, studentId) {
   const reports = listExamReports(state, { entryYear: state.player.cohortYear });

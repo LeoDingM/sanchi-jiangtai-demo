@@ -217,6 +217,9 @@ export function studentRecentStatus(student, state, { placed = false } = {}) {
     bits.push(ctx.hw.status === "缺交" || ctx.hw.correction === "待补交" ? "这趟作业缺交" : `作业${ctx.hw.quality}${ctx.hw.reviewed ? "（已面批）" : ""}${corr}`);
   }
   if (ctx?.quiz) bits.push(`随堂小测 ${ctx.quiz.score} 分`);
+  if (student.lastParentMeeting) {
+    bits.push(student.lastParentMeeting.statusLine || `${student.lastParentMeeting.date}家长会：数学老师与家长谈了近况`);
+  }
   if (!bits.length) return `${seat}。还没有本班课堂或作业记录。`;
   return `${seat}。带班近况：` + bits.join("；") + "。";
 }

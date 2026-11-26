@@ -28,6 +28,20 @@ export function weekdayName(s) {
   return WEEKDAY[weekday(s)] || WEEKDAY_NAMES[weekday(s)];
 }
 
+/** 从某日起（含当天）第一个指定星期几。dow：0 日 … 6 六。 */
+export function firstWeekdayOnOrAfter(date, dow) {
+  let d = date;
+  for (let i = 0; i < 7; i++) {
+    if (weekday(d) === dow) return d;
+    d = addDays(d, 1);
+  }
+  return d;
+}
+
+export const PARENTS_SOURCE_NOTE = "校内日期安排，按普通高中在学期开学后或期中后召开家长会的惯例排入校历，不是某所实校或教育行政部门公告的逐年日期。";
+
+export const STAGE_KINDS = ["exam", "placement1", "placement2", "admission", "promote", "parents"];
+
 export function cmpDate(a, b) { return a < b ? -1 : a > b ? 1 : 0; }
 
 export function formatDateCn(s) {
@@ -144,6 +158,24 @@ export function buildCalendar(fromYear = 2017, toYear = 2030) {
     }));
 
     events.push(ev({ id: `open-${sy}-spring`, date: ymd(y2, 2, 22), name: "下学期开学", kind: "opening" }));
+    const fallParents = firstWeekdayOnOrAfter(addDays(ymd(sy, 11, 15), 7), 6);
+    events.push(ev({
+      id: `parents-fall-${sy}`,
+      date: fallParents,
+      name: "秋季期中后家长会",
+      kind: "parents",
+      grades: [1, 2, 3],
+      sourceNote: PARENTS_SOURCE_NOTE,
+    }));
+    const springParents = firstWeekdayOnOrAfter(addDays(ymd(y2, 2, 22), 14), 6);
+    events.push(ev({
+      id: `parents-spring-${sy}`,
+      date: springParents,
+      name: "春季学期家长会",
+      kind: "parents",
+      grades: [1, 2, 3],
+      sourceNote: PARENTS_SOURCE_NOTE,
+    }));
     events.push(ev({
       id: `exam-${sy}-spring-monthly1`, date: ymd(y2, 3, 20), name: "下学期月考", kind: "exam", examKind: "monthly", year: sy,
     }));
@@ -209,7 +241,7 @@ export function nextEvent(date, calendar = SCHOOL_CALENDAR) {
 }
 
 export function nextExamEvent(date, calendar = SCHOOL_CALENDAR) {
-  return calendar.find((e) => e.date > date && (e.kind === "exam" || e.kind === "placement1" || e.kind === "placement2" || e.kind === "admission" || e.kind === "promote")) || null;
+  return calendar.find((e) => e.date > date && STAGE_KINDS.includes(e.kind)) || null;
 }
 
 export function eventById(id, calendar = SCHOOL_CALENDAR) {

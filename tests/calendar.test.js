@@ -6,11 +6,11 @@ import { firstPlacement, rebuildClasses } from "../js/domain/placement.js";
 import { runExam } from "../js/domain/examService.js";
 import { provincialLines, gapOfficial } from "../js/domain/jiangxi.js";
 
-test("校历从 2017 年 9 月起，含月考/期中/期末/联考/模拟/高考与两次分班、升学", () => {
+test("校历从 2017 年 9 月起，含月考/期中/期末/联考/模拟/高考、两次分班、升学与家长会", () => {
   const ev = buildCalendar(2017, 2021);
   assert.ok(ev[0].date >= "2017-09-01");
   const kinds = new Set(ev.map((e) => e.kind + ":" + (e.examKind || "")));
-  for (const k of ["exam:monthly", "exam:midterm", "exam:final", "exam:city", "exam:province", "exam:mock1", "exam:gaokao", "placement1:", "placement2:", "admission:", "promote:"]) {
+  for (const k of ["exam:monthly", "exam:midterm", "exam:final", "exam:city", "exam:province", "exam:mock1", "exam:gaokao", "placement1:", "placement2:", "admission:", "promote:", "parents:"]) {
     assert.ok([...ev.map((e) => e.kind + ":" + (e.examKind || ""))].some((x) => x.startsWith(k.replace(/:$/, "")) || x === k || x.startsWith(k.slice(0, -1))), k);
   }
   assert.ok(ev.some((e) => e.kind === "placement1"));
@@ -20,6 +20,9 @@ test("校历从 2017 年 9 月起，含月考/期中/期末/联考/模拟/高考
   assert.ok(hk, "高二应有学业水平考试（会考）薄层");
   assert.deepEqual(hk.grades, [2]);
   assert.ok(hk.sourceNote && hk.sourceNote.includes("校内"));
+  const pm = ev.find((e) => e.kind === "parents" && e.date.startsWith("2017-11"));
+  assert.ok(pm, "秋季期中后应有家长会");
+  assert.ok(pm.sourceNote && pm.sourceNote.includes("校内日期安排"));
 });
 
 test("不同场次难度不同，一本/二本线随难度明显波动，分差为数十分而非几分", () => {

@@ -7,7 +7,9 @@ import {
   daySchedule, currentSlot, formatSlotLabel, upcomingMath, upcomingTutoring,
   tutorEvening, raisedHands, seatLabel, periodTalkScene, isTutoringSlot,
   homeroomEveningRoll, placementSeatNotice, cohortPlacementStage, studentRecentStatus,
+  meetParent, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE,
 } from "../domain/simulation.js";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js";
 import { saveSlot, loadSlot, listSlots, toJSON, fromJSON } from "../domain/save.js";
 import { subjectById, SUBJECTS_G1 } from "../domain/config.js";
 import { filterRows, sameTierCompare } from "../domain/examService.js";
@@ -271,6 +273,7 @@ function deskPanelHtml(student, slot, scene) {
     <div class="row-actions">${extra.join("")}</div>
     <p>谈话（本时段还可 ${leftTalk} 人，本日余 ${dayLeft} 人）</p>
     <div class="row-actions">${talks}</div>
+    ${isParentsMeetingOpen(state) ? `<div class="row-actions"><button type="button" class="accent" data-parent="${student.id}" ${student.lastParentMeeting?.date === state.date ? "disabled" : ""}>${student.lastParentMeeting?.date === state.date ? "这场已与家长谈过" : "与家长面谈"}</button></div>` : ""}
     <div class="row-actions"><button type="button" id="to-profile">查看档案</button></div>`;
 }
 
@@ -324,6 +327,7 @@ function viewClassroom(host) {
   let slotLine = slot ? formatSlotLabel(slot) : formatDateCn(state.date);
   if (slot?.isTutoring) slotLine += "。可以巡视、到座位旁答疑、收订正，或请班主任点名";
   else if (slot?.isMath) slotLine += "（本节可上课，也可在座位边提醒）";
+  else if (isParentsMeetingOpen(state) || (slot?.isExamDay && state.parentsMeeting?.date === state.date)) slotLine += "（今日家长会，由班主任主持，你可作为数学老师与本班家长面谈）";
   else if (slot?.isExamDay) slotLine += "（今日停课）";
   else if (slot && !slot.isMath && slot.kind !== "break" && slot.id !== "rest") slotLine += "。这节不是数学课，谈话请到走廊门口简短说";
   if (nxtT && !slot?.isTutoring) slotLine += `。下一节可答疑：${nxtT.sameDay ? "" : nxtT.date + " "}${formatSlotLabel(nxtT.slot)}`;
@@ -339,6 +343,7 @@ function viewClassroom(host) {
   const board = slot ? `${formatSlotLabel(slot)} · 卓行16班` : "宁川中学 · 卓行16班";
   renderSeating(c, sts, selectedId, (id) => { selectedId = id; render(); }, { boardTitle: board, marks });
   bindDeskAndTutor(host);
+  bindParentActions(host);
 }
 
 function viewRoster(host) {
@@ -431,6 +436,7 @@ function viewProfile(host) {
         <p><b>心情</b> ${s.mood ?? "—"}　<b>压力</b> ${s.stress ?? "—"}　<b>精力</b> ${s.energy ?? "—"}　<b>师生关系</b> ${s.relation||0}</p>
         <p class="muted">${teachingStatus(s)}</p>
         ${(s.rollCalls || []).length ? `<p><b>晚自习点名记录</b></p>${(s.rollCalls||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : ""}
+        ${(s.parentMeetings || []).length ? `<p><b>家长会面谈</b></p>${(s.parentMeetings||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : ""}
         <p class="muted">学科能力（潜能为个人上限，不是当场分数）</p>
         <p>${ab || "—"}</p>
       </div>
@@ -624,6 +630,52 @@ function hwActionButtons(r) {
   return `<button type="button" data-rv="${r.id}">面批</button>`;
 }
 
+function parentsMeetingHtml() {
+  const open = isParentsMeetingOpen(state);
+  const nxt = upcomingParentsMeeting(state, SCHOOL_CALENDAR);
+  const home = state.player.homeroom;
+  if (!open) {
+    const when = nxt && nxt.date !== state.date ? `${nxt.date} ${nxt.name || "家长会"}` : "";
+    return `<div class="paper lesson-card parents-panel">
+      <h3>家长会</h3>
+      <p class="muted">家长会由班主任${home}主持，你以本班数学任课老师身份参加，和家长谈该生近期考试、作业订正和课堂表现。${when ? `下场：${when}。` : "校历上尚未排到下一场。"}日期是校内安排，不是某所实校或教育局公告的逐年日期。</p>
+    </div>`;
+  }
+  const used = state.parentTalksThisMeeting || 0;
+  const left = Math.max(0, PARENT_TALK_CAP - used);
+  const sts = clsStudents().slice().sort((a, b) => parentTalkPriority(b, state) - parentTalkPriority(a, state) || (a.seq ?? 0) - (b.seq ?? 0));
+  const rows = sts.map((s) => {
+    const done = s.lastParentMeeting?.date === state.date;
+    const brief = composeParentBrief(s, state);
+    const hint = [brief.exam ? `${brief.exam.examName}校排${brief.exam.rank || "—"}` : "", brief.homeworkText, brief.classroom?.flag || ""].filter(Boolean).join("；");
+    return `<div class="parents-row">
+      <div>
+        <b>${s.name}</b>　<span class="muted">${seatLabel(s)}</span>
+        <p class="muted">${done ? "这场已经谈过。" : hint}</p>
+      </div>
+      <button type="button" data-parent="${s.id}" ${done || left <= 0 ? "disabled" : ""}>${done ? "已谈" : "面谈"}</button>
+    </div>`;
+  }).join("");
+  return `<div class="paper lesson-card parents-panel">
+    <h3>${state.parentsMeeting.name || "家长会"}</h3>
+    <p class="notice">由班主任${home}主持，你作为数学任课老师在教室一侧和本班家长面谈。这场还可面谈 ${left} / ${PARENT_TALK_CAP} 人。${state.parentsMeeting.sourceNote || PARENTS_SOURCE_NOTE}</p>
+    <div class="parents-list">${rows}</div>
+  </div>`;
+}
+
+function bindParentActions(host) {
+  host.querySelectorAll("[data-parent]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      selectedId = b.dataset.parent;
+      const r = meetParent(state, b.dataset.parent);
+      toast(r.ok ? r.text : (r.reason || "无法面谈"));
+      persist();
+      render();
+    };
+  });
+}
+
 function officeCollabHtml() {
   const watch = homeworkWatchlist(state.homework, state);
   const names = [...new Set(watch.map((r) => r.name))];
@@ -745,6 +797,7 @@ function viewTeach(host) {
         ${last ? `<p class="muted">${last.date}　${last.topic} · ${last.style}</p><ol class="notes-list">${(last.notes||[]).map((n)=>`<li>${n}</li>`).join("")}</ol>${last.quiz?`<p class="muted">小测均分 ${last.quizAvg}。前列：${last.quiz.slice(0,5).map((q)=>`${q.name}${q.score}`).join("、")}${quizLow.length?`。偏低：${quizLow.map((q)=>`${q.name}${q.score}`).join("、")}`:""}</p>`:""}` : `<p class="muted">今天还没上数学课。</p>`}
       </div>
     </div>
+    ${parentsMeetingHtml()}
     ${eveningTutorHtml()}
     ${officeCollabHtml()}
     <div class="paper lesson-card">
@@ -783,6 +836,7 @@ function viewTeach(host) {
     };
   });
   bindOfficeActions(host);
+  bindParentActions(host);
   bindDeskAndTutor(host);
   host.querySelectorAll("tr[data-id]").forEach((tr) => {
     tr.onclick = () => { selectedId = tr.dataset.id; view = "profile"; render(); };
@@ -920,6 +974,7 @@ function viewOffice(host) {
       ${officeCollabHtml()}
       <p class="muted">全校成绩要等第一次考试结算之后才会出现在这里。办公室坐班、班主任通报和备课请教现在就可以做。</p>`;
     bindOfficeActions(host);
+    bindParentActions(host);
     return;
   }
   const pick = examPick && names.find((n)=>n.includes(examPick.split("|")[0])) || names[0];
@@ -1073,7 +1128,7 @@ function viewSave(host) {
 
 function renderAgenda() {
   const box = $("#agenda");
-  const next = SCHOOL_CALENDAR.find((e) => e.date >= state.date && ["exam","placement1","placement2","admission","promote"].includes(e.kind));
+  const next = SCHOOL_CALENDAR.find((e) => e.date >= state.date && ["exam","placement1","placement2","admission","promote","parents"].includes(e.kind));
   const cls = clsStudents();
   const sched = daySchedule(state.date, state);
   const curId = state.periodId;

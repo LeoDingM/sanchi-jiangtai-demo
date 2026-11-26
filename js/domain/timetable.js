@@ -69,7 +69,7 @@ const SUBJECTS_WEN = {
   6: { ...SUBJECTS_MIXED[6], p4: "政治" },
 };
 
-const MAJOR_KINDS = new Set(["exam", "placement1", "placement2", "admission", "promote"]);
+const MAJOR_KINDS = new Set(["exam", "placement1", "placement2", "admission", "promote", "parents"]);
 
 export function periodsForWeekday(wd) {
   const ids = WEEKDAY_PERIODS[wd] || WEEKDAY_PERIODS[1];
