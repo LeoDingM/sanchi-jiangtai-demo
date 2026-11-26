@@ -395,9 +395,38 @@ a { color: var(--gold); }
   min-height: 40px;
 }
 
+.settings-section {
+  margin-top: 28px;
+  max-width: 36rem;
+}
+.settings-section h4 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+.settings-toggle {
+  flex-direction: row !important;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+.settings-toggle input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.settings-toggle span {
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.45;
+}
+
 @media (max-width: 980px) {
   .settings-form,
   .settings-form input[type="url"],
   .settings-form input[type="text"],
-  .settings-form input[type="password"] { width: 100%; max-width: none; }
+  .settings-form input[type="password"],
+  .settings-section { width: 100%; max-width: none; }
 }

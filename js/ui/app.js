@@ -21,7 +21,8 @@ import { studentExamHistory, tierName, findStudentInState } from "../domain/stud
 import { drawScoreChart, drawRankChart } from "./charts.js";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
-  playerSubjectName, analysisScope, isPlayerHomeroom,
+  loadGodSettings, saveGodSettings, officialHomeroomName,
+  playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
 } from "../domain/examAi.js";
 
@@ -937,6 +938,8 @@ function examAiCacheKey(report, player) {
 
 function viewSettings(host) {
   const conf = loadAiSettings();
+  const god = loadGodSettings();
+  const officialName = officialHomeroomName(state.player);
   const keyHint = conf.hasKey ? `已保存密钥 ${maskApiKey(conf.apiKey)}。输入框留空再保存，会保留原密钥。` : "尚未保存密钥。";
   host.innerHTML = `<h3>设置</h3>
     <p class="notice">考后分析使用 OpenAI 兼容接口（默认 DeepSeek，地址 ${escapeHtml("https://api.deepseek.com")}，路径 /chat/completions）。密钥只存在本机浏览器，与游戏存档分开，也不会写入导出的 JSON。分析只写评语，不会改分数、排名或上线人数。</p>
@@ -949,7 +952,18 @@ function viewSettings(host) {
         <button type="submit" class="accent">保存设置</button>
         <button type="button" id="ai-clear">清除密钥</button>
       </div>
-    </form>`;
+    </form>
+    <section class="settings-section" id="god-mode">
+      <h4>上帝模式</h4>
+      <p class="notice">上帝模式只改变查看与分析范围，不会改写学校的正式任职，也不会写入存档或导出的 JSON，只保存在这台设备的浏览器里。</p>
+      <form class="settings-form" id="god-form">
+        <label class="settings-toggle">
+          <input type="checkbox" id="god-homeroom" ${god.actAsHomeroom ? "checked" : ""} />
+          <span>以本班班主任身份查看考后分析</span>
+        </label>
+        <p class="muted">打开后，考后分析按本班班主任身份查看全班总分、各科和划线。学校正式班主任仍是${escapeHtml(officialName)}。关闭即可恢复为单科任课老师。家长会主持、向班主任通报、请班主任点名等剧情仍按正式任职进行。</p>
+      </form>
+    </section>`;
   host.querySelector("#ai-form").onsubmit = (e) => {
     e.preventDefault();
     const model = host.querySelector("#ai-model").value.trim();
@@ -965,6 +979,13 @@ function viewSettings(host) {
     const r = clearAiKey();
     host.querySelector("#ai-key").value = "";
     toast(r.ok ? "已清除本机密钥。" : (r.reason || "无法清除"));
+    viewSettings(host);
+  };
+  host.querySelector("#god-homeroom").onchange = (e) => {
+    const r = saveGodSettings({ actAsHomeroom: e.target.checked });
+    toast(r.ok
+      ? (r.actAsHomeroom ? "已按本班班主任身份查看考后分析。正式班主任不变，也不会写入存档。" : "已恢复为单科任课老师分析。")
+      : (r.reason || "无法保存"));
     viewSettings(host);
   };
 }
@@ -1033,8 +1054,14 @@ function viewGrades(host) {
     if (isJoint) return `<td>${i+1}</td><td>${r.name}</td><td>${r.total}</td><td>${r.rank||"—"}</td><td>${r.countyRank??"—"}</td><td>${r.cityRank??"—"}</td><td>${r.jointLine?.city||"—"}</td><td>${r.jointLine?.county||"—"}</td>`;
     return `<td>${i+1}</td><td>${r.name}</td><td>${r.total}</td><td>${r.rank||"—"}</td><td>${r.line||""}</td>`;
   };
+  const actingHome = isActingHomeroom(state.player, state.player.classNo);
+  const officialHome = isPlayerHomeroom(state.player, state.player.classNo);
+  const godNote = actingHome && !officialHome
+    ? `<p class="notice">上帝模式：当前按班主任身份查看本班考后分析。学校正式班主任仍是${escapeHtml(officialHomeroomName(state.player))}，任职与存档不会被改写。</p>`
+    : "";
   host.innerHTML = `<h3>考试成绩 · 任教班</h3>
     <div class="filters"><label>场次 <select id="exsel">${examOptions()}</select></label></div>
+    ${godNote}
     ${note?`<p class="notice">${note}</p>`:""}
     ${isJoint?jointKpi:`<div class="kpi">
       <div><span>试卷难度</span><b>${(report.difficulty||1).toFixed(3)}</b></div>
@@ -1056,11 +1083,15 @@ function viewGrades(host) {
 
 function examAiPanel(report) {
   const p = state.player;
-  const home = isPlayerHomeroom(p, p.classNo);
+  const official = isPlayerHomeroom(p, p.classNo);
+  const acting = isActingHomeroom(p, p.classNo);
   const sub = playerSubjectName(p);
-  const scopeText = home
+  const officialName = officialHomeroomName(p);
+  const scopeText = official
     ? "你现在是本班班主任，可以分析全班总分、均分、校内线与对照省控、班/层/校排和跨层次排、排名分布，以及各门单科。"
-    : `你现在是本班${sub}任课老师，不是班主任，只能分析本班${sub}（整体排名只作背景）。若以后接任班主任，这里会改为可看全班整体。`;
+    : acting
+      ? `当前为上帝模式查看：按本班班主任身份分析全班总分、均分、校内线与对照省控、班/层/校排和跨层次排、排名分布，以及各门单科。学校正式班主任仍是${officialName}，任职与存档不会被改写。`
+      : `你现在是本班${sub}任课老师，不是班主任，只能分析本班${sub}（整体排名只作背景）。可在「设置」的上帝模式里临时按班主任范围查看全班；若以后正式接任班主任，这里会自动改为可看全班整体。`;
   const cached = examAiCache.get(examAiCacheKey(report, p));
   const body = cached ? escapeHtml(cached).replace(/\n/g, "<br/>") : "";
   return `<div class="paper exam-ai">

@@ -13,6 +13,7 @@ import { buildStudentExamSnapshot, strongerTiers, tierName } from "./studentHist
 
 export const AI_SETTINGS_KEY = "sanchi-jiangtai-ai-settings-v1";
 export const AI_KEY_KEY = "sanchi-jiangtai-ai-key-v1";
+export const GOD_SETTINGS_KEY = "sanchi-jiangtai-god-settings-v1";
 export const DEFAULT_AI_BASE_URL = "https://api.deepseek.com";
 export const DEFAULT_AI_MODEL = "deepseek-flash";
 
@@ -78,6 +79,35 @@ export function clearAiKey() {
   return { ok: true, ...loadAiSettings() };
 }
 
+export function defaultGodSettings() {
+  return { actAsHomeroom: false };
+}
+
+export function loadGodSettings() {
+  const out = defaultGodSettings();
+  const st = storage();
+  if (!st) return out;
+  try {
+    const raw = st.getItem(GOD_SETTINGS_KEY);
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (data.actAsHomeroom === true) out.actAsHomeroom = true;
+    }
+  } catch { /* 忽略损坏的设置 */ }
+  return out;
+}
+
+export function saveGodSettings({ actAsHomeroom } = {}) {
+  const st = storage();
+  if (!st) return { ok: false, reason: "当前环境不能保存设置。" };
+  const prev = loadGodSettings();
+  const next = {
+    actAsHomeroom: actAsHomeroom != null ? !!actAsHomeroom : !!prev.actAsHomeroom,
+  };
+  st.setItem(GOD_SETTINGS_KEY, JSON.stringify(next));
+  return { ok: true, ...loadGodSettings() };
+}
+
 export function maskApiKey(key) {
   const k = String(key || "");
   if (!k) return "";
@@ -97,9 +127,10 @@ export function playerSubjectName(player) {
 }
 
 /**
- * 是否以该班班主任身份看整体分析。
- * 用任职字段判断，不用本班班主任姓名（player.homeroom 是赵映秋等人的名字）。
+ * 是否以该班正式班主任身份看整体分析。
+ * 只用任职字段判断，不用本班班主任姓名（player.homeroom 是赵映秋等人的名字）。
  * 以后若玩家接任班主任，设置 player.isHomeroom 或 player.homeroomOf = 班号即可。
+ * 上帝模式不得写入这两个字段，也不应经过本函数判断。
  */
 export function isPlayerHomeroom(player, classNo = player?.classNo) {
   if (!player || classNo == null) return false;
@@ -107,8 +138,26 @@ export function isPlayerHomeroom(player, classNo = player?.classNo) {
   return player.isHomeroom === true;
 }
 
-export function analysisScope(player, classNo = player?.classNo) {
-  return isPlayerHomeroom(player, classNo) ? "class" : "subject";
+/**
+ * 上帝模式叠加层：是否按本班班主任身份查看考后分析。
+ * 只读独立设置，不读写 player.isHomeroom / homeroomOf，也不改变学校正式班主任（player.homeroom）。
+ * 仅对本班（player.classNo）生效。settings 可显式传入，缺省则读本机设置，默认关闭。
+ */
+export function isActingHomeroom(player, classNo = player?.classNo, settings) {
+  const conf = settings || loadGodSettings();
+  if (!conf?.actAsHomeroom) return false;
+  if (!player || classNo == null) return false;
+  return Number(player.classNo) === Number(classNo);
+}
+
+export function analysisScope(player, classNo = player?.classNo, settings) {
+  if (isPlayerHomeroom(player, classNo)) return "class";
+  if (isActingHomeroom(player, classNo, settings)) return "class";
+  return "subject";
+}
+
+export function officialHomeroomName(player) {
+  return player?.homeroom || "赵映秋";
 }
 
 export function chatCompletionsUrl(baseUrl) {
@@ -437,12 +486,14 @@ function classCompareSummary({ mine, prevMine, report, prev, snaps, prevSnaps, s
  * 把已经算好的成绩、排名、划线、进退步整理成给模型的事实稿。数字全部来自报告，分析时不得改写。
  * previousReports / reports：本届已结算考试，函数会排除当前场和未结算/已精简空场。
  */
-export function buildExamAnalysisPayload(report, { player, classNo, previousReports, reports } = {}) {
+export function buildExamAnalysisPayload(report, { player, classNo, previousReports, reports, godSettings } = {}) {
   const clsNo = classNo ?? player?.classNo;
   const check = canAnalyzeReport(report, clsNo);
   if (!check.ok) return { ok: false, reason: check.reason };
   const mine = check.rows;
-  const scope = analysisScope(player, clsNo);
+  const scope = analysisScope(player, clsNo, godSettings);
+  const officialHome = isPlayerHomeroom(player, clsNo);
+  const actingHome = isActingHomeroom(player, clsNo, godSettings);
   const subjectId = playerSubjectId(player);
   const subjectName = playerSubjectName(player);
   const tier = mine[0]?.tier;
@@ -506,11 +557,19 @@ export function buildExamAnalysisPayload(report, { player, classNo, previousRepo
       应届人数: mine.length,
     },
     教师身份: {
-      职务: isPlayerHomeroom(player, clsNo) ? "本班班主任" : "单科任课老师",
+      职务: officialHome
+        ? "本班班主任"
+        : actingHome
+          ? "本班班主任（上帝模式查看）"
+          : "单科任课老师",
       任教科目: subjectName,
       分析范围: scope === "class"
         ? "全班整体（总分、均分、校内线、对照省控、班/层/校排与跨层次排、各科概要、进退步及建议谈话对象）"
         : `以本班${subjectName}单科为主，整体总分排名只作背景，含进退步和建议谈话对象`,
+      ...(actingHome && !officialHome ? {
+        学校正式班主任: officialHomeroomName(player),
+        说明: "上帝模式只改变分析查看范围，不表示已接任班主任。",
+      } : {}),
     },
     校内划线说明: describeSchoolCutoff(report.quota, report.split),
     校内线: schoolLine,

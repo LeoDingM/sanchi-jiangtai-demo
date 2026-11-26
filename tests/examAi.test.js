@@ -5,9 +5,10 @@ import { firstPlacement, rebuildClasses } from "../js/domain/placement.js";
 import { runExam } from "../js/domain/examService.js";
 import { toJSON, fromJSON } from "../js/domain/save.js";
 import {
-  AI_SETTINGS_KEY, AI_KEY_KEY, DEFAULT_AI_BASE_URL, DEFAULT_AI_MODEL,
+  AI_SETTINGS_KEY, AI_KEY_KEY, GOD_SETTINGS_KEY, DEFAULT_AI_BASE_URL, DEFAULT_AI_MODEL,
   bindAiStorage, loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
-  playerSubjectId, playerSubjectName, isPlayerHomeroom, analysisScope,
+  loadGodSettings, saveGodSettings, officialHomeroomName,
+  playerSubjectId, playerSubjectName, isPlayerHomeroom, isActingHomeroom, analysisScope,
   chatCompletionsUrl, buildExamAnalysisPayload, buildAnalysisMessages,
   requestExamAnalysis, formatAiError, pickPreviousComparableReport,
 } from "../js/domain/examAi.js";
@@ -265,4 +266,87 @@ test("班主任事实含总分班/层/校排和谈话候选，名单中的人与
   const msgs = buildAnalysisMessages(whole);
   assert.ok(msgs[0].content.includes("班主任"));
   assert.ok(msgs[0].content.includes("不得编造") || msgs[0].content.includes("不要虚构"));
+});
+
+test("上帝模式只叠加分析范围，不改写正式任职，也不进入存档", () => {
+  const mem = memoryStorage();
+  bindAiStorage(mem);
+
+  assert.equal(loadGodSettings().actAsHomeroom, false);
+  assert.equal(isPlayerHomeroom(player, 16), false);
+  assert.equal(isActingHomeroom(player, 16), false);
+  assert.equal(analysisScope(player, 16), "subject");
+  assert.equal(officialHomeroomName(player), "赵映秋");
+
+  const { mid } = placed(20170901);
+  const off = buildExamAnalysisPayload(mid, { player, classNo: 16 });
+  assert.equal(off.ok, true);
+  assert.equal(off.scope, "subject");
+  assert.ok(off.fact.单科);
+  assert.ok(!off.fact.各科均分);
+  assert.ok(!off.fact.本班学生总分);
+  assert.equal(off.fact.教师身份.职务, "单科任课老师");
+
+  const saved = saveGodSettings({ actAsHomeroom: true });
+  assert.equal(saved.ok, true);
+  assert.equal(loadGodSettings().actAsHomeroom, true);
+  assert.equal(JSON.parse(mem.getItem(GOD_SETTINGS_KEY)).actAsHomeroom, true);
+  assert.equal(isPlayerHomeroom(player, 16), false);
+  assert.equal(player.isHomeroom, undefined);
+  assert.equal(player.homeroomOf, undefined);
+  assert.equal(isActingHomeroom(player, 16), true);
+  assert.equal(isActingHomeroom(player, 15), false, "上帝模式只对本班生效");
+  assert.equal(analysisScope(player, 16), "class");
+  assert.equal(analysisScope(player, 15), "subject");
+
+  const on = buildExamAnalysisPayload(mid, { player, classNo: 16 });
+  assert.equal(on.ok, true);
+  assert.equal(on.scope, "class");
+  assert.ok(on.fact.各科均分.数学);
+  assert.ok(on.fact.各科均分.语文);
+  assert.ok(on.fact.本班学生总分.length >= 1);
+  assert.ok("班排" in on.fact.本班学生总分[0] && "校排" in on.fact.本班学生总分[0]);
+  assert.equal(typeof on.fact.对照省控.一本, "number");
+  assert.equal(typeof on.fact.本班校内上线.一本, "number");
+  assert.equal(on.fact.教师身份.职务, "本班班主任（上帝模式查看）");
+  assert.equal(on.fact.教师身份.学校正式班主任, "赵映秋");
+  assert.equal(player.isHomeroom, undefined);
+  assert.equal(player.homeroomOf, undefined);
+  assert.equal(player.homeroom, "赵映秋");
+
+  saveAiSettings({ model: DEFAULT_AI_MODEL, baseUrl: DEFAULT_AI_BASE_URL, apiKey: "sk-test-god-mode-key" });
+  const state = { date: "2017-09-01", player: { ...player }, exams: {} };
+  const json = toJSON(state);
+  assert.ok(!json.includes("sk-test-god-mode-key"));
+  assert.ok(!json.includes("actAsHomeroom"));
+  assert.ok(!json.includes("isActingHomeroom"));
+  const round = fromJSON(json);
+  assert.equal(round.player.isHomeroom, undefined);
+  assert.equal(round.player.homeroomOf, undefined);
+  assert.equal(round.player.homeroom, "赵映秋");
+  assert.ok(!("apiKey" in (round.player || {})));
+
+  const closed = saveGodSettings({ actAsHomeroom: false });
+  assert.equal(closed.actAsHomeroom, false);
+  assert.equal(isActingHomeroom(player, 16), false);
+  assert.equal(isPlayerHomeroom(player, 16), false);
+  assert.equal(analysisScope(player, 16), "subject");
+  const back = buildExamAnalysisPayload(mid, { player, classNo: 16 });
+  assert.equal(back.scope, "subject");
+  assert.ok(!back.fact.各科均分);
+  assert.ok(!back.fact.本班学生总分);
+  assert.equal(back.fact.教师身份.职务, "单科任课老师");
+
+  const home = { ...player, isHomeroom: true };
+  assert.equal(isPlayerHomeroom(home, 16), true);
+  assert.equal(isActingHomeroom(home, 16), false);
+  assert.equal(analysisScope(home, 16), "class");
+  const official = buildExamAnalysisPayload(mid, { player: home, classNo: 16 });
+  assert.equal(official.scope, "class");
+  assert.ok(official.fact.各科均分.语文);
+  assert.equal(official.fact.教师身份.职务, "本班班主任");
+  assert.ok(!String(official.fact.教师身份.职务).includes("上帝模式"));
+  assert.ok(!official.fact.教师身份.学校正式班主任);
+
+  bindAiStorage(null);
 });
