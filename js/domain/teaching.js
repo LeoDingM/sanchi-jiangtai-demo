@@ -220,8 +220,27 @@ export function studentRecentStatus(student, state, { placed = false } = {}) {
   if (student.lastParentMeeting) {
     bits.push(student.lastParentMeeting.statusLine || `${student.lastParentMeeting.date}家长会：数学老师与家长谈了近况`);
   }
+  if (student.lastClassLate?.date) {
+    bits.push(`${student.lastClassLate.date}正课迟到，上课铃后才进教室`);
+  }
   if (!bits.length) return `${seat}。还没有本班课堂或作业记录。`;
   return `${seat}。带班近况：` + bits.join("；") + "。";
+}
+
+/** 正课迟到，与晚自习点名名单分开，不写入 eveningLatecomers。 */
+export function classLatecomers(state, students) {
+  if (!state || !students?.length) return [];
+  const out = [];
+  for (const s of students) {
+    if (hash01(s.id, state.date, state.periodId, "class-late") < 0.04) out.push(s);
+  }
+  return out;
+}
+
+/** 实习老师偶发走错教室。按 seed+日期+节次确定，不是每节都发生。 */
+export function wrongClassroomThisPeriod(state) {
+  if (!state?.date) return false;
+  return hash01(state.seed, state.date, state.periodId, "wrong-room") < 0.07;
 }
 
 /** 上课：按教案和课型生成课堂纪要，并登记作业、微调班级状态与教学积累。 */
@@ -319,6 +338,18 @@ export function teachLesson(state, students, { style = "精讲例题", callId = 
     notes.push(`讲评时把「${plan.topic}」里错得集中的几步重新板书，点了${weakHw.slice(0, 3).map((x) => x.name).join("、")}的本子。`);
   }
 
+  const lateList = classLatecomers(state, students);
+  for (const s of lateList) {
+    s.lastClassLate = { date: state.date, periodId: state.periodId, text: `${state.date}正课迟到，上课铃后才进教室` };
+  }
+  if (lateList.length) {
+    notes.push(`上课铃后，${lateList.slice(0, 3).map((x) => x.name).join("、")}${lateList.length > 3 ? "等" : ""}才进门，你让他们先坐到座位上。`);
+  }
+  const wrongRoom = wrongClassroomThisPeriod(state);
+  if (wrongRoom) {
+    notes.push("你先走到别的班门口，看了门牌才发现不是卓行16班，赶紧转回来。这节稍微晚了几分钟，课讲得紧了一些。");
+  }
+
   const record = {
     date: state.date,
     topic: plan.topic,
@@ -334,6 +365,8 @@ export function teachLesson(state, students, { style = "精讲例题", callId = 
     quizAll: quiz || null,
     homeworkMissing: missing.length,
     homeworkWeak: weakHw.length,
+    latecomers: lateList.map((s) => ({ id: s.id, name: s.name })),
+    wrongClassroom: wrongRoom,
   };
   state.player.lessons = [record, ...(state.player.lessons || [])].slice(0, 24);
   state.player.lastTaught = record;
@@ -341,7 +374,9 @@ export function teachLesson(state, students, { style = "精讲例题", callId = 
   if (!taught.some((t) => t.grade === grade && t.topic === plan.topic)) {
     state.player.taughtTopics = [...taught, { grade, topic: plan.topic, date: state.date }].slice(-40);
   }
-  const text = `你给卓行${state.player.classNo}班上了「${plan.topic}」（${conf.label}${prep ? "，有备课" : "，备课不足"}）。数学教学积累到${state.player.mathTeaching.toFixed(1)}。`;
+  const lateNote = lateList.length ? `上课铃后有人迟到。` : "";
+  const wrongNote = wrongRoom ? "你这节先走错了教室，回来后课讲得紧了一些。" : "";
+  const text = `你给卓行${state.player.classNo}班上了「${plan.topic}」（${conf.label}${prep ? "，有备课" : "，备课不足"}）。${wrongNote}${lateNote}数学教学积累到${state.player.mathTeaching.toFixed(1)}。`;
   return { ok: true, teaching: state.player.mathTeaching, record, homework: state.homework, text };
 }
 

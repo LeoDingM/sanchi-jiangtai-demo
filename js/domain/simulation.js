@@ -9,8 +9,9 @@ import { runExam } from "./examService.js";
 import { provincialPassCounts, schoolQuotaFromPrior, fallbackSchoolQuota, examResultLogText } from "./schoolLines.js";
 import { admitCohort } from "./admission.js";
 import { rngFrom, clamp } from "./prng.js";
-import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands, homeroomEveningRoll as homeroomEveningRollCore, compileEveningRoll, studentRecentStatus, rollCallStatusLine } from "./teaching.js";
-import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, upcomingTutoring, formatSlotLabel, isTutoringSlot } from "./timetable.js";
+import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands, homeroomEveningRoll as homeroomEveningRollCore, compileEveningRoll, studentRecentStatus, rollCallStatusLine, classLatecomers, wrongClassroomThisPeriod } from "./teaching.js";
+import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, upcomingTutoring, formatSlotLabel, isTutoringSlot, weekMathCount, weekSchedule, weekStart } from "./timetable.js";
+import { swapPeriods as swapPeriodsCore, borrowIn as borrowInCore, borrowOut as borrowOutCore, respondTimetableRequest as respondTimetableRequestCore, ensureIncomingRequest, pendingTimetableRequest, weekBorrowCounts, weekTiaokeSummary, canAlterSlot, shortSlotLabel, teacherOf, ensureTiaokeState } from "./tiaoke.js";
 import { openParentsMeeting as openParentsMeetingCore, meetParent as meetParentCore, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE } from "./parents.js";
 
 export const SAVE_VERSION = 1;
@@ -117,6 +118,8 @@ export function createGame(seed = 20170901, playerName = PLAYER_DEFAULT_NAME) {
     talksToday: 0,
     flags: {},
     schoolLineHistory: [],
+    timetableOverrides: [],
+    timetableInbox: {},
   };
   const prior = simulatePriorGaokaoStats(seed, GRADE_YEAR - 3, GRADE_YEAR);
   state.schoolLineHistory = [prior];
@@ -678,7 +681,40 @@ export function reviewHomework(state, studentId) {
   return r;
 }
 
-export { topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, daySchedule, currentSlot, formatSlotLabel, upcomingMath, upcomingTutoring, majorEventOn, pendingMajorEvent, isTutoringSlot, raisedHands, seatLabel, seatOf, compileEveningRoll, studentRecentStatus, rollCallStatusLine, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE };
+export { topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, daySchedule, currentSlot, formatSlotLabel, upcomingMath, upcomingTutoring, majorEventOn, pendingMajorEvent, isTutoringSlot, raisedHands, seatLabel, seatOf, compileEveningRoll, studentRecentStatus, rollCallStatusLine, classLatecomers, wrongClassroomThisPeriod, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE, weekMathCount, weekSchedule, weekStart, ensureIncomingRequest, pendingTimetableRequest, weekBorrowCounts, weekTiaokeSummary, canAlterSlot, shortSlotLabel, teacherOf };
+
+export function swapPeriods(state, a, b) {
+  ensureTiaokeState(state);
+  const r = swapPeriodsCore(state, a, b);
+  if (r.ok) addLog(state, r.text);
+  return r;
+}
+
+export function borrowIn(state, date, periodId) {
+  ensureTiaokeState(state);
+  const r = borrowInCore(state, date, periodId);
+  if (r.ok) addLog(state, r.text);
+  return r;
+}
+
+export function borrowOut(state, date, periodId, opts = {}) {
+  ensureTiaokeState(state);
+  const r = borrowOutCore(state, date, periodId, opts);
+  if (r.ok) addLog(state, r.text);
+  return r;
+}
+
+export function respondTimetableRequest(state, accept, date = state?.date) {
+  ensureTiaokeState(state);
+  // 回应时再写入 inbox，自动推进不会预先弹请求。
+  if (date && !state.timetableInbox[date]) {
+    const pending = pendingTimetableRequest(state, date);
+    if (pending) state.timetableInbox[date] = pending;
+  }
+  const r = respondTimetableRequestCore(state, accept, date);
+  if (r.ok) addLog(state, r.text);
+  return r;
+}
 
 function latestMathExam(state, studentId) {
   const reports = listExamReports(state, { entryYear: state.player.cohortYear });

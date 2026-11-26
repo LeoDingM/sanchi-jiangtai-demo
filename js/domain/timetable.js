@@ -71,6 +71,48 @@ const SUBJECTS_WEN = {
 
 const MAJOR_KINDS = new Set(["exam", "placement1", "placement2", "admission", "promote", "parents"]);
 
+/** 可调、可借的正课节次。早读、午休、晚自习不在此列。 */
+export const CLASS_PERIOD_IDS = ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"];
+const CLASS_PERIOD_SET = new Set(CLASS_PERIOD_IDS);
+
+export function isClassPeriodId(periodId) {
+  return CLASS_PERIOD_SET.has(periodId);
+}
+
+/** 本周周一（周日算在刚刚结束的这一周里）。 */
+export function weekStart(date) {
+  if (!date) return date;
+  const wd = weekday(date);
+  const back = wd === 0 ? 6 : wd - 1;
+  return addDays(date, -back);
+}
+
+export function weekDates(date) {
+  const mon = weekStart(date);
+  return Array.from({ length: 7 }, (_, i) => addDays(mon, i));
+}
+
+export function overridesOf(state) {
+  return Array.isArray(state?.timetableOverrides) ? state.timetableOverrides : [];
+}
+
+/** 同一节若写过多次覆盖，以最后一条为准。 */
+export function overrideFor(state, date, periodId) {
+  const list = overridesOf(state);
+  for (let i = list.length - 1; i >= 0; i--) {
+    const o = list[i];
+    if (o && o.date === date && o.periodId === periodId) return o;
+  }
+  return null;
+}
+
+export function templateSubject(date, periodId, state = null) {
+  const wd = weekday(date);
+  const track = playerTrackOf(state);
+  const table = subjectTable(track)[wd] || subjectTable(track)[1];
+  return table[periodId] || null;
+}
+
 export function periodsForWeekday(wd) {
   const ids = WEEKDAY_PERIODS[wd] || WEEKDAY_PERIODS[1];
   return ids.map((id) => {
@@ -124,11 +166,16 @@ export function daySchedule(date, state = null) {
   const major = majorEventOn(date);
   const periods = periodsForWeekday(wd);
   return periods.map((p) => {
-    const subject = major
+    let subject = major
       ? (p.kind === "break" || p.kind === "rest" ? (table[p.id] || p.name) : `停课 · ${major.name}`)
       : (table[p.id] || p.name);
-    const isMath = !major && isMathPeriodId(wd, p.id);
+    let isMath = !major && isMathPeriodId(wd, p.id);
     const isTutoring = !major && isTutoringPeriodId(wd, p.id);
+    const ov = !major && overrideFor(state, date, p.id);
+    if (ov) {
+      if (ov.subject) subject = ov.subject;
+      isMath = ov.isMath != null ? !!ov.isMath : subject === "数学";
+    }
     return {
       ...p,
       weekday: wd,
@@ -138,8 +185,18 @@ export function daySchedule(date, state = null) {
       isTutoring,
       isExamDay: !!major,
       eventName: major?.name || null,
+      override: ov || null,
     };
   });
+}
+
+export function weekSchedule(date, state = null) {
+  return weekDates(date).map((d) => ({
+    date: d,
+    weekday: weekday(d),
+    weekdayName: weekdayName(d),
+    periods: daySchedule(d, state),
+  }));
 }
 
 export function startPeriodId(date, state = null) {
@@ -228,8 +285,12 @@ export function formatSlotLabel(slot) {
   return `${slot.name}${time} ${slot.subject || ""}`.trim();
 }
 
-export function weekMathCount() {
-  return Object.values(MATH_SLOTS).reduce((n, arr) => n + arr.length, 0);
+/** 不传日期时仍返回星期模板上的数学正课数；传入日期和存档后，按该周实际课表（含调借）计算。 */
+export function weekMathCount(date, state) {
+  if (!date) {
+    return Object.values(MATH_SLOTS).reduce((n, arr) => n + arr.length, 0);
+  }
+  return weekDates(date).reduce((n, d) => n + daySchedule(d, state).filter((p) => p.isMath).length, 0);
 }
 
 export { PERIODS, MATH_SLOTS, TUTOR_SLOTS };

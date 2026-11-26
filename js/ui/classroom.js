@@ -74,6 +74,12 @@ export function renderSeating(canvas, students, selectedId, onPick, opts = {}) {
       ctx.arc(x + radius * 0.7, y - radius * 0.7, 4, 0, Math.PI * 2);
       ctx.fill();
     }
+    if (mk.late) {
+      ctx.beginPath();
+      ctx.fillStyle = "#d08a2a";
+      ctx.arc(x - radius * 0.7, y - radius * 0.7, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.fillStyle = "#f3efe0";
     ctx.font = "12px sans-serif";
     ctx.fillText(s.name.slice(0, 1), x, y + 4);

@@ -440,3 +440,14 @@ a { color: var(--gold); }
   .settings-form input[type="password"],
   .settings-section { width: 100%; max-width: none; }
 }
+
+.tiaoke-panel { margin-top: 12px; }
+.tiaoke-panel .tt-week { width: 100%; border-collapse: collapse; font-size: 12px; text-align: center; }
+.tiaoke-panel .tt-week th, .tiaoke-panel .tt-week td { border: 1px solid rgba(80, 70, 50, 0.18); padding: 4px 3px; }
+.tiaoke-panel .tt-week th { background: rgba(232, 213, 163, 0.25); font-weight: 600; }
+.tiaoke-panel .tt-week td { cursor: pointer; }
+.tiaoke-panel .tt-week td.math { color: var(--ok, #2c5e3f); font-weight: 600; }
+.tiaoke-panel .tt-week td.exam { color: #7a4a1c; }
+.tiaoke-panel .tt-week td.empty { color: #999; cursor: default; }
+.tiaoke-panel .ov-tag { color: var(--seal, #8b2b2b); font-size: 11px; }
+.tiaoke-request { margin: 10px 0; padding: 8px 10px; background: rgba(232, 213, 163, 0.28); border-radius: 6px; }

@@ -9,7 +9,10 @@ import {
   tutorEvening, raisedHands, seatLabel, periodTalkScene, isTutoringSlot,
   homeroomEveningRoll, placementSeatNotice, cohortPlacementStage, studentRecentStatus,
   meetParent, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE,
+  weekSchedule, weekStart, weekMathCount, swapPeriods, borrowIn, respondTimetableRequest,
+  ensureIncomingRequest, pendingTimetableRequest, weekTiaokeSummary, classLatecomers,
 } from "../domain/simulation.js";
+import { addDays } from "../domain/calendar.js";
 import { parentTalkPriority, composeParentBrief } from "../domain/parents.js";
 import { saveSlot, loadSlot, listSlots, toJSON, fromJSON } from "../domain/save.js";
 import { subjectById, SUBJECTS_G1 } from "../domain/config.js";
@@ -234,11 +237,16 @@ function seatMarks(students) {
   const watch = new Set(homeworkWatchlist(state.homework, state).map((r) => r.id));
   const hands = slot?.isTutoring ? new Set(raisedHands(state, students).map((s) => s.id)) : new Set();
   const marks = {};
+  const lateSet = slot?.isMath && !slot?.isTutoring
+    ? new Set(classLatecomers(state, students).map((s) => s.id))
+    : new Set();
   for (const s of students) {
+    const lateNow = slot?.isMath && !slot?.isTutoring && lateSet.has(s.id);
     marks[s.id] = {
       hand: hands.has(s.id),
       watch: watch.has(s.id),
       drowsy: s.lastClassFlag === "走神" || (s.energy ?? 70) < 48,
+      late: lateNow,
     };
   }
   return marks;
@@ -354,7 +362,7 @@ function viewClassroom(host) {
   const seatNote = placementSeatNotice(state);
   host.innerHTML = `<h3>教室座位表</h3>
     ${seatNote ? `<p class="notice">${seatNote}</p>` : ""}
-    <p class="notice">现在是${slotLine}。金圈是举手，红点是作业还要盯，颜色偏暗的是走神或精力不足。点击座位按当前课时处理，不必先跳到档案。任教班为卓行16班，约 73 人。</p>
+    <p class="notice">现在是${slotLine}。金圈是举手，红点是作业还要盯，颜色偏暗的是走神或精力不足，橙点是这节正课迟到。点击座位按当前课时处理，不必先跳到档案。任教班为卓行16班，约 73 人。</p>
     <div class="classroom-layout">
       <canvas id="classroom"></canvas>
       <div class="desk-panel paper">${deskPanelHtml(sel, slot, scene)}</div>
@@ -696,7 +704,175 @@ function bindParentActions(host) {
   });
 }
 
+
+let tiaokeWeekOffset = 0;
+let tiaokeMathPick = "";
+let tiaokeOtherPick = "";
+let tiaokeBorrowPick = "";
+
+function tiaokeFocusDate() {
+  return addDays(weekStart(state.date), tiaokeWeekOffset * 7);
+}
+
+function tiaokeOptionValue(date, periodId) {
+  return `${date}|${periodId}`;
+}
+
+function parseTiaokeOption(v) {
+  if (!v) return null;
+  const i = v.lastIndexOf("|");
+  if (i < 0) return null;
+  return { date: v.slice(0, i), periodId: v.slice(i + 1) };
+}
+
+function tiaokeSlotOptions(days, pred) {
+  const out = [];
+  for (const day of days) {
+    for (const p of day.periods) {
+      if (p.id === "rest" || p.kind === "break" || p.kind === "rest") continue;
+      if (!pred(p, day.date)) continue;
+      const mark = p.override ? (p.override.type === "borrow-in" ? "借" : p.override.type === "borrow-out" ? "出" : "调") : "";
+      out.push({
+        value: tiaokeOptionValue(day.date, p.id),
+        label: `${day.date.slice(5).replace("-", "月")}日周${day.weekdayName}${p.name}${p.subject ? "「" + p.subject + "」" : ""}${mark ? "（" + mark + "）" : ""}`,
+      });
+    }
+  }
+  return out;
+}
+
+function tiaokePanelHtml() {
+  const focus = tiaokeFocusDate();
+  const days = weekSchedule(focus, state);
+  const mathOpts = tiaokeSlotOptions(days, (p) => p.isMath);
+  const otherOpts = tiaokeSlotOptions(days, (p) => !p.isMath && !p.isTutoring && !p.isExamDay && p.id !== "morning-read");
+  const borrowOpts = tiaokeSlotOptions(days, (p) => !p.isMath && (p.subject === "自习" || p.subject === "体育"));
+  if (mathOpts.length && !mathOpts.some((o) => o.value === tiaokeMathPick)) tiaokeMathPick = mathOpts[0].value;
+  if (otherOpts.length && !otherOpts.some((o) => o.value === tiaokeOtherPick)) tiaokeOtherPick = otherOpts[0].value;
+  if (borrowOpts.length && !borrowOpts.some((o) => o.value === tiaokeBorrowPick)) tiaokeBorrowPick = borrowOpts[0].value;
+  const req = ensureIncomingRequest(state);
+  const pending = req && req.status === "pending" ? req : null;
+  const weekLabel = tiaokeWeekOffset === 0 ? "本周" : (tiaokeWeekOffset === 1 ? "下周" : tiaokeWeekOffset === -1 ? "上周" : `${days[0].date} 起`);
+  const mathN = weekMathCount(focus, state);
+  const periodRows = ["morning-read", "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"];
+  const head = `<tr><th></th>${days.filter((d) => d.weekday !== 0).map((d) => `<th>周${d.weekdayName}<br>${d.date.slice(5)}</th>`).join("")}</tr>`;
+  const body = periodRows.map((pid) => {
+    const cells = days.filter((d) => d.weekday !== 0).map((d) => {
+      const p = d.periods.find((x) => x.id === pid);
+      if (!p) return "<td class=\"empty\">—</td>";
+      const ov = p.override ? (p.override.type === "borrow-in" ? "借" : p.override.type === "borrow-out" ? "出" : "调") : "";
+      const cls = `${p.isMath ? "math" : ""}${p.isExamDay ? " exam" : ""}`;
+      return `<td class="${cls}" data-tk-date="${d.date}" data-tk-pid="${p.id}" title="${p.subject}">${p.subject || ""}${ov ? ` <span class="ov-tag">${ov}</span>` : ""}</td>`;
+    }).join("");
+    const name = (days[0].periods.find((x) => x.id === pid) || days[1]?.periods.find((x) => x.id === pid) || { name: pid }).name;
+    return `<tr><th>${name}</th>${cells}</tr>`;
+  }).join("");
+  const pendingHtml = pending
+    ? `<div class="tiaoke-request">
+        <p><b>对方请求</b> ${pending.why || ""}</p>
+        <p class="muted">${pending.type === "borrow-out"
+          ? `${pending.peer}想借走${pending.mathDate} ${pending.mathPeriodId} 的数学课，改上${pending.peerSubject}。`
+          : `${pending.peer}想把${pending.mathDate} 的数学课和${pending.otherDate} 的${pending.peerSubject}对调。`}</p>
+        <div class="row-actions">
+          <button type="button" class="accent" id="tk-accept">同意</button>
+          <button type="button" id="tk-reject">谢绝</button>
+        </div>
+      </div>`
+    : "";
+  const opt = (list, cur) => list.map((o) => `<option value="${o.value}" ${o.value === cur ? "selected" : ""}>${o.label}</option>`).join("");
+  return `<div class="paper lesson-card tiaoke-panel">
+      <h3>调课 / 借课</h3>
+      <p class="muted">只改本班这张课表，按日期临时生效，不改星期模板。早读、午休和晚自习不能改成数学正课；考试、分班、录取、家长会等全日停课日不能调或借。一周最多额外借入 1 节，被借走也不超过 1 节。</p>
+      <div class="row-actions">
+        <button type="button" id="tk-week-prev">上一周</button>
+        <button type="button" id="tk-week-now"${tiaokeWeekOffset === 0 ? " disabled" : ""}>回到本周</button>
+        <button type="button" id="tk-week-next">下一周</button>
+      </div>
+      <p>课表 · ${weekLabel}　数学正课 ${mathN} 节。${weekTiaokeSummary(state, focus)}</p>
+      <div class="scroll-table"><table class="tt-week">${head}${body}</table></div>
+      ${pendingHtml}
+      <div class="form-grid">
+        <label>对调：把数学 <select id="tk-math">${opt(mathOpts, tiaokeMathPick)}</select></label>
+        <label>和 <select id="tk-other">${opt(otherOpts, tiaokeOtherPick)}</select></label>
+      </div>
+      <div class="row-actions"><button type="button" class="accent" id="tk-swap" ${mathOpts.length && otherOpts.length ? "" : "disabled"}>确认对调</button></div>
+      <div class="form-grid">
+        <label>借入自习或体育 <select id="tk-borrow">${opt(borrowOpts, tiaokeBorrowPick)}</select></label>
+      </div>
+      <div class="row-actions"><button type="button" id="tk-borrow-go" ${borrowOpts.length ? "" : "disabled"}>确认借入，改上数学</button></div>
+    </div>`;
+}
+
+function bindTiaokeActions(host) {
+  const prev = host.querySelector("#tk-week-prev");
+  if (prev) prev.onclick = () => { tiaokeWeekOffset -= 1; render(); };
+  const now = host.querySelector("#tk-week-now");
+  if (now) now.onclick = () => { tiaokeWeekOffset = 0; render(); };
+  const next = host.querySelector("#tk-week-next");
+  if (next) next.onclick = () => { tiaokeWeekOffset += 1; render(); };
+  const mathSel = host.querySelector("#tk-math");
+  if (mathSel) mathSel.onchange = () => { tiaokeMathPick = mathSel.value; };
+  const otherSel = host.querySelector("#tk-other");
+  if (otherSel) otherSel.onchange = () => { tiaokeOtherPick = otherSel.value; };
+  const borrowSel = host.querySelector("#tk-borrow");
+  if (borrowSel) borrowSel.onchange = () => { tiaokeBorrowPick = borrowSel.value; };
+  const swapBtn = host.querySelector("#tk-swap");
+  if (swapBtn) swapBtn.onclick = () => {
+    const a = parseTiaokeOption(host.querySelector("#tk-math")?.value);
+    const b = parseTiaokeOption(host.querySelector("#tk-other")?.value);
+    const r = swapPeriods(state, a, b);
+    toast(r.ok ? r.text : r.reason);
+    persist(); render();
+  };
+  const borrowBtn = host.querySelector("#tk-borrow-go");
+  if (borrowBtn) borrowBtn.onclick = () => {
+    const a = parseTiaokeOption(host.querySelector("#tk-borrow")?.value);
+    const r = a ? borrowIn(state, a.date, a.periodId) : { ok: false, reason: "先选一节自习或体育。" };
+    toast(r.ok ? r.text : r.reason);
+    persist(); render();
+  };
+  const acc = host.querySelector("#tk-accept");
+  if (acc) acc.onclick = () => {
+    const r = respondTimetableRequest(state, true);
+    toast(r.ok ? r.text : r.reason);
+    persist(); render();
+  };
+  const rej = host.querySelector("#tk-reject");
+  if (rej) rej.onclick = () => {
+    const r = respondTimetableRequest(state, false);
+    toast(r.ok ? r.text : r.reason);
+    persist(); render();
+  };
+  host.querySelectorAll("[data-tk-date]").forEach((td) => {
+    td.onclick = () => {
+      const date = td.dataset.tkDate;
+      const periodId = td.dataset.tkPid;
+      const val = tiaokeOptionValue(date, periodId);
+      const slot = daySchedule(date, state).find((p) => p.id === periodId);
+      if (!slot || slot.isExamDay) return;
+      if (slot.id === "morning-read" || slot.id === "noon" || slot.id === "rest" || slot.id === "evening-1" || slot.id === "evening-2") return;
+      if (slot.isMath) {
+        tiaokeMathPick = val;
+        const sel = host.querySelector("#tk-math");
+        if (sel) sel.value = val;
+      } else if (slot.subject === "自习" || slot.subject === "体育") {
+        tiaokeBorrowPick = val;
+        tiaokeOtherPick = val;
+        const b = host.querySelector("#tk-borrow");
+        const o = host.querySelector("#tk-other");
+        if (b) b.value = val;
+        if (o) o.value = val;
+      } else {
+        tiaokeOtherPick = val;
+        const o = host.querySelector("#tk-other");
+        if (o) o.value = val;
+      }
+    };
+  });
+}
+
 function officeCollabHtml() {
+
   const watch = homeworkWatchlist(state.homework, state);
   const names = [...new Set(watch.map((r) => r.name))];
   const nxt = upcomingMath(state, { skipTaught: true });
@@ -711,7 +887,8 @@ function officeCollabHtml() {
       </div>
       ${names.length ? `<p>需要盯的人：${names.slice(0, 8).join("、")}${names.length > 8 ? "等" : ""}。也可单独通报：</p>
         <div class="row-actions">${watch.slice(0, 8).map((r)=>`<button type="button" data-home="${r.id}">通报${r.name}</button>`).join("")}</div>` : `<p class="muted">眼下没有特别要盯的缺交或订正。仍可和班主任对一下班情，或向${state.player.mentor}请教下一课。</p>`}
-    </div>`;
+    </div>
+    ${tiaokePanelHtml()}`;
 }
 
 function bindOfficeActions(host) {
@@ -730,6 +907,7 @@ function bindOfficeActions(host) {
   host.querySelectorAll("[data-chk]").forEach((b) => {
     b.onclick = (ev) => { ev.stopPropagation(); selectedId = b.dataset.chk; const r = checkCorrection(state, b.dataset.chk); toast(r.ok ? r.text : r.reason); persist(); render(); };
   });
+  bindTiaokeActions(host);
 }
 
 
@@ -1304,6 +1482,7 @@ function renderAgenda() {
     ${tt}
     <div class="row-actions"><button type="button" data-act="nextperiod">下一节</button></div>
     <p class="notice">备课充分度 ${state.player.prep||0}　数学教学积累 ${Number(state.player.mathTeaching||0).toFixed(1)}</p>
+    ${(() => { const req = pendingTimetableRequest(state); return req && req.status === "pending" ? `<p class="notice">有调课或借课请求：${req.peer}想${req.type === "borrow-out" ? "借走一节数学课" : "对调一节课"}。可在「日常教学」或「教务处」里处理。</p>` : ""; })()}
     <p class="notice">下一件大事：${next ? `${next.date} ${next.name}` : "（暂无）"}</p>`;
   const narrow = window.matchMedia("(max-width: 600px)").matches;
   lastNarrowAgenda = narrow;
