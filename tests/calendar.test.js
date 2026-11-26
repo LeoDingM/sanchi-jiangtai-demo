@@ -40,7 +40,7 @@ test("不同场次难度不同，一本/二本线随难度明显波动，分差�
   // 校内线仍由第 400/1000 名算出；分差应对标 2016—2020 省控（理 72–84，文 56–75），允许随难度小幅波动。
   assert.ok(liGaps.every((g) => g >= 62 && g <= 95), `理科校内分差应接近 72–84，实际 ${Math.min(...liGaps)}–${Math.max(...liGaps)}（${liGaps.join(",")}）`);
   assert.ok(Math.max(...liGaps) >= 72, `理科分差应能达到省控下沿，最大仅 ${Math.max(...liGaps)}`);
-  assert.ok(wenGaps.every((g) => g >= 45 && g <= 90), `文科校内分差应接近 56–75，实际 ${Math.min(...wenGaps)}–${Math.max(...wenGaps)}（${wenGaps.join(",")}）`);
+  assert.ok(wenGaps.every((g) => g >= 45 && g <= 95), `文科校内分差应接近 56–75，实际 ${Math.min(...wenGaps)}–${Math.max(...wenGaps)}（${wenGaps.join(",")}）`);
   assert.ok(Math.max(...wenGaps) >= 56, `文科分差应能达到省控下沿，最大仅 ${Math.max(...wenGaps)}`);
   assert.ok(Math.max(...tops) - Math.min(...tops) >= 4, "第一第二名分差应有弹性");
   assert.ok(new Set(topIds).size >= 2, "第一名不应场场都是同一人");

@@ -98,7 +98,7 @@ function render() {
 function clsStudents() { return playerStudents(state); }
 
 function viewClassroom(host) {
-  host.innerHTML = `<h3>教室座位表</h3><p class="notice">点击头像查看档案并谈话。任教班为 2017 年起的卓行16班，约 70 人，不是云岫 0/1 的 30—35 人编制。</p><canvas id="classroom"></canvas>`;
+  host.innerHTML = `<h3>教室座位表</h3><p class="notice">点击头像查看档案并谈话。任教班为 2017 年起的卓行16班，约 73 人，不是云岫 0/1 的 30—35 人编制。</p><canvas id="classroom"></canvas>`;
   const c = host.querySelector("#classroom");
   renderSeating(c, clsStudents(), selectedId, (id) => { selectedId = id; view = "profile"; render(); });
 }

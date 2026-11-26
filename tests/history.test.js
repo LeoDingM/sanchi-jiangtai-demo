@@ -43,7 +43,7 @@ test("学生轨迹由各次真实分计算，含班排、同层次排、跨层�
   assert.ok(next || top);
   if (topHist.cross.top) {
     assert.ok(topHist.cross.top.rank >= 1);
-    // 云岫实验两班合计约 64 人，插入后仍可能少于 70 人的卓行班，不能要求人数一定更大。
+    // 云岫实验两班合计约 64 人，插入后仍可能少于约 73 人的卓行班，不能要求人数一定更大。
     assert.ok(topHist.cross.top.n >= 20, "实验班池应有一定规模");
     assert.ok(topHist.cross.top.rank >= topHist.classRank, "放入顶尖层后名次不应优于本班第 1");
   }

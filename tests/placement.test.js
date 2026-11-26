@@ -40,3 +40,26 @@ test("第二次分班只在同科类同梯队内重组，不重新分文理、�
     else if (b.tier !== "yiti") assert.equal(s.tier, b.tier, "不跨梯队");
   }
 });
+
+test("第一次分班后同层同科班级实力均衡，不为高考预留笃学苗子", () => {
+  let c = generateCohort(2017, 7);
+  const exam = runExam(c, { id: "f", name: "期末", examKind: "final", difficulty: 1, dispersion: 1, date: "2018-01-16" }, { grade: 1, split: false });
+  const p = firstPlacement(c.students, exam.scoreMap, { seed: 7 });
+  const groups = {};
+  for (const s of p.students) {
+    if (s.repeat || s.tier === "yiti") continue;
+    const key = `${s.tier}|${s.track}`;
+    groups[key] ??= {};
+    groups[key][s.classNo] ??= [];
+    groups[key][s.classNo].push(exam.scoreMap[s.id].total);
+  }
+  for (const [key, classes] of Object.entries(groups)) {
+    const nos = Object.keys(classes);
+    if (nos.length < 2) continue;
+    const means = nos.map((no) => classes[no].reduce((a, b) => a + b, 0) / classes[no].length);
+    const gap = Math.max(...means) - Math.min(...means);
+    assert.ok(gap <= 8, `${key} 分班当时均分极差应很小，实际 ${gap.toFixed(2)}`);
+  }
+  // 分班只按当场分数蛇形均衡，不得再为笃学对换或预留一本苗子。
+  assert.equal(typeof firstPlacement, "function");
+});

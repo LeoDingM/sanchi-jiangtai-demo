@@ -5,7 +5,7 @@
  */
 import { FIRST_PLACEMENT_TARGETS, CLASS_BLUEPRINT } from "./config.js";
 import { compareScoreRows } from "./scores.js";
-import { hash01, rngFrom, shuffle } from "./prng.js";
+import { rngFrom, shuffle } from "./prng.js";
 
 export function firstPlacement(students, scoreMap, { overrides = {}, seed = 1 } = {}) {
   const movable = [];
@@ -48,33 +48,21 @@ export function firstPlacement(students, scoreMap, { overrides = {}, seed = 1 } 
   // 2—4：理科重点内部按成绩分班，保持顶尖梯队
   lockedKeyLi.sort(compareScoreRows);
   const keyTargets = FIRST_PLACEMENT_TARGETS.li.filter((t) => t.locked === "key");
-  fillByRank(lockedKeyLi, keyTargets, assign, "li");
+  fillTiersByRankThenBalance(lockedKeyLi, keyTargets, assign, "li", seed);
 
   // 原 2—4 选文的学生：插入文科可流动队列的最前（凌霄文科优先）
   const wenFromKey = movable.filter((r) => (r.student.originClassNo ?? r.student.classNo) >= 2 && (r.student.originClassNo ?? r.student.classNo) <= 4 && r.track === "wen");
   const rest = movable.filter((r) => !wenFromKey.includes(r));
   const byTrack = { li: rest.filter((r) => r.track === "li"), wen: [...wenFromKey, ...rest.filter((r) => r.track === "wen")] };
-  // 可流动队列不按期末绝对分卡死：加入种子扰动，模拟名额与班级稳定，
-  // 让卓行/笃学交界有交叉，底部班仍能留下一定前部学生。
-  const jittered = (list) => list.map((r) => {
-    const j = (hash01(seed, r.studentId, "place1") - 0.5) * 36;
-    return { ...r, total: r.total + j, _raw: r.total };
-  }).sort(compareScoreRows);
-  byTrack.li = jittered(byTrack.li);
-  byTrack.wen = jittered(byTrack.wen);
+  byTrack.li.sort(compareScoreRows);
+  byTrack.wen.sort(compareScoreRows);
 
   const liTargets = FIRST_PLACEMENT_TARGETS.li.filter((t) => !t.locked);
   const wenTargets = FIRST_PLACEMENT_TARGETS.wen.filter((t) => !t.locked);
-  fillByRank(byTrack.li, liTargets, assign, "li");
-  fillByRank(byTrack.wen, wenTargets, assign, "wen");
-  // 分层后从卓行中前部抽少量学生“下沉”到笃学，换出笃学最弱的一部分。
-  // 这是重点中学底部班仍有一本苗子的写实处理，不倒挂层次均值。
-  const scoreOf = (id) => {
-    const row = [...byTrack.li, ...byTrack.wen].find((r) => r.student.id === id);
-    return row?._raw ?? row?.total ?? 0;
-  };
-  retainDuxueSeeds(assign, scoreOf, seed, "li", 16);
-  retainDuxueSeeds(assign, scoreOf, seed, "wen", 8);
+  // 按期末实考分划入梯队，再在同一层次内蛇形分班，只保证分班当时同层各班均衡。
+  // 不做交界抖动，也不把人预留到笃学去照顾三年后的高考。
+  fillTiersByRankThenBalance(byTrack.li, liTargets, assign, "li", seed);
+  fillTiersByRankThenBalance(byTrack.wen, wenTargets, assign, "wen", seed);
 
   for (const r of yiti) assign.push({ id: r.student.id, classNo: 30, track: r.track, tier: "yiti", name: "艺体30班" });
 
@@ -96,42 +84,42 @@ export function firstPlacement(students, scoreMap, { overrides = {}, seed = 1 } 
 }
 
 
-/** 把卓行中前部的少量学生与笃学底部对换，使笃学保留省控一本苗子。 */
-function retainDuxueSeeds(assign, scoreOf, seed, track, count) {
-  const zx = assign.filter((a) => a.track === track && a.tier === "zhuoxing")
-    .slice()
-    .sort((a, b) => scoreOf(b.id) - scoreOf(a.id) || String(a.id).localeCompare(String(b.id)));
-  const dx = assign.filter((a) => a.track === track && a.tier === "duxue")
-    .slice()
-    .sort((a, b) => scoreOf(b.id) - scoreOf(a.id) || String(a.id).localeCompare(String(b.id)));
-  if (zx.length < 30 || dx.length < 20 || count <= 0) return;
-  const pool = zx.slice(Math.floor(zx.length * 0.06), Math.floor(zx.length * 0.30));
-  const picked = pool
-    .slice()
-    .sort((a, b) => hash01(seed, "duxue-seed", track, a.id) - hash01(seed, "duxue-seed", track, b.id))
-    .slice(0, Math.min(count, pool.length, dx.length));
-  const weak = dx.slice(-picked.length);
-  for (let i = 0; i < picked.length; i++) {
-    const a = picked[i], b = weak[i];
-    if (!a || !b) break;
-    const tmp = { classNo: a.classNo, tier: a.tier, name: a.name };
-    a.classNo = b.classNo; a.tier = b.tier; a.name = b.name;
-    b.classNo = tmp.classNo; b.tier = tmp.tier; b.name = tmp.name;
+
+/** 先按成绩切梯队，再在同一层次的班级里蛇形均衡。 */
+function fillTiersByRankThenBalance(ranked, targets, assign, track, seed) {
+  if (!targets.length) return;
+  const groups = [];
+  for (const t of targets) {
+    const last = groups[groups.length - 1];
+    if (last && last.tier === t.tier) last.list.push(t);
+    else groups.push({ tier: t.tier, list: [t] });
+  }
+  let i = 0;
+  for (let g = 0; g < groups.length; g++) {
+    const isLast = g === groups.length - 1;
+    const n = groups[g].list.reduce((s, t) => s + t.size, 0);
+    const take = isLast ? ranked.slice(i) : ranked.slice(i, i + n);
+    i += take.length;
+    snakeIntoClasses(take, groups[g].list, assign, track, seed);
   }
 }
 
-function fillByRank(ranked, targets, assign, track) {
-  let i = 0;
-  for (const t of targets) {
-    const take = ranked.slice(i, i + t.size);
-    i += t.size;
-    for (const r of take) assign.push({ id: r.student.id, classNo: t.no, track, tier: t.tier, name: t.name });
-  }
-  // 溢出：放入该科类最后一档
-  if (i < ranked.length) {
-    const last = targets[targets.length - 1];
-    for (const r of ranked.slice(i)) assign.push({ id: r.student.id, classNo: last.no, track, tier: last.tier, name: last.name });
-  }
+function snakeIntoClasses(ranked, classTargets, assign, track, seed) {
+  if (!classTargets.length) return;
+  const buckets = classTargets.map(() => []);
+  ranked.forEach((r, i) => {
+    const cycle = classTargets.length;
+    const row = Math.floor(i / cycle);
+    const k = row % 2 === 0 ? i % cycle : cycle - 1 - (i % cycle);
+    buckets[k].push(r);
+  });
+  buckets.forEach((seats, idx) => {
+    const t = classTargets[idx];
+    const ordered = shuffle(rngFrom(seed, "place-seats", track, t.no), seats);
+    for (const r of ordered) {
+      assign.push({ id: r.student.id, classNo: t.no, track, tier: t.tier, name: t.name });
+    }
+  });
 }
 
 /** 第二次分班：同科类同梯队内按成绩蛇形均衡，0/1 不动，2—4 只在重点班内部均衡。 */

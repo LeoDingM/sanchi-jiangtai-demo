@@ -55,10 +55,12 @@ export function expectedPct(ability) {
   // 锚点按 750 分制。加陡的是校内第 400 与第 1000 名实际所在的中上段
   // （约能力 64–76，对应理科这两条线），使分差接近江西 2016—2020 省控
   // （理 72–84，文 56–75）。顶端仍压住，避免清北人数爆掉。
-  // 44→443，56→472，64→489，76→580，86→603，96→649，99→687。
+  // 中上段（64–76）保持校内第400/1000名分差；中低段下调，
+  // 使卓行平行班高考省控一本典型约 3 人、二本累计明显低于 45。
+  // 44→412，55→445，60→471，64→524，76→563，86→603，99→687。
   const pts = [
-    [0, 0.22], [30, 0.49], [44, 0.590], [50, 0.610], [56, 0.630],
-    [64, 0.652], [76, 0.773], [86, 0.804], [92, 0.822],
+    [0, 0.20], [30, 0.47], [44, 0.550], [50, 0.575], [56, 0.600], [60, 0.628],
+    [64, 0.698], [76, 0.750], [86, 0.804], [92, 0.822],
     [96, 0.865], [98, 0.895], [99, 0.916], [100, 0.930],
   ];
   for (let i = 1; i < pts.length; i++) {
@@ -124,7 +126,7 @@ export function gradeStudent(student, exam, scale, teachingBonus = 0) {
     const rawP = student.potential[sub.id] ?? student.potential.math;
     const room = Math.max(0, rawP - rawA);
     // 低分段进步空间大，顶尖接近潜力则几乎不涨，避免高三把清北人数抬爆。
-    const gScale = rawA >= 84 ? 0.12 : rawA >= 74 ? 0.30 : rawA >= 62 ? 0.45 : 0.85;
+    const gScale = rawA >= 84 ? 0.10 : rawA >= 74 ? 0.20 : rawA >= 62 ? 0.25 : 0.35;
     const grown = rawA + years * Math.min(5.2, room * 0.28) * gScale;
     const v = scoreSubject({
       max: sub.max,
@@ -144,10 +146,18 @@ export function gradeStudent(student, exam, scale, teachingBonus = 0) {
     throw new Error("高一试卷不应出现生物");
   }
   const maxTotal = subjects.reduce((s, x) => s + x.max, 0);
+  // 文科校内一本常落在卓行上段，与理科共用 60–64 陡坡后分差易偏宽。
+  // 500–580 略压、580–618 收回，与高尾清北压缩在 618 处连续衔接。
   // 2020 江西文科 650 分以上全省仅约 12 人，644 分约全省第 24 名。
-  // 对文科总分高尾做压缩，避免一个文科实验班出现多名清北。
-  if ((scale === SCALE_GAOKAO || scale === SCALE_G3 || scale === SCALE_G2) && track === "wen" && total > 615) {
-    total = Math.round(618 + (total - 618) * 0.36);
+  if ((scale === SCALE_GAOKAO || scale === SCALE_G3 || scale === SCALE_G2) && track === "wen" && total > 500) {
+    if (total <= 580) {
+      total = Math.round(500 + (total - 500) * 0.70);
+    } else if (total <= 618) {
+      // 580 → 556，再线性回到 618，保证单调且与高尾相接。
+      total = Math.round(556 + (total - 580) * (62 / 38));
+    } else {
+      total = Math.round(618 + (total - 618) * 0.36);
+    }
   }
   return { ...scores, total, maxTotal, scale, subjects: subjects.map((s) => s.id) };
 }

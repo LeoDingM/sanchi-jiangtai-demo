@@ -1,11 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createGame, skipToGaokaoOf, skipToNextStage, playerStudents } from "../js/domain/simulation.js";
+import { CLASS_BLUEPRINT, PLAYER_CLASS_NO } from "../js/domain/config.js";
+
+const PLAYER_CLASS_SIZE = CLASS_BLUEPRINT.find((c) => c.no === PLAYER_CLASS_NO).size;
 
 test("可从 2017 年 9 月自动推进到 2017 级高考录取，再升入下一届", async () => {
   const g = createGame(20170901);
   assert.equal(g.date, "2017-09-01");
-  assert.equal(playerStudents(g).length, 70);
+  assert.equal(playerStudents(g).length, PLAYER_CLASS_SIZE);
+  assert.equal(PLAYER_CLASS_SIZE, 73);
   assert.equal(g.player.classNo, 16);
   skipToGaokaoOf(g, 2017);
   assert.ok(g.admissions["2017|2020"], "应有 2020 年对 2017 级的录取");
