@@ -2,15 +2,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   generateCohort, generateOpeningSchool, applyRepeaterSeating, placeGraduatingRepeaters,
+  eraQuality,
 } from "../js/domain/school.js";
 import { firstPlacement, secondPlacement, rebuildClasses } from "../js/domain/placement.js";
 import { runExam } from "../js/domain/examService.js";
+import { examParams } from "../js/domain/calendar.js";
 import { provincialPassCounts } from "../js/domain/schoolLines.js";
-import { canInsertRepeat, missedProvincialFirst } from "../js/domain/admission.js";
+import { canInsertRepeat, missedProvincialFirst, admitCohort } from "../js/domain/admission.js";
 import { createGame, skipToGaokaoOf, skipToNextCohort } from "../js/domain/simulation.js";
 import {
   FIRST_PLACEMENT_TARGETS, REPEAT_WEN_NOS, REPEAT_LI_NOS, REPEAT_CLASS_SIZE,
-  INSERT_REPEAT_CLASS_NOS,
+  INSERT_REPEAT_CLASS_NOS, TIER,
 } from "../js/domain/config.js";
 
 const LI_SIZES = Object.fromEntries(FIRST_PLACEMENT_TARGETS.li.map((t) => [t.no, t.size]));
@@ -247,3 +249,142 @@ test("晋升后新一届高三同样按上次高考总分排座，失常的原0/
     assert.ok(st.classNo >= 31, `已达一本仍复读的 ${r.studentId} 应进补习班，实际在 ${st.classNo} 班`);
   }
 });
+
+const PROFILE_SEEDS = [20170901, 7, 99, 2020, 42, 11];
+
+function tutoringGaokao(entryYear, seed) {
+  const c = generateCohort(entryYear, seed, {
+    alreadySplit: true, withRepeat: true, quality: eraQuality(entryYear),
+  });
+  const year = entryYear + 3;
+  const ev = { id: `gaokao-${year}`, name: `${year}年普通高考`, examKind: "gaokao", date: `${year}-06-07`, year };
+  const params = examParams(ev);
+  const gk = runExam(c, { ...ev, difficulty: params.difficulty, dispersion: params.dispersion }, { grade: 3, split: true });
+  const ads = admitCohort(c.students, gk.scoreMap, year);
+  const byId = Object.fromEntries(c.students.map((s) => [s.id, s]));
+  const pack = (nos, track) => {
+    const rows = nos.map((no) => {
+      const list = ads.filter((a) => byId[a.studentId]?.repeat && byId[a.studentId]?.classNo === no);
+      return {
+        no,
+        n: list.length,
+        first: list.filter((a) => a.batch === "一批").length,
+        second: list.filter((a) => a.batch === "一批" || a.batch === "二批").length,
+      };
+    });
+    const tops = ads.filter((a) => {
+      const s = byId[a.studentId];
+      return s?.repeat && s.classNo >= 31 && (track === "wen" ? s.track === "wen" : s.track === "li");
+    }).sort((a, b) => b.total - a.total);
+    const best = rows.slice().sort((a, b) => b.first - a.first || b.second - a.second || a.no - b.no)[0];
+    return { rows, tops, best, firstSum: rows.reduce((s, r) => s + r.first, 0) };
+  };
+  return { year, li: pack(REPEAT_LI_NOS, "li"), wen: pack(REPEAT_WEN_NOS, "wen") };
+}
+
+test("补习班层次用于生成能力，略强于普通卓行、远低于凌霄", () => {
+  assert.equal(TIER.fuzhuo.name, "补习班");
+  assert.ok(TIER.fuzhuo.abilityMean > TIER.zhuoxing.abilityMean);
+  assert.ok(TIER.fuzhuo.abilityMean < TIER.lingxiao.abilityMean - 8);
+  assert.ok(TIER.fuzhuo.abilitySd < TIER.zhuoxing.abilitySd);
+});
+
+test("补习班分班不把尖子全部塞进37班，第一进最好的班，第二第三进其他班", () => {
+  const mk = (id, track, total, firstLine) => ({
+    id, classNo: 16, track, repeat: true, name: id, ability: {},
+    lastGaokao: { total, year: 2020, track, math: 80, chinese: 80, firstLine },
+  });
+  const staying = [];
+  for (let i = 0; i < 33; i++) staying.push(mk(`f${i}`, "li", 600 - i, 535));
+  for (let i = 0; i < 50; i++) staying.push(mk(`s${i}`, "li", 530 - i, 535));
+  for (let i = 0; i < 37; i++) staying.push(mk(`r${i}`, "li", 450 - i, 535));
+  for (let i = 0; i < 20; i++) staying.push(mk(`w${i}`, "wen", 580 - i, 547));
+  const ads = Object.fromEntries(staying.map((s) => [s.id, {
+    studentId: s.id, total: s.lastGaokao.total, firstLine: s.lastGaokao.firstLine,
+    repeatIntent: true, track: s.track, year: 2020,
+  }]));
+  const bestNos = new Set();
+  for (const key of ["assign-a", "assign-b", "assign-c", "assign-d", "assign-e", "assign-f"]) {
+    const placed = placeGraduatingRepeaters(staying, ads, key);
+    const li = placed.filter((s) => s.track === "li" && s.classNo >= 31);
+    assert.equal(li.length, 120);
+    const ordered = li.slice().sort((a, b) => b.lastGaokao.total - a.lastGaokao.total);
+    const byClass = {};
+    for (const s of li) {
+      byClass[s.classNo] ??= { first: 0, second: 0 };
+      if (s.lastGaokao.total >= 535) byClass[s.classNo].first += 1;
+      if (s.lastGaokao.total >= 463) byClass[s.classNo].second += 1;
+    }
+    const bestNo = Number(Object.entries(byClass).sort((a, b) => b[1].first - a[1].first || b[1].second - a[1].second || Number(a[0]) - Number(b[0]))[0][0]);
+    bestNos.add(bestNo);
+    assert.equal(ordered[0].classNo, bestNo, "上次高考第一应在最好的补习班");
+    assert.notEqual(ordered[1].classNo, bestNo, "第二不应与第一同班");
+    assert.notEqual(ordered[2].classNo, bestNo, "第三不应与第一同班");
+    assert.notEqual(ordered[1].classNo, ordered[2].classNo, "第二、第三尽量分在不同班");
+    assert.ok(byClass[bestNo].first >= 6 && byClass[bestNo].first <= 10, `最好的班一本 ${byClass[bestNo].first}`);
+    for (const [no, row] of Object.entries(byClass)) {
+      if (Number(no) === bestNo) continue;
+      assert.ok(row.first < byClass[bestNo].first, `${no}班一本 ${row.first} 应少于最好的 ${bestNo} 班 ${byClass[bestNo].first}`);
+      assert.ok(row.first <= 7, `其余班一本不应到十几二十，${no}班 ${row.first}`);
+    }
+  }
+  assert.ok(bestNos.size >= 2, `最好的班号应随种子变化，实际 ${[...bestNos].join(",")}`);
+  assert.ok(!(bestNos.size === 1 && bestNos.has(37)), "37 班不应永远断层第一");
+});
+
+test("开局理科补习班一本/二本与高尾按 2020 年量级，文科顶端可强、其余一般，多种子抽查", () => {
+  const bestNos = [];
+  const gaps = [];
+  const liFirsts = [];
+  const top1Scores = [];
+  let sawXiamenBand = false;
+  let sawWenTop = false;
+  let sawWenOrdinary = false;
+  const lines = [];
+  const checkYear = (entryYear, label) => {
+    for (const seed of PROFILE_SEEDS) {
+      const { year, li, wen } = tutoringGaokao(entryYear, seed);
+      const firsts = li.rows.map((r) => r.first);
+      const maxF = Math.max(...firsts);
+      const minF = Math.min(...firsts);
+      assert.ok(li.rows.every((r) => r.n === REPEAT_CLASS_SIZE));
+      assert.ok(maxF >= 6 && maxF <= 12, `${label} 种子${seed} 最好的理科补习班一本应约 8 个，实际 ${maxF}（${firsts.join(",")}）`);
+      assert.ok(minF >= 1 && minF <= 7, `${label} 种子${seed} 其余理科补习班应有少数一本，实际最少 ${minF}`);
+      gaps.push(maxF - minF);
+      for (const r of li.rows) {
+        if (r.no !== li.best.no) {
+          assert.ok(r.first <= 8, `${label} 种子${seed} ${r.no}班一本 ${r.first} 不应到十几二十`);
+          assert.ok(r.first <= maxF, `${label} 种子${seed} ${r.no}班一本不应超过最好的班`);
+        }
+      }
+      assert.ok(li.best.second >= 38 && li.best.second <= 56, `${label} 种子${seed} 最好的班二本以上应约 47，实际 ${li.best.no}班 ${li.best.second}`);
+      assert.ok(li.firstSum >= 22 && li.firstSum <= 45, `${label} 种子${seed} 理科补习班合计一本应约 33，实际 ${li.firstSum}`);
+      const t1 = li.tops[0], t2 = li.tops[1], t3 = li.tops[2];
+      assert.ok(t1 && t2 && t3);
+      assert.ok(t1.total >= 598 && t1.total < 660, `${label} 种子${seed} 理科第一应在 630–640 量级且不到 660，实际 ${t1.total} ${t1.university}`);
+      assert.ok(t1.total < 660, `${label} 种子${seed} 理科补习班第一不应常到 660+，实际 ${t1.total}`);
+      assert.ok(t2.total >= 570 && t2.total <= 625, `${label} 种子${seed} 理科第二应在 600 上下，实际 ${t2.total} ${t2.university}`);
+      assert.ok(t3.total >= 555 && t3.total <= 615, `${label} 种子${seed} 理科第三应在 590 上下，实际 ${t3.total} ${t3.university}`);
+      if (t1.total >= 625 && t1.total <= 645) sawXiamenBand = true;
+      bestNos.push(li.best.no);
+      liFirsts.push(maxF);
+      top1Scores.push(t1.total);
+      assert.ok(wen.firstSum <= 20, `${label} 种子${seed} 文科补习班一本不应膨胀，实际 ${wen.firstSum}`);
+      assert.ok(wen.rows.every((r) => r.first <= 8), `${label} 种子${seed} 文科单班一本 ${wen.rows.map((r) => r.first).join(",")}`);
+      const w1 = wen.tops[0], w3 = wen.tops[2];
+      assert.ok(w1.total >= 600, `${label} 种子${seed} 文科第一应能到较强顶端，实际 ${w1.total} ${w1.university}`);
+      if (w1.total >= 620) sawWenTop = true;
+      if (w3 && w3.total <= w1.total - 20) sawWenOrdinary = true;
+      lines.push(`${label}s${seed}@${year} 理${li.rows.map((r) => `${r.no}:${r.first}/${r.second}`).join(",")} 合计${li.firstSum} 前三 ${t1.total}/${t2.total}/${t3.total} 文一本${wen.firstSum} 文前 ${w1.total}`);
+    }
+  };
+  checkYear(2015, "开局2018");
+  checkYear(2017, "2020附近");
+  assert.ok(new Set(bestNos).size >= 3, `最好的理科补习班不应年年都是 37，实际 ${bestNos.join(",")}。${lines.join("；")}`);
+  assert.ok(gaps.filter((g) => g >= 2).length >= Math.ceil(gaps.length / 2), `多数抽查应有一班明显更强，分差 ${gaps.join(",")}。${lines.join("；")}`);
+  assert.ok(sawXiamenBand, `应见到理科第一落在 630–640 量级。${lines.join("；")}`);
+  assert.ok(sawWenTop, `文科顶端有的年份应到人大/厦大量级。${lines.join("；")}`);
+  assert.ok(sawWenOrdinary, `多数年份文科第三应明显低于顶端（其余一般般）。${lines.join("；")}`);
+  assert.ok(Math.max(...top1Scores) < 660, `理科补习班第一不应冲到 660+，最高 ${Math.max(...top1Scores)}`);
+});
+

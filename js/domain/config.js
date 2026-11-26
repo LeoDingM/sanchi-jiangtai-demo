@@ -66,6 +66,8 @@ export const TIER = {
   zhuoxing: { id: "zhuoxing", name: "卓行", rank: 3, abilityMean: 52, abilitySd: 10.5, potMean: 74, potSd: 7 },
   duxue: { id: "duxue", name: "笃学", rank: 4, abilityMean: 45.5, abilitySd: 12.5, potMean: 67, potSd: 8.5 },
   yiti: { id: "yiti", name: "艺体", rank: 5, abilityMean: 42, abilitySd: 12, potMean: 60, potSd: 8 },
+  // 补习班：略强于普通卓行、远低于凌霄。高尾单独压缩，不按重点/凌霄生成再改显示层次。
+  fuzhuo: { id: "fuzhuo", name: "补习班", rank: 6, abilityMean: 53, abilitySd: 4.8, potMean: 72, potSd: 5.5 },
 };
 
 /**

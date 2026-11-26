@@ -9,6 +9,7 @@ import { generateName } from "./names.js";
 import { gradeStudent, scaleOf } from "./scores.js";
 import { provincialLines } from "./jiangxi.js";
 import { canInsertRepeat } from "./admission.js";
+import { examParams } from "./calendar.js";
 
 export const ALL_SUBJECTS = [...SUBJECT_IDS, "biology"];
 
@@ -204,16 +205,16 @@ function priorGaokaoYear(forSeniorEntryYear) {
 }
 
 function lastGaokaoExam(year) {
-  return {
+  const ev = {
     id: `prior-gaokao-${year}`,
     name: "上次高考",
     examKind: "gaokao",
-    difficulty: 1.003,
-    dispersion: 1,
     date: `${year}-06-07`,
     grade: 3,
     year,
   };
+  const params = examParams(ev);
+  return { ...ev, difficulty: params.difficulty, dispersion: params.dispersion };
 }
 
 /** 为开局合成的复读生补上上次高考总分；必要时压到省控一本以下，表示发挥失常。 */
@@ -288,7 +289,161 @@ export function applyRepeaterSeating(students) {
   return students.map((s) => byId.get(s.id) || s);
 }
 
-function assignTutoringClasses(students) {
+function evenShare(total, parts) {
+  const n = Math.max(0, parts);
+  if (n <= 0) return [];
+  const base = Math.floor(total / n);
+  let rem = total - base * n;
+  return Array.from({ length: n }, () => {
+    const v = base + (rem > 0 ? 1 : 0);
+    if (rem > 0) rem -= 1;
+    return v;
+  });
+}
+
+function argmaxQuota(left) {
+  let best = -1;
+  for (let i = 0; i < left.length; i++) {
+    if (left[i] <= 0) continue;
+    if (best < 0 || left[i] > left[best]) best = i;
+  }
+  return best;
+}
+
+function fillByQuota(buckets, list, quotas, cap, pickIdx) {
+  const left = quotas.slice();
+  for (let i = 0; i < list.length; i++) {
+    let idx = pickIdx ? pickIdx(i, left) : -1;
+    if (idx == null || idx < 0 || left[idx] <= 0) idx = argmaxQuota(left);
+    if (idx < 0) {
+      idx = buckets.findIndex((b) => b.length < cap);
+      if (idx < 0) idx = 0;
+    }
+    buckets[idx].push(list[i]);
+    if (left[idx] > 0) left[idx] -= 1;
+  }
+}
+
+/**
+ * 把补习生分到文/理科各班：按上次高考位次分带，不按某年省控绝对人数（开局合成分与当年线可能错位）。
+ * 最好的一班拿更多一本，但尖子不全塞进 37/31；第一进最好的班，第二、第三尽量进其他班。
+ */
+function distributeToTutoringClasses(sorted, nos, rng) {
+  if (!sorted.length) return [];
+  const nClasses = nos.length;
+  const cap = REPEAT_CLASS_SIZE;
+  const bestIdx = Math.floor(rng() * nClasses);
+  const year = sorted.find((s) => s.lastGaokao?.year != null)?.lastGaokao.year;
+  const track = sorted.find((s) => s.lastGaokao?.track)?.lastGaokao.track
+    || (sorted[0].track === "wen" ? "wen" : "li");
+  const lines = year ? provincialLines(year, track) : null;
+  const firstLine = lines?.first ?? sorted.find((s) => s.lastGaokao?.firstLine != null)?.lastGaokao.firstLine;
+  const secondLine = lines?.second;
+  let firstBand, secondBand, rest;
+  if (firstLine != null && secondLine != null) {
+    firstBand = sorted.filter((s) => (s.lastGaokao?.total ?? -Infinity) >= firstLine);
+    secondBand = sorted.filter((s) => {
+      const t = s.lastGaokao?.total ?? -Infinity;
+      return t >= secondLine && t < firstLine;
+    });
+    rest = sorted.filter((s) => (s.lastGaokao?.total ?? -Infinity) < secondLine);
+  } else {
+    const n = sorted.length;
+    const nFirst = Math.min(n, Math.max(n >= 12 ? 3 : (n > 0 ? 1 : 0), Math.round(n * 33 / 420)));
+    const nAboveSecond = Math.min(n, Math.max(nFirst, Math.round(n * 237 / 420)));
+    firstBand = sorted.slice(0, nFirst);
+    secondBand = sorted.slice(nFirst, nAboveSecond);
+    rest = sorted.slice(nAboveSecond);
+  }
+  const nFirst = firstBand.length;
+  const nSecond = secondBand.length;
+
+  const qFirst = Array(nClasses).fill(0);
+  const qSecond = Array(nClasses).fill(0);
+  const qRest = Array(nClasses).fill(0);
+  let bestFirst = 0;
+  if (nFirst > 0) {
+    const raw = Math.round(nFirst * 8 / 33);
+    bestFirst = clamp(raw, Math.min(6, nFirst), Math.min(10, nFirst));
+    if (nFirst >= nClasses && nFirst - bestFirst < nClasses - 1) bestFirst = nFirst - (nClasses - 1);
+    bestFirst = clamp(bestFirst, 1, Math.min(cap, nFirst));
+  }
+  qFirst[bestIdx] = bestFirst;
+  evenShare(nFirst - bestFirst, nClasses - 1).forEach((v, i) => {
+    qFirst[i < bestIdx ? i : i + 1] = v;
+  });
+
+  const bestSecond = Math.min(nSecond, Math.max(0, 47 - bestFirst), cap - qFirst[bestIdx]);
+  qSecond[bestIdx] = bestSecond;
+  evenShare(nSecond - bestSecond, nClasses - 1).forEach((v, i) => {
+    qSecond[i < bestIdx ? i : i + 1] = v;
+  });
+  for (let i = 0; i < nClasses; i++) {
+    const overflow = qFirst[i] + qSecond[i] - cap;
+    if (overflow <= 0) continue;
+    qSecond[i] -= overflow;
+    let left = overflow;
+    for (let j = 0; j < nClasses && left > 0; j++) {
+      if (j === i) continue;
+      const room = cap - qFirst[j] - qSecond[j];
+      if (room <= 0) continue;
+      const take = Math.min(room, left);
+      qSecond[j] += take;
+      left -= take;
+    }
+  }
+
+  const seats = qFirst.map((f, i) => cap - f - qSecond[i]);
+  const nRest = rest.length;
+  const seatSum = seats.reduce((a, b) => a + b, 0);
+  if (nRest >= seatSum) {
+    seats.forEach((v, i) => { qRest[i] = v; });
+  } else if (nRest === seatSum) {
+    seats.forEach((v, i) => { qRest[i] = v; });
+  } else {
+    evenShare(nRest, nClasses).forEach((v, i) => { qRest[i] = v; });
+    let extra = 0;
+    for (let i = 0; i < nClasses; i++) {
+      if (qRest[i] > seats[i]) {
+        extra += qRest[i] - seats[i];
+        qRest[i] = seats[i];
+      }
+    }
+    for (let i = 0; i < nClasses && extra > 0; i++) {
+      const room = seats[i] - qRest[i];
+      if (room <= 0) continue;
+      const take = Math.min(room, extra);
+      qRest[i] += take;
+      extra -= take;
+    }
+  }
+
+  const buckets = Array.from({ length: nClasses }, () => []);
+  const otherFirst = shuffle(rng, qFirst.map((n, j) => j).filter((j) => j !== bestIdx && qFirst[j] > 0));
+  fillByQuota(buckets, firstBand, qFirst, cap, (i, left) => {
+    if (i === 0 && left[bestIdx] > 0) return bestIdx;
+    if (i === 1 && otherFirst[0] != null && left[otherFirst[0]] > 0) return otherFirst[0];
+    if (i === 2 && otherFirst[1] != null && left[otherFirst[1]] > 0) return otherFirst[1];
+    return -1;
+  });
+  fillByQuota(buckets, secondBand, qSecond, cap);
+  fillByQuota(buckets, rest, qRest, cap);
+  const assigned = new Set(buckets.flat().map((s) => s.id));
+  for (const s of sorted) {
+    if (assigned.has(s.id)) continue;
+    let idx = buckets.findIndex((b) => b.length < cap);
+    if (idx < 0) idx = nClasses - 1;
+    buckets[idx].push(s);
+  }
+
+  const out = [];
+  buckets.forEach((list, i) => {
+    for (const s of list) out.push({ ...s, classNo: nos[i], tier: "fuzhuo" });
+  });
+  return out;
+}
+
+function assignTutoringClasses(students, seedKey = "tutoring") {
   const out = [];
   const plans = [
     { track: "wen", nos: REPEAT_WEN_NOS },
@@ -298,16 +453,14 @@ function assignTutoringClasses(students) {
     const arr = students.filter((s) => p.track === "wen" ? s.track === "wen" : s.track !== "wen")
       .slice()
       .sort(compareLastGaokao);
-    arr.forEach((s, i) => {
-      const idx = Math.min(p.nos.length - 1, Math.floor(i / REPEAT_CLASS_SIZE));
-      out.push({ ...s, classNo: p.nos[idx], tier: "fuzhuo" });
-    });
+    const rng = rngFrom(seedKey, "assign-tutoring", p.track, arr.map((s) => s.id).join(","));
+    distributeToTutoringClasses(arr, p.nos, rng).forEach((s) => out.push(s));
   }
   return applyRepeaterSeating(out);
 }
 
 /** 毕业留下的复读生：失常的原 0/翠微插回对应班，其余编入补习班并按上次高考分排座。 */
-export function placeGraduatingRepeaters(staying, admissionById = {}) {
+export function placeGraduatingRepeaters(staying, admissionById = {}, seedKey = "promote-repeat") {
   const inserts = [];
   const tutoring = [];
   for (const s of staying) {
@@ -319,12 +472,65 @@ export function placeGraduatingRepeaters(staying, admissionById = {}) {
       tutoring.push({ ...s, tier: "fuzhuo", insertedRepeat: false });
     }
   }
-  return [...assignTutoringClasses(tutoring), ...inserts];
+  return [...assignTutoringClasses(tutoring, seedKey), ...inserts];
 }
 
-/** 高三复读生：能力略高于原梯队均值，但仍是重点中学复读画像，不是人人清北。 */
+function examAbilityIds(track) {
+  return track === "wen"
+    ? ["chinese", "math", "english", "politics", "history", "geography"]
+    : ["chinese", "math", "english", "physics", "chemistry", "biology"];
+}
+
+function shiftAbilityToward(st, targetBase, cap = 99) {
+  const ids = examAbilityIds(st.track);
+  const have = ids.filter((id) => st.ability?.[id] != null);
+  if (!have.length) return st;
+  const cur = have.reduce((sum, id) => sum + Number(st.ability[id] || 0), 0) / have.length;
+  const shift = targetBase - cur;
+  const allIds = new Set([...Object.keys(st.ability || {}), ...have]);
+  for (const id of allIds) {
+    const a = clamp((st.ability[id] || 0) + shift, 16, Math.min(99, cap));
+    st.ability[id] = round1(a);
+    const pot = clamp((st.potential?.[id] || a) + shift, a, 99.5);
+    st.potential[id] = round1(pot);
+  }
+  return st;
+}
+
+function takeUnique(list, n, rng, used) {
+  const pool = shuffle(rng, list.filter((s) => !used.has(s.id)));
+  const out = pool.slice(0, Math.min(n, pool.length));
+  out.forEach((s) => used.add(s.id));
+  return out;
+}
+
+/** 给补习班点出一本带与薄薄高尾：理科压在厦大/矿大/南大量级，文科顶端可到人大/厦大，不年年剧本化。 */
+function plantTutoringProfile(students, rng) {
+  const used = new Set();
+  const li = students.filter((s) => s.track !== "wen");
+  const wen = students.filter((s) => s.track === "wen");
+
+  const liTops = [
+    90.8 + rng() * 2.2, // 约 630–640，厦大量级；按考试科目对齐，避免弱科把理综抬到 660+
+    84.4 + rng() * 2.0, // 约 600 上下，矿大量级
+    82.2 + rng() * 1.8, // 约 590 上下，南大量级
+  ];
+  if (rng() < 0.35) liTops.push(77.5 + rng() * 2.2);
+  takeUnique(li, liTops.length, rng, used).forEach((s, i) => shiftAbilityToward(s, liTops[i], 93.8));
+  // 其余一本来自一条较窄的刚过线带，避免整班二十多个一本。
+  const nLiFirst = Math.min(30, Math.max(0, li.length - used.size));
+  takeUnique(li, nLiFirst, rng, used).forEach((s) => shiftAbilityToward(s, 67 + rng() * 4.2, 74));
+
+  const wenFirst = rng() < 0.58 ? 96.0 + rng() * 2.2 : 91.0 + rng() * 3.0;
+  const wenSecond = rng() < 0.55 ? 92.0 + rng() * 2.2 : 87.0 + rng() * 3.0;
+  takeUnique(wen, 2, rng, used).forEach((s, i) => shiftAbilityToward(s, i === 0 ? wenFirst : wenSecond, i === 0 ? 99 : 96));
+  const nWenFirst = Math.min(10, Math.max(0, wen.length - used.size));
+  takeUnique(wen, nWenFirst, rng, used).forEach((s) => shiftAbilityToward(s, 70 + rng() * 4, 78));
+}
+
+/** 高三复读生：能力按补习班层次生成，略强于普通卓行、远低于凌霄，不是按重点/凌霄再改标签。 */
 export function generateRepeaters(forSeniorEntryYear, seed, usedNames, quality = 0, { regulars = [] } = {}) {
-  // 高三补习班：文科 31–36、理科 37–42，每班 70 人。班内序号按上次高考总分降序，最高为 1 号。
+  // 高三补习班：文科 31–36、理科 37–42，每班 70 人。先按补习班画像生成再分班，班内按上次高考总分排座。
   const rng = rngFrom(seed, "repeaters", forSeniorEntryYear);
   const students = [];
   const gaokaoYear = priorGaokaoYear(forSeniorEntryYear);
@@ -332,25 +538,31 @@ export function generateRepeaters(forSeniorEntryYear, seed, usedNames, quality =
     ...REPEAT_WEN_NOS.map((no) => ({ no, track: "wen", size: REPEAT_CLASS_SIZE, hint: "wen" })),
     ...REPEAT_LI_NOS.map((no) => ({ no, track: "li", size: REPEAT_CLASS_SIZE, hint: "li" })),
   ];
+  let seqCounter = 1;
   for (const p of plan) {
-    for (let seq = 1; seq <= p.size; seq++) {
-      // 补习生来源多数为原卓行/凌霄/笃学，少数原重点；能力略高于原梯队，但不是人人清北。
+    for (let i = 0; i < p.size; i++) {
+      // 来源多数仍是卓行/笃学，少数凌霄、极少数重点；只作档案来历，不决定能力。
       const roll = rng();
-      const tierSrc = roll < 0.08 ? "yunxiu_key" : roll < 0.38 ? "lingxiao" : roll < 0.82 ? "zhuoxing" : "duxue";
+      const originTier = roll < 0.04 ? "yunxiu_key" : roll < 0.20 ? "lingxiao" : roll < 0.72 ? "zhuoxing" : "duxue";
       const st = makeStudent({
         rng, usedNames, entryYear: forSeniorEntryYear - 1,
-        classNo: p.no, seq, tier: tierSrc, hint: p.hint, repeat: true,
-        quality: quality + 0.8,
+        classNo: p.no, seq: seqCounter, tier: "fuzhuo", hint: p.hint, repeat: true,
+        quality: quality * 0.2,
       });
+      seqCounter += 1;
       st.track = p.track;
       st.tier = "fuzhuo";
-      st.originTier = tierSrc;
+      st.originTier = originTier;
       st.insertedRepeat = false;
-      st.lastGaokao = synthesizeLastGaokao(st, gaokaoYear);
       students.push(st);
     }
   }
+  plantTutoringProfile(students, rng);
+  for (const st of students) st.lastGaokao = synthesizeLastGaokao(st, gaokaoYear);
+  const assigned = assignTutoringClasses(students, [seed, "repeat-assign", forSeniorEntryYear].join("|"));
+
   const insertRng = rngFrom(seed, "repeat-inserts", forSeniorEntryYear);
+  const inserts = [];
   for (const p of INSERT_PLAN) {
     const regularCount = regulars.filter((s) => s.classNo === p.no).length || p.sizeHint;
     const n = rollInsertCount(insertRng, regularCount, p.rate, p.cap);
@@ -366,10 +578,10 @@ export function generateRepeaters(forSeniorEntryYear, seed, usedNames, quality =
       st.originTier = p.tier;
       st.insertedRepeat = true;
       st.lastGaokao = synthesizeLastGaokao(st, gaokaoYear, { forceMissFirst: true, rng: insertRng });
-      students.push(st);
+      inserts.push(st);
     }
   }
-  return applyRepeaterSeating(students.concat(regulars)).filter((s) => s.repeat);
+  return applyRepeaterSeating(assigned.concat(inserts).concat(regulars)).filter((s) => s.repeat);
 }
 
 export function generateOpeningSchool(seed, playerEntryYear = GRADE_YEAR) {

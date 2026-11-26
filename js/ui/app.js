@@ -1,5 +1,5 @@
 import {
-  createGame, playerStudents, skipToNextStage, skipToGaokaoOf, skipToNextCohort,
+  createGame, freshGameSeed, parseGameSeed, playerStudents, skipToNextStage, skipToGaokaoOf, skipToNextCohort,
   advanceDay, advancePeriod, prepareLesson, teach, talkTo, reviewHomework, listExamReports, formatDateCn,
   applyEvent, SCHOOL_CALENDAR, gradeOf, topicsForGrade, LESSON_STYLES,
   formatGradeTerm, describePlayerStage, describeStageAdvance, describeAdmissionContext,
@@ -99,10 +99,13 @@ export function boot() {
   });
   $("#btn-new").onclick = () => {
     const name = $("#pname").value.trim() || "林知秋";
-    state = createGame(20170901, name);
+    const typed = parseGameSeed($("#pseed")?.value);
+    const seed = typed ?? freshGameSeed();
+    state = createGame(seed, name);
     selectedId = playerStudents(state)[0]?.id;
     persist();
     showMain();
+    toast(typed ? `已用世界编号 ${seed} 开局。` : `本局世界编号 ${seed}，下次开档会再换一套名单。`);
   };
   $("#btn-cont").onclick = () => {
     const s = loadSlot("auto");
@@ -1196,6 +1199,11 @@ function viewSettings(host) {
   const officialName = officialHomeroomName(state.player);
   const keyHint = conf.hasKey ? `已保存密钥 ${maskApiKey(conf.apiKey)}。输入框留空再保存，会保留原密钥。` : "尚未保存密钥。";
   host.innerHTML = `<h3>设置</h3>
+    <section class="settings-section" id="world-seed">
+      <h4>本局世界编号</h4>
+      <p class="notice">每次开始新学期会随机生成一套学生名单和考试结果。同一编号可以重开出同一局。</p>
+      <p><code>${escapeHtml(String(state.seed))}</code></p>
+    </section>
     <p class="notice">考后分析使用 OpenAI 兼容接口（默认 DeepSeek，地址 ${escapeHtml("https://api.deepseek.com")}，路径 /chat/completions）。密钥只存在本机浏览器，与游戏存档分开，也不会写入导出的 JSON。分析只写评语，不会改分数、排名或上线人数。</p>
     <form class="settings-form" id="ai-form">
       <label>接口地址 <input id="ai-base" type="url" value="${escapeHtml(conf.baseUrl)}" autocomplete="off" spellcheck="false" /></label>
@@ -1545,7 +1553,7 @@ function viewLog(host) {
 function viewSave(host) {
   const slots = listSlots();
   host.innerHTML = `<h3>存档 / 读档</h3>
-    <p class="notice">刷新页面后可通过「继续存档」读取自动档。也可存到 3 个手动槽，或下载 JSON。</p>
+    <p class="notice">刷新页面后可通过「继续存档」读取自动档。也可存到 3 个手动槽，或下载 JSON。本局世界编号 ${escapeHtml(String(state.seed))}。</p>
     <div class="row-actions">
       <button type="button" id="auto-save">立刻自动保存</button>
       <button type="button" id="dl">下载存档文件</button>

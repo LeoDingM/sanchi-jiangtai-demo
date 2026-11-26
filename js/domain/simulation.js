@@ -71,6 +71,29 @@ export function recordPriorGaokaoCounts(state, counts) {
   return schoolQuotaFromPrior(counts);
 }
 
+/** 仅用于新开档挑选世界编号。一经选定，生成与考试仍走确定性伪随机。 */
+export function freshGameSeed() {
+  let n = 0;
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    const buf = new Uint32Array(1);
+    crypto.getRandomValues(buf);
+    n = buf[0] >>> 0;
+  } else {
+    n = (Date.now() ^ Math.floor(Math.random() * 0x100000000)) >>> 0;
+  }
+  if (n === 0 || n === 20170901) n = (n + 1) >>> 0 || 1;
+  return n;
+}
+
+/** 开档页填写的世界编号；空或非法则返回 null，由界面改走随机。 */
+export function parseGameSeed(raw) {
+  const s = String(raw ?? "").trim();
+  if (!s || !/^\d+$/.test(s)) return null;
+  const n = Number(s);
+  if (!Number.isSafeInteger(n) || n < 1 || n > 0xffffffff) return null;
+  return n >>> 0;
+}
+
 export function createGame(seed = 20170901, playerName = PLAYER_DEFAULT_NAME) {
   const opening = generateOpeningSchool(seed, GRADE_YEAR);
   const date = START_DATE;
@@ -356,7 +379,7 @@ export function doPromote(state, ev) {
       }
     }
     // 失常的原 0/翠微插回对应班；其余进补习班，按上次高考总分排座，不再洗牌。
-    const placed = placeGraduatingRepeaters(staying, byId);
+    const placed = placeGraduatingRepeaters(staying, byId, [state.seed, "promote-repeat", graduatedCohort].join("|"));
     delete state.cohorts[graduatedCohort];
     // 复读生挂到“下一届高三”所属：他们与新高三同一学年上课，单独保留在 repeatPool 直到合并
     state.pendingRepeat = placed;
