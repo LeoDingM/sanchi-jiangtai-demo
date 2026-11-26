@@ -104,6 +104,8 @@ function compactReport(report, entryYear) {
     scale: r.scale, subjects: r.subjects, line: r.line, rank: r.rank,
     ...Object.fromEntries((r.subjects || []).map((id) => [id, r[id]])),
     huikaoPass: r.huikaoPass, huikaoSubjects: r.huikaoSubjects,
+    cityRank: r.cityRank, countyRank: r.countyRank, provinceRank: r.provinceRank,
+    cityN: r.cityN, countyN: r.countyN, provinceN: r.provinceN, jointLine: r.jointLine,
   }));
   const cut = { ...report.cutoffs, ranked: undefined };
   return {
@@ -111,7 +113,7 @@ function compactReport(report, entryYear) {
     date: report.date, difficulty: report.difficulty, dispersion: report.dispersion,
     scale: report.scale, grade: report.grade, split: report.split, entryYear,
     rows, classes: report.classes, subjectIds: report.subjectIds, toppers: report.toppers,
-    cutoffs: cut, huikao: report.huikao || null, sourceNote: report.sourceNote || null,
+    cutoffs: cut, huikao: report.huikao || null, sourceNote: report.sourceNote || null, joint: report.joint || null,
   };
 }
 

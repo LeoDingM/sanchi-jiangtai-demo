@@ -5,6 +5,7 @@ import {
   scaleOf, subjectRanks, summarizeClass, subjectsFor,
 } from "./scores.js";
 import { provincialLines } from "./jiangxi.js";
+import { attachJointExam, JOINT_SOURCE_NOTE } from "./jointExam.js";
 
 export function studentTrackForExam(student, split) {
   if (!split || student.track === "mixed" || !student.track) return "mixed";
@@ -47,6 +48,13 @@ export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0
     }
   }
   // 把上线标记写回全部行（含班级表和教务筛选所用的 rows）
+  const schoolRank = new Map();
+  for (const list of Object.values(cut.ranked || {})) {
+    for (const row of list) schoolRank.set(row.studentId, row.rank);
+  }
+  for (const r of rows) {
+    if (schoolRank.has(r.studentId)) r.rank = schoolRank.get(r.studentId);
+  }
   for (const r of rows) {
     if (r.repeat) {
       const c = reallySplit ? (r.track === "wen" ? cut.wen : cut.li) : cut.mixed;
@@ -80,8 +88,10 @@ export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0
       r.huikaoSubjects = detail;
     }
   }
+  let joint = null;
   if (exam.examKind === "city" || exam.examKind === "province") {
-    sourceNote = sourceNote || "目前只在宁川中学校内考生中计分排名。没有可靠的全市或全省样本前，不生成虚构考生池，也不展示虚构的市位次或省位次。";
+    joint = attachJointExam(rows, exam);
+    sourceNote = JOINT_SOURCE_NOTE;
   }
 
   const scoreMap = Object.fromEntries(rows.map((r) => [r.studentId, r]));
@@ -106,6 +116,7 @@ export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0
     cutoffs: cut,
     huikao,
     sourceNote,
+    joint,
     classes,
     subjectIds,
     toppers,
