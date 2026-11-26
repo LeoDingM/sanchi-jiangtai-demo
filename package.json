@@ -1,0 +1,11 @@
+{
+  "name": "sanchi-jiangtai",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "《三尺讲台》宁川中学教学生活模拟（网页可玩）",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "start": "python3 -m http.server 8766 --bind 127.0.0.1"
+  }
+}

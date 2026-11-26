@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>三尺讲台 · 江西省宁川中学</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <div class="brand">
+        <div class="seal">川</div>
+        <div>
+          <h1>三尺讲台</h1>
+          <p class="school">江西省宁川中学 · 2017级起</p>
+        </div>
+      </div>
+      <div id="status" class="status">
+        <div id="clock">2017年9月1日</div>
+        <div id="roleline">实习教师 林知秋 · 卓行16班 数学</div>
+      </div>
+      <div class="top-actions">
+        <button type="button" data-act="prep">备课</button>
+        <button type="button" data-act="teach">上课</button>
+        <button type="button" data-act="nextday">下一天</button>
+        <button type="button" class="accent" data-act="skip">下一阶段</button>
+      </div>
+    </header>
+
+    <div id="boot" class="boot">
+      <div class="boot-card">
+        <div class="seal big">川</div>
+        <h2>三尺讲台</h2>
+        <p class="lead">你是刚到江西省宁川中学的数学实习教师。<br/>任教班级：2017级卓行16班（70人，普通班规模）。<br/>从 2017 年 9 月走到高考，再把下一届带起来。</p>
+        <label>教师姓名 <input id="pname" type="text" value="林知秋" maxlength="8" /></label>
+        <div class="boot-btns">
+          <button type="button" id="btn-new" class="accent">开始新学期</button>
+          <button type="button" id="btn-cont">继续存档</button>
+        </div>
+        <p class="hint">本机浏览器打开即可玩。分数、排名、分班和录取由确定性规则计算，不用 AI 出分。</p>
+      </div>
+    </div>
+
+    <div id="main" class="main hidden">
+      <nav id="sidenav">
+        <button type="button" data-view="classroom" class="on">教室座位</button>
+        <button type="button" data-view="roster">学生名册</button>
+        <button type="button" data-view="profile">学生档案</button>
+        <button type="button" data-view="grades">考试成绩</button>
+        <button type="button" data-view="office">教务处</button>
+        <button type="button" data-view="admission">录取去向</button>
+        <button type="button" data-view="auto">自动模式</button>
+        <button type="button" data-view="log">日志校历</button>
+        <button type="button" data-view="save">存档读档</button>
+      </nav>
+      <section id="view" class="view"></section>
+      <aside id="agenda" class="agenda"></aside>
+    </div>
+  </div>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

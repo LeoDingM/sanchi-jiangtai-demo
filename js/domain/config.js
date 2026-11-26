@@ -1,0 +1,186 @@
+/** 科目、分值、班级编制与考试规则。与《项目总控-V1.1》冲突时以总控为准。 */
+
+export const GAME_TITLE = "三尺讲台";
+export const SCHOOL_NAME = "江西省宁川中学";
+export const GRADE_YEAR = 2017;
+export const START_DATE = "2017-09-01";
+export const PLAYER_CLASS_NO = 16;
+export const PLAYER_DEFAULT_NAME = "林知秋";
+export const PLAYER_ROLE = "数学实习教师";
+export const MENTOR_NAME = "陈正衡";
+export const HOMEROOM_NAME = "赵映秋";
+
+/** 高一上：8 门课，总分 950，不含生物。 */
+export const SUBJECTS_G1 = [
+  { id: "chinese", name: "语文", max: 150 },
+  { id: "math", name: "数学", max: 150 },
+  { id: "english", name: "英语", max: 150 },
+  { id: "physics", name: "物理", max: 100 },
+  { id: "chemistry", name: "化学", max: 100 },
+  { id: "geography", name: "地理", max: 100 },
+  { id: "history", name: "历史", max: 100 },
+  { id: "politics", name: "政治", max: 100 },
+];
+
+export const SUBJECT_IDS = SUBJECTS_G1.map((s) => s.id);
+export const SUBJECT_MAX = Object.fromEntries(SUBJECTS_G1.map((s) => [s.id, s.max]));
+export const G1_TOTAL = 950;
+export const BIOLOGY_STARTS = "高二";
+
+/** 高三传统高考（规则备查，MVP 不考）。 */
+export const GAOKAO_LI = { chinese: 150, math: 150, english: 150, physics: 110, chemistry: 100, biology: 90, total: 750 };
+export const GAOKAO_WEN = { chinese: 150, math: 150, english: 150, politics: 100, history: 100, geography: 100, total: 750 };
+
+export const CUTOFF_FIRST_RANK = 400;
+export const CUTOFF_SECOND_RANK = 1000;
+
+export const LI_SUBJECTS = ["physics", "chemistry", "math"];
+export const WEN_SUBJECTS = ["politics", "history", "geography"];
+
+export const TIER = {
+  yunxiu_exp: { id: "yunxiu_exp", name: "云岫实验", rank: 0, abilityMean: 86, abilitySd: 5, potMean: 94, potSd: 3 },
+  yunxiu_key: { id: "yunxiu_key", name: "云岫重点", rank: 1, abilityMean: 78, abilitySd: 6, potMean: 88, potSd: 4 },
+  lingxiao: { id: "lingxiao", name: "凌霄", rank: 2, abilityMean: 68, abilitySd: 7, potMean: 80, potSd: 5 },
+  zhuoxing: { id: "zhuoxing", name: "卓行", rank: 3, abilityMean: 55, abilitySd: 11, potMean: 74, potSd: 7 },
+  duxue: { id: "duxue", name: "笃学", rank: 4, abilityMean: 45, abilitySd: 12, potMean: 66, potSd: 8 },
+  yiti: { id: "yiti", name: "艺体", rank: 5, abilityMean: 42, abilitySd: 12, potMean: 60, potSd: 8 },
+};
+
+/**
+ * 2017 级高一上预分班。尚未正式文理分科，但入学成绩已分梯队。
+ * 玩家任教卓行 16 班（约 70 人普通班），不选云岫 0/1（30—35 人清北标准班）。
+ */
+export const CLASS_BLUEPRINT = [
+  { no: 0, name: "云岫0班", short: "云岫理科实验班", tier: "yunxiu_exp", trackHint: "li", size: 32 },
+  { no: 1, name: "云岫1班", short: "云岫文科实验班", tier: "yunxiu_exp", trackHint: "wen", size: 32 },
+  { no: 2, name: "云岫2班", short: "云岫理科重点班", tier: "yunxiu_key", trackHint: "li", size: 52 },
+  { no: 3, name: "云岫3班", short: "云岫理科重点班", tier: "yunxiu_key", trackHint: "li", size: 52 },
+  { no: 4, name: "云岫4班", short: "云岫理科重点班", tier: "yunxiu_key", trackHint: "li", size: 52 },
+  { no: 5, name: "凌霄5班", short: "凌霄班", tier: "lingxiao", trackHint: "li", size: 60 },
+  { no: 6, name: "凌霄6班", short: "凌霄班", tier: "lingxiao", trackHint: "li", size: 60 },
+  { no: 7, name: "凌霄7班", short: "凌霄班", tier: "lingxiao", trackHint: "li", size: 60 },
+  { no: 8, name: "凌霄8班", short: "凌霄班", tier: "lingxiao", trackHint: "li", size: 60 },
+  { no: 9, name: "凌霄9班", short: "凌霄班", tier: "lingxiao", trackHint: "li", size: 60 },
+  { no: 10, name: "凌霄10班", short: "凌霄班", tier: "lingxiao", trackHint: "wen", size: 60 },
+  { no: 11, name: "凌霄11班", short: "凌霄班", tier: "lingxiao", trackHint: "wen", size: 60 },
+  { no: 12, name: "卓行12班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 70 },
+  { no: 13, name: "卓行13班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 70 },
+  { no: 14, name: "卓行14班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 70 },
+  { no: 15, name: "卓行15班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 70 },
+  { no: 16, name: "卓行16班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 70, player: true },
+  { no: 17, name: "卓行17班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 70 },
+  { no: 18, name: "卓行18班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 70 },
+  { no: 19, name: "卓行19班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 70 },
+  { no: 20, name: "卓行20班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 70 },
+  { no: 21, name: "卓行21班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 70 },
+  { no: 22, name: "卓行22班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 70 },
+  { no: 23, name: "卓行23班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 70 },
+  { no: 24, name: "笃学24班", short: "笃学班", tier: "duxue", trackHint: "mixed", size: 70 },
+  { no: 25, name: "笃学25班", short: "笃学班", tier: "duxue", trackHint: "mixed", size: 70 },
+  { no: 26, name: "笃学26班", short: "笃学班", tier: "duxue", trackHint: "mixed", size: 70 },
+  { no: 27, name: "笃学27班", short: "笃学班", tier: "duxue", trackHint: "mixed", size: 70 },
+  { no: 28, name: "笃学28班", short: "笃学班", tier: "duxue", trackHint: "mixed", size: 70 },
+  { no: 29, name: "笃学29班", short: "笃学班", tier: "duxue", trackHint: "mixed", size: 70 },
+  { no: 30, name: "艺体30班", short: "艺体班", tier: "yiti", trackHint: "mixed", size: 50 },
+];
+
+/** 第一次分班后的目标班额（文理分科 + 梯队）。第二次分班不得使用此表。 */
+export const FIRST_PLACEMENT_TARGETS = {
+  li: [
+    { no: 0, name: "云岫0班", short: "云岫理科实验班", tier: "yunxiu_exp", size: 32, locked: "exp" },
+    { no: 2, name: "云岫2班", short: "云岫理科重点班", tier: "yunxiu_key", size: 52, locked: "key" },
+    { no: 3, name: "云岫3班", short: "云岫理科重点班", tier: "yunxiu_key", size: 52, locked: "key" },
+    { no: 4, name: "云岫4班", short: "云岫理科重点班", tier: "yunxiu_key", size: 52, locked: "key" },
+    { no: 5, name: "凌霄5班", short: "凌霄班", tier: "lingxiao", size: 60 },
+    { no: 6, name: "凌霄6班", short: "凌霄班", tier: "lingxiao", size: 60 },
+    { no: 7, name: "凌霄7班", short: "凌霄班", tier: "lingxiao", size: 60 },
+    { no: 8, name: "凌霄8班", short: "凌霄班", tier: "lingxiao", size: 60 },
+    { no: 9, name: "凌霄9班", short: "凌霄班", tier: "lingxiao", size: 60 },
+    { no: 12, name: "卓行12班", short: "卓行班", tier: "zhuoxing", size: 70 },
+    { no: 13, name: "卓行13班", short: "卓行班", tier: "zhuoxing", size: 70 },
+    { no: 14, name: "卓行14班", short: "卓行班", tier: "zhuoxing", size: 70 },
+    { no: 15, name: "卓行15班", short: "卓行班", tier: "zhuoxing", size: 70 },
+    { no: 16, name: "卓行16班", short: "卓行班", tier: "zhuoxing", size: 70 },
+    { no: 17, name: "卓行17班", short: "卓行班", tier: "zhuoxing", size: 70 },
+    { no: 18, name: "卓行18班", short: "卓行班", tier: "zhuoxing", size: 70 },
+    { no: 27, name: "笃学27班", short: "笃学班", tier: "duxue", size: 70 },
+    { no: 28, name: "笃学28班", short: "笃学班", tier: "duxue", size: 70 },
+    { no: 29, name: "笃学29班", short: "笃学班", tier: "duxue", size: 70 },
+  ],
+  wen: [
+    { no: 1, name: "云岫1班", short: "云岫文科实验班", tier: "yunxiu_exp", size: 32, locked: "exp" },
+    { no: 10, name: "凌霄10班", short: "凌霄班", tier: "lingxiao", size: 60 },
+    { no: 11, name: "凌霄11班", short: "凌霄班", tier: "lingxiao", size: 60 },
+    { no: 19, name: "卓行19班", short: "卓行班", tier: "zhuoxing", size: 70 },
+    { no: 20, name: "卓行20班", short: "卓行班", tier: "zhuoxing", size: 70 },
+    { no: 21, name: "卓行21班", short: "卓行班", tier: "zhuoxing", size: 70 },
+    { no: 22, name: "卓行22班", short: "卓行班", tier: "zhuoxing", size: 70 },
+    { no: 23, name: "卓行23班", short: "卓行班", tier: "zhuoxing", size: 70 },
+    { no: 24, name: "笃学24班", short: "笃学班", tier: "duxue", size: 70 },
+    { no: 25, name: "笃学25班", short: "笃学班", tier: "duxue", size: 70 },
+    { no: 26, name: "笃学26班", short: "笃学班", tier: "duxue", size: 70 },
+  ],
+  yiti: [{ no: 30, name: "艺体30班", short: "艺体班", tier: "yiti", size: 50, locked: "yiti" }],
+};
+
+export const EXAMS = [
+  { id: "monthly1", name: "第一次月考", kind: "月考", dates: ["2017-10-12", "2017-10-13", "2017-10-14"], difficulty: 0.98 },
+  { id: "midterm", name: "期中考试", kind: "期中", dates: ["2017-11-15", "2017-11-16", "2017-11-17"], difficulty: 1.02 },
+  { id: "monthly2", name: "第二次月考", kind: "月考", dates: ["2017-12-14", "2017-12-15", "2017-12-16"], difficulty: 1.0 },
+  { id: "final", name: "期末考试", kind: "期末", dates: ["2018-01-15", "2018-01-16", "2018-01-17"], difficulty: 1.05 },
+];
+
+/** 三天八科的场次安排。 */
+export const EXAM_SESSIONS = [
+  { dayOffset: 0, half: "morning", subjects: ["chinese"], label: "语文" },
+  { dayOffset: 0, half: "afternoon", subjects: ["math"], label: "数学" },
+  { dayOffset: 1, half: "morning", subjects: ["english"], label: "英语" },
+  { dayOffset: 1, half: "afternoon", subjects: ["physics", "chemistry"], label: "物理、化学" },
+  { dayOffset: 2, half: "morning", subjects: ["history", "politics"], label: "历史、政治" },
+  { dayOffset: 2, half: "afternoon", subjects: ["geography"], label: "地理" },
+];
+
+export const PERIODS = [
+  { id: "morning-read", name: "早读", short: "早读", kind: "self", clock: "06:40" },
+  { id: "p1", name: "第1节", short: "1节", kind: "class", clock: "07:50" },
+  { id: "p2", name: "第2节", short: "2节", kind: "class", clock: "08:40" },
+  { id: "p3", name: "第3节", short: "3节", kind: "class", clock: "09:40" },
+  { id: "p4", name: "第4节", short: "4节", kind: "class", clock: "10:30" },
+  { id: "noon", name: "午休", short: "午休", kind: "break", clock: "12:00" },
+  { id: "p5", name: "第5节", short: "5节", kind: "class", clock: "14:00" },
+  { id: "p6", name: "第6节", short: "6节", kind: "class", clock: "14:50" },
+  { id: "p7", name: "第7节", short: "7节", kind: "class", clock: "15:50" },
+  { id: "p8", name: "第8节", short: "8节", kind: "class", clock: "16:40" },
+  { id: "evening-1", name: "晚自习一", short: "晚一", kind: "self", clock: "19:00" },
+  { id: "evening-2", name: "晚自习二", short: "晚二", kind: "self", clock: "20:10" },
+];
+
+export const WEEKDAY_NAMES = ["日", "一", "二", "三", "四", "五", "六"];
+
+export const PERSONALITIES = ["沉稳", "开朗", "好强", "内向", "敏感", "自律", "懒散", "热心", "倔强", "细腻", "活泼", "寡言"];
+
+export const FAMILY_TYPES = [
+  { type: "务农", note: "家里在乡下种地，逢学期开学由亲人送来。" },
+  { type: "外出务工", note: "父母在沿海打工，平时住校，假期才团圆。" },
+  { type: "教师子女", note: "家里有人从教，对成绩和规矩都更敏感。" },
+  { type: "经商", note: "家里做些小生意，经济上宽裕一些。" },
+  { type: "单亲", note: "由父亲或母亲一方抚养，性格更早熟。" },
+  { type: "机关职员", note: "父母在县城单位上班，周末常回家。" },
+  { type: "手艺人家", note: "家里开店或做手艺，孩子偶尔要帮忙。" },
+];
+
+export function blueprintByNo(no) {
+  return CLASS_BLUEPRINT.find((c) => c.no === no);
+}
+
+export function examById(id) {
+  return EXAMS.find((e) => e.id === id);
+}
+
+export function examByDate(date) {
+  return EXAMS.find((e) => e.dates.includes(date));
+}
+
+export function subjectById(id) {
+  return SUBJECTS_G1.find((s) => s.id === id);
+}

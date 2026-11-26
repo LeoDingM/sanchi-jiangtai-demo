@@ -1,0 +1,159 @@
+/** 组织一次考试：出分、文理分列排名、分数线、层次筛选、单科第一。 */
+import { CUTOFF_FIRST_RANK, CUTOFF_SECOND_RANK } from "./config.js";
+import {
+  attachStudentMeta, cutoffRanks, cutoffsFromRanked, gradeStudent, rankRows,
+  scaleOf, subjectRanks, summarizeClass, subjectsFor,
+} from "./scores.js";
+import { provincialLines } from "./jiangxi.js";
+
+export function studentTrackForExam(student, split) {
+  if (!split || student.track === "mixed" || !student.track) return "mixed";
+  return student.track === "wen" ? "wen" : "li";
+}
+
+export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0 }) {
+  const scale = scaleOf(grade, exam.examKind);
+  const rows = [];
+  for (const s of cohort.students) {
+    const bonus = teachingBonusFor(s);
+    const sc = gradeStudent(s, exam, scale, bonus);
+    rows.push(attachStudentMeta(sc, s));
+  }
+  const regular = rows.filter((r) => !r.repeat);
+  const repeaters = rows.filter((r) => r.repeat);
+  // 分科前按全年级第400/1000名划线；分科后文理分列，名额按人数比例分摊。
+  const reallySplit = !!split;
+
+  const byTrack = { mixed: regular, li: regular.filter((r) => r.track === "li"), wen: regular.filter((r) => r.track === "wen") };
+  const cut = { split: reallySplit };
+  if (!reallySplit) {
+    const ranked = rankRows(regular);
+    const n = regular.length;
+    const { firstN, secondN } = cutoffRanks(n, false, n);
+    cut.mixed = { ...cutoffsFromRanked(ranked, firstN, secondN), track: "mixed", firstN, secondN, count: n };
+    applyLineFlags(ranked, cut.mixed);
+    cut.ranked = { mixed: ranked };
+  } else {
+    cut.ranked = {};
+    const totalN = regular.length;
+    for (const track of ["li", "wen"]) {
+      const list = byTrack[track];
+      const ranked = rankRows(list);
+      const { firstN, secondN } = cutoffRanks(totalN, true, list.length);
+      const c = { ...cutoffsFromRanked(ranked, firstN, secondN), track, firstN, secondN, count: list.length };
+      applyLineFlags(ranked, c);
+      cut[track] = c;
+      cut.ranked[track] = ranked;
+    }
+  }
+  // 把上线标记写回全部行（含班级表和教务筛选所用的 rows）
+  for (const r of rows) {
+    if (r.repeat) {
+      const c = reallySplit ? (r.track === "wen" ? cut.wen : cut.li) : cut.mixed;
+      r.line = c && r.total >= c.firstLine ? "一本" : c && r.total >= c.secondLine ? "二本" : "未达二本";
+    } else if (!reallySplit) {
+      r.line = r.total >= cut.mixed.firstLine ? "一本" : r.total >= cut.mixed.secondLine ? "二本" : "未达二本";
+    } else {
+      const c = r.track === "wen" ? cut.wen : cut.li;
+      r.line = r.total >= c.firstLine ? "一本" : r.total >= c.secondLine ? "二本" : "未达二本";
+    }
+  }
+  const scoreMap = Object.fromEntries(rows.map((r) => [r.studentId, r]));
+
+  const classes = summarizeAllClasses(cohort, scoreMap, cut, reallySplit);
+  const subjects = subjectsFor(scale, "li").concat(reallySplit ? [] : []);
+  const subjectIds = [...new Set(rows.flatMap((r) => r.subjects || []))];
+  const toppers = subjectToppers(rows, subjectIds, reallySplit);
+
+  return {
+    examId: exam.id,
+    examName: exam.name,
+    examKind: exam.examKind,
+    date: exam.date,
+    difficulty: exam.difficulty,
+    dispersion: exam.dispersion,
+    scale,
+    grade,
+    split: reallySplit,
+    scoreMap,
+    rows,
+    cutoffs: cut,
+    classes,
+    subjectIds,
+    toppers,
+    repeaters: rankRows(repeaters),
+  };
+}
+
+function applyLineFlags(ranked, c) {
+  for (const r of ranked) {
+    r.line = r.total >= c.firstLine ? "一本" : r.total >= c.secondLine ? "二本" : "未达二本";
+    r.trackRank = r.rank;
+  }
+}
+
+function lineOf(row, cut, split) {
+  if (!split) return cut.mixed;
+  return row.track === "wen" ? cut.wen : cut.li;
+}
+
+export function summarizeAllClasses(cohort, scoreMap, cut, split) {
+  const out = [];
+  for (const cls of cohort.classes) {
+    const sts = cohort.students.filter((s) => s.classNo === cls.no);
+    if (!sts.length) continue;
+    const sample = scoreMap[sts[0].id];
+    const track = split ? (sts[0].track === "wen" ? "wen" : "li") : "mixed";
+    const lines = split ? cut[track] : cut.mixed;
+    const sum = summarizeClass(sts, scoreMap, lines);
+    out.push({
+      classNo: cls.no,
+      name: cls.name,
+      tier: cls.tier || sts[0].tier,
+      track: split ? track : "mixed",
+      repeat: !!cls.repeat || sts.some((s) => s.repeat),
+      ...sum,
+    });
+  }
+  out.sort((a, b) => b.avg - a.avg || a.classNo - b.classNo);
+  out.forEach((c, i) => { c.classRank = i + 1; });
+  return out;
+}
+
+export function subjectToppers(rows, subjectIds, split) {
+  const scopes = { all: rows.filter((r) => !r.repeat) };
+  if (split) {
+    scopes.li = scopes.all.filter((r) => r.track === "li");
+    scopes.wen = scopes.all.filter((r) => r.track === "wen");
+  }
+  const tiers = ["yunxiu_exp", "yunxiu_key", "lingxiao", "zhuoxing", "duxue", "yiti", "fuzhuo"];
+  for (const t of tiers) scopes[t] = scopes.all.filter((r) => r.tier === t);
+  const out = {};
+  for (const [scope, list] of Object.entries(scopes)) {
+    out[scope] = {};
+    for (const sid of subjectIds) {
+      const sr = subjectRanks(list, sid);
+      out[scope][sid] = sr[0] || null;
+    }
+  }
+  return out;
+}
+
+export function filterRows(rows, { track, tier, classNo, repeat } = {}) {
+  return rows.filter((r) => {
+    if (track && track !== "all" && track !== "mixed" && r.track !== track) return false;
+    if (tier && tier !== "all" && r.tier !== tier) return false;
+    if (classNo != null && r.classNo !== classNo) return false;
+    if (repeat === false && r.repeat) return false;
+    if (repeat === true && !r.repeat) return false;
+    return true;
+  });
+}
+
+export function sameTierCompare(report, tier) {
+  const classes = report.classes.filter((c) => c.tier === tier && !c.repeat);
+  const rows = report.rows.filter((r) => r.tier === tier && !r.repeat);
+  return { classes, rows: rankRows(rows) };
+}
+
+export { CUTOFF_FIRST_RANK, CUTOFF_SECOND_RANK, provincialLines };

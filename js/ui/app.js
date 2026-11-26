@@ -1,0 +1,346 @@
+import {
+  createGame, playerStudents, skipToNextStage, skipToGaokaoOf, skipToNextCohort,
+  advanceDay, prepareLesson, teach, talkTo, listExamReports, formatDateCn,
+  applyEvent, SCHOOL_CALENDAR,
+} from "../domain/simulation.js";
+import { saveSlot, loadSlot, listSlots, toJSON, fromJSON } from "../domain/save.js";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js";
+import { filterRows, sameTierCompare } from "../domain/examService.js";
+import { hydrateReport } from "../domain/simulation.js";
+import { renderSeating } from "./classroom.js";
+import { provincialLines } from "../domain/jiangxi.js";
+
+let state = null;
+let view = "classroom";
+let selectedId = null;
+let examPick = "";
+let toastTimer = 0;
+
+const $ = (s) => document.querySelector(s);
+
+function toast(msg) {
+  let el = document.querySelector(".toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.className = "toast";
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.remove("hidden");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add("hidden"), 2800);
+}
+
+function persist() {
+  if (state) saveSlot(state, "auto");
+}
+
+export function boot() {
+  $("#btn-new").onclick = () => {
+    const name = $("#pname").value.trim() || "林知秋";
+    state = createGame(20170901, name);
+    selectedId = playerStudents(state)[0]?.id;
+    persist();
+    showMain();
+  };
+  $("#btn-cont").onclick = () => {
+    const s = loadSlot("auto");
+    if (!s) { toast("还没有自动存档"); return; }
+    state = s;
+    selectedId = playerStudents(state)[0]?.id;
+    showMain();
+  };
+  document.querySelectorAll("#sidenav [data-view]").forEach((btn) => {
+    btn.onclick = () => { view = btn.dataset.view; render(); };
+  });
+  document.querySelectorAll("[data-act]").forEach((btn) => {
+    btn.onclick = () => handleAct(btn.dataset.act);
+  });
+}
+
+function showMain() {
+  $("#boot").classList.add("hidden");
+  $("#main").classList.remove("hidden");
+  render();
+}
+
+function handleAct(act) {
+  if (!state) return;
+  if (act === "prep") { prepareLesson(state); toast("备课完成"); }
+  if (act === "teach") { teach(state, "精讲例题", selectedId); toast("已上完一节数学课"); }
+  if (act === "nextday") {
+    const r = advanceDay(state);
+    if (r.type && r.type !== "day") toast(`结算：${r.type}`);
+  }
+  if (act === "skip") {
+    const r = skipToNextStage(state);
+    toast(r.ok ? `已推进到 ${r.event.name}` : (r.reason || "无法推进"));
+  }
+  persist();
+  render();
+}
+
+function render() {
+  if (!state) return;
+  $("#clock").textContent = formatDateCn(state.date);
+  $("#roleline").textContent = `${state.player.role} ${state.player.name} · ${state.player.cohortYear}级卓行${state.player.classNo}班 数学`;
+  document.querySelectorAll("#sidenav [data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
+  const host = $("#view");
+  const map = { classroom: viewClassroom, roster: viewRoster, profile: viewProfile, grades: viewGrades, office: viewOffice, admission: viewAdmission, auto: viewAuto, log: viewLog, save: viewSave };
+  host.innerHTML = "";
+  (map[view] || viewClassroom)(host);
+  renderAgenda();
+}
+
+function clsStudents() { return playerStudents(state); }
+
+function viewClassroom(host) {
+  host.innerHTML = `<h3>教室座位表</h3><p class="notice">点击头像查看档案并谈话。任教班为 2017 年起的卓行16班，约 70 人，不是云岫 0/1 的 30—35 人编制。</p><canvas id="classroom"></canvas>`;
+  const c = host.querySelector("#classroom");
+  renderSeating(c, clsStudents(), selectedId, (id) => { selectedId = id; view = "profile"; render(); });
+}
+
+function viewRoster(host) {
+  const sts = clsStudents().slice().sort((a, b) => a.seq - b.seq);
+  host.innerHTML = `<h3>学生名册 · ${sts.length}人</h3>
+    <table><thead><tr><th>座号</th><th>姓名</th><th>性别</th><th>性格</th><th>家庭</th><th>文理意向</th><th>师生关系</th></tr></thead>
+    <tbody>${sts.map((s) => `<tr data-id="${s.id}" class="${s.id===selectedId?"me":""}"><td>${s.seq}</td><td>${s.name}</td><td>${s.gender==="F"?"女":"男"}</td><td>${s.personality}</td><td>${s.family.type}</td><td>${s.trackPref==="wen"?"文":"理"}</td><td>${s.relation||0}</td></tr>`).join("")}</tbody></table>`;
+  host.querySelectorAll("tr[data-id]").forEach((tr) => tr.onclick = () => { selectedId = tr.dataset.id; view = "profile"; render(); });
+}
+
+function viewProfile(host) {
+  const s = clsStudents().find((x) => x.id === selectedId) || clsStudents()[0];
+  if (!s) { host.innerHTML = "<p>没有学生</p>"; return; }
+  selectedId = s.id;
+  const ab = Object.entries(s.ability).map(([k, v]) => `${(subjectById(k)?.name)||k} ${v.toFixed(0)}`).join("　");
+  host.innerHTML = `<h3>${s.name} · 档案</h3>
+    <div class="profile-grid">
+      <div class="paper">
+        <p><b>学号</b> ${s.id}　<b>性别</b> ${s.gender==="F"?"女":"男"}　<b>性格</b> ${s.personality}</p>
+        <p><b>家庭</b> ${s.family.type}。${s.family.note}</p>
+        <p><b>文理意向</b> ${s.trackPref==="wen"?"文科":"理科"}　<b>专业倾向</b> ${s.majorPref||"—"}</p>
+        <p><b>心情</b> ${s.mood}　<b>压力</b> ${s.stress}　<b>精力</b> ${s.energy}　<b>师生关系</b> ${s.relation||0}</p>
+        <p class="muted">学科能力（潜能为个人上限，不是当场分数）</p>
+        <p>${ab}</p>
+      </div>
+      <div class="paper">
+        <p>谈话（本时段最多 5 人次）</p>
+        <div class="row-actions">
+          ${["鼓励","询问学习","关注状态","谈心"].map((t)=>`<button type="button" data-talk="${t}">${t}</button>`).join("")}
+        </div>
+        <div>${(s.talks||[]).slice(-6).reverse().map((t)=>`<p class="muted">${t.date}　${t.topic}：${t.text}</p>`).join("") || "<p class='muted'>还没有谈话记录。</p>"}</div>
+      </div>
+    </div>`;
+  host.querySelectorAll("[data-talk]").forEach((b) => b.onclick = () => {
+    const r = talkTo(state, s.id, b.dataset.talk);
+    toast(r.ok ? r.text : r.reason);
+    persist(); render();
+  });
+}
+
+function examOptions() {
+  const list = listExamReports(state, { entryYear: state.player.cohortYear });
+  if (!list.length) return "";
+  if (!examPick || !list.some((e) => `${e.date}|${e.examId}` === examPick)) examPick = `${list[0].date}|${list[0].examId}`;
+  return list.map((e) => {
+    const v = `${e.date}|${e.examId}`;
+    return `<option value="${v}" ${v===examPick?"selected":""}>${e.date} ${e.examName}（难度${(e.difficulty||1).toFixed(2)}）</option>`;
+  }).join("");
+}
+
+function currentReport() {
+  const list = listExamReports(state, { entryYear: state.player.cohortYear });
+  return list.find((e) => `${e.date}|${e.examId}` === examPick) || list[0] || null;
+}
+
+function viewGrades(host) {
+  const report = currentReport();
+  if (!report) {
+    host.innerHTML = `<h3>考试成绩</h3><p>还没有考试。可用「下一阶段」跳到第一次月考。</p>`;
+    return;
+  }
+  const mine = (report.rows||[]).filter((r) => r.classNo === state.player.classNo && !r.repeat)
+    .sort((a,b)=> (a.rank||0)-(b.rank||0) || b.total-a.total);
+  const cut = report.split ? report.cutoffs.li : report.cutoffs.mixed;
+  const cutW = report.split ? report.cutoffs.wen : null;
+  host.innerHTML = `<h3>考试成绩 · 任教班</h3>
+    <div class="filters"><label>场次 <select id="exsel">${examOptions()}</select></label></div>
+    <div class="kpi">
+      <div><span>试卷难度</span><b>${(report.difficulty||1).toFixed(3)}</b></div>
+      <div><span>${report.split?"理科":""}一本线（第${cut?.firstN}名）</span><b>${cut?.firstLine ?? "—"}</b></div>
+      <div><span>二本线（第${cut?.secondN}名）</span><b>${cut?.secondLine ?? "—"}</b></div>
+      <div><span>线差分</span><b>${cut && cut.firstLine-cut.secondLine}</b></div>
+      <div><span>年级第一/第二差</span><b>${cut?.topGap ?? "—"}</b></div>
+    </div>
+    ${cutW?`<p class="notice">文科一本线 ${cutW.firstLine}（第${cutW.firstN}名），二本线 ${cutW.secondLine}，分差 ${cutW.firstLine-cutW.secondLine}。分数线由当次个人成绩排序得出，难度变化时会明显波动。</p>`:""}
+    <div class="paper"><table><thead><tr><th>班名次</th><th>姓名</th><th>总分</th><th>年级名次</th><th>上线</th></tr></thead>
+    <tbody>${mine.map((r,i)=>`<tr data-id="${r.studentId}"><td>${i+1}</td><td>${r.name}</td><td>${r.total}</td><td>${r.rank||"—"}</td><td>${r.line||""}</td></tr>`).join("")}</tbody></table></div>`;
+  host.querySelector("#exsel").onchange = (e) => { examPick = e.target.value; render(); };
+  host.querySelectorAll("tr[data-id]").forEach((tr)=>tr.onclick=()=>{selectedId=tr.dataset.id; view="profile"; render();});
+}
+
+function viewOffice(host) {
+  const all = listExamReports(state);
+  const byDate = {};
+  for (const r of all) (byDate[r.date+" "+r.examName] ??= []).push(r);
+  const names = Object.keys(byDate);
+  if (!names.length) { host.innerHTML = "<h3>教务处</h3><p>暂无全校成绩。</p>"; return; }
+  const pick = examPick && names.find((n)=>n.includes(examPick.split("|")[0])) || names[0];
+  const reports = byDate[pick] || byDate[names[0]];
+  const report = reports.find((r)=>r.entryYear==null) || reports[0];
+  // 合并同年级：list already per cohort; 选玩家当前年级或可筛选
+  const gradeRep = reports.find((r) => r.grade === 1 || r.grade) || reports[0];
+  const use = hydrateReport(JSON.parse(JSON.stringify(gradeRep)));
+  // allow choosing any stored report
+  const flat = all;
+  const cur = flat.find((e)=> `${e.date}|${e.examId}|${e.grade}` === examPick) || flat[0];
+  const live = hydrateReport(cur);
+  const tiers = [["all","全部层次"],["yunxiu_exp","云岫实验 0/1"],["yunxiu_key","云岫重点 2—4"],["lingxiao","凌霄"],["zhuoxing","卓行"],["duxue","笃学"],["yiti","艺体"],["fuzhuo","复卓"]];
+  const tracks = live.split ? [["all","文理全部"],["li","理科"],["wen","文科"]] : [["all","未分科"]];
+  host.innerHTML = `<h3>教务处 · 全校成绩</h3>
+    <div class="filters">
+      <label>场次 <select id="exsel">${flat.map((e)=>{const v=`${e.date}|${e.examId}`; return `<option value="${v}" ${`${e.date}|${e.examId}`===`${live.date}|${live.examId}`?"selected":""}>${e.date} ${e.examName} · 高${e.grade}</option>`;}).join("")}</select></label>
+      <label>层次 <select id="tier">${tiers.map(([v,n])=>`<option value="${v}">${n}</option>`).join("")}</select></label>
+      <label>科类 <select id="track">${tracks.map(([v,n])=>`<option value="${v}">${n}</option>`).join("")}</select></label>
+    </div>
+    <div id="office-body"></div>`;
+  const sel = host.querySelector("#exsel");
+  sel.value = `${live.date}|${live.examId}`;
+  sel.onchange = () => { examPick = sel.value; render(); };
+  const draw = () => {
+    const tier = host.querySelector("#tier").value;
+    const track = host.querySelector("#track").value;
+    let rows = filterRows(live.rows||[], { tier: tier==="all"?null:tier, track: track==="all"?null:track, repeat: false });
+    rows = rows.slice().sort((a,b)=>b.total-a.total).map((r,i)=>({...r, showRank:i+1}));
+    const body = host.querySelector("#office-body");
+    const cut = live.split ? (track==="wen"?live.cutoffs.wen:live.cutoffs.li) : live.cutoffs.mixed;
+    const subjects = live.subjectIds || [];
+    const toppers = live.toppers || {};
+    const scope = tier==="all" ? (track==="wen"?"wen":track==="li"?"li":"all") : tier;
+    const topSet = toppers[scope] || toppers.all || {};
+    const topLine = subjects.map((id)=> {
+      const t = topSet[id];
+      const nm = (subjectById(id)||{name:id}).name;
+      return t ? `${nm}第一：${t.name}（${t.score}）` : "";
+    }).filter(Boolean).join("　");
+    const classTable = (live.classes||[]).filter((c)=> (tier==="all"||c.tier===tier) && !c.repeat);
+    body.innerHTML = `
+      <p class="notice">难度 ${(live.difficulty||1).toFixed(3)}　离散 ${(live.dispersion||1).toFixed(3)}。${live.split?"文理分列划线。":"分科前按全年级第400/1000名划线。"}班级汇总全部由个人成绩加总，不另造统计。</p>
+      <div class="kpi"><div><span>一本线</span><b>${cut?.firstLine??"—"}</b></div><div><span>二本线</span><b>${cut?.secondLine??"—"}</b></div><div><span>分差</span><b>${cut?cut.firstLine-cut.secondLine:"—"}</b></div><div><span>第一名</span><b>${cut?.top??"—"}</b></div></div>
+      <p class="notice">${topLine}</p>
+      <h3>各班对照</h3>
+      <div class="paper"><table><thead><tr><th>班</th><th>层次</th><th>人数</th><th>均分</th><th>最高</th><th>一本</th><th>一本率</th><th>二本累计</th></tr></thead>
+      <tbody>${classTable.map((c)=>`<tr><td>${c.name||c.classNo+"班"}</td><td>${c.tier}</td><td>${c.count}</td><td>${c.avg}</td><td>${c.max}</td><td>${c.firstCount}</td><td>${c.firstRate}%</td><td>${c.secondCount}</td></tr>`).join("")}</tbody></table></div>
+      <h3>学生总分与单科（当前筛选 ${rows.length} 人）</h3>
+      <div class="paper"><table><thead><tr><th>筛选名次</th><th>姓名</th><th>班级</th><th>总分</th><th>${subjects.slice(0,8).map(id=>(subjectById(id)||{name:id}).name).join("</th><th>")}</th><th>上线</th></tr></thead>
+      <tbody>${rows.slice(0,200).map((r)=>`<tr><td>${r.showRank}</td><td>${r.name}</td><td>${r.classNo}班</td><td>${r.total}</td>${subjects.slice(0,8).map(id=>`<td>${r[id]??""}</td>`).join("")}<td>${r.line||""}</td></tr>`).join("")}</tbody></table>
+      ${rows.length>200?"<p class='muted'>仅显示前 200 人，可用层次筛选缩小范围。</p>":""}</div>`;
+  };
+  host.querySelector("#tier").onchange = draw;
+  host.querySelector("#track").onchange = draw;
+  draw();
+}
+
+function viewAdmission(host) {
+  const keys = Object.keys(state.admissions||{}).sort().reverse();
+  if (!keys.length) { host.innerHTML = "<h3>录取去向</h3><p>还没有走完高考录取。可用自动模式跳到本届高考。</p>"; return; }
+  const key = keys[0];
+  const pack = state.admissions[key];
+  const list = pack.results || [];
+  const qb = list.filter((x)=>x.qingbei);
+  const first = list.filter((x)=>x.batch==="一批");
+  host.innerHTML = `<h3>${pack.year}年高考录取</h3>
+    <p class="notice">对照江西${pack.year}年省控线与 2020 年公开投档结构（其他年份按省控线分差平移，并在备注中标明）。不随机派校名，也不为喜报虚造清北。</p>
+    <div class="kpi"><div><span>清北</span><b>${qb.length}</b></div><div><span>一批</span><b>${first.length}</b></div><div><span>公布人数</span><b>${list.length}</b></div></div>
+    <div class="filters"><input id="q" placeholder="搜索姓名或大学" /></div>
+    <div class="paper" id="adm-table"></div>`;
+  const draw = () => {
+    const q = (host.querySelector("#q").value||"").trim();
+    const rows = list.filter((a)=>!q || a.name.includes(q) || (a.university||"").includes(q));
+    host.querySelector("#adm-table").innerHTML = `<table><thead><tr><th>姓名</th><th>班</th><th>科类</th><th>总分</th><th>省位次</th><th>批次</th><th>去向</th></tr></thead>
+      <tbody>${rows.slice(0,250).map((a)=>`<tr><td>${a.name}</td><td>${a.classNo}</td><td>${a.track==="wen"?"文":"理"}</td><td>${a.total}</td><td>${a.provinceRank??"—"}</td><td>${a.batch}</td><td>${a.university}${a.shifted?"（按省控平移）":""}</td></tr>`).join("")}</tbody></table>`;
+  };
+  host.querySelector("#q").oninput = draw; draw();
+}
+
+function viewAuto(host) {
+  host.innerHTML = `<h3>自动模式</h3>
+    <p class="notice">不必亲自备课上课，也可按考试阶段推进。跳过时仍会走完校历、生成该次真实成绩与排名，并写入存档。第一届高考、录取、毕业后游戏继续：学生离校或进入复卓，低年级升级，新高一入学。</p>
+    <div class="row-actions">
+      <button type="button" class="accent" id="n1">下一阶段</button>
+      <button type="button" id="n2">跳到本届高考录取</button>
+      <button type="button" id="n3">再推进到下一届入学</button>
+    </div>
+    <p class="notice" id="auto-msg">当前 ${formatDateCn(state.date)}，任教 ${state.player.cohortYear} 级。</p>`;
+  host.querySelector("#n1").onclick = () => handleAct("skip");
+  host.querySelector("#n2").onclick = () => {
+    toast("正在自动推进到高考录取，请稍候…");
+    setTimeout(() => {
+      skipToGaokaoOf(state, state.player.cohortYear);
+      persist(); render();
+      toast("已到达本届高考录取（若校历已过则停在当前）");
+    }, 20);
+  };
+  host.querySelector("#n3").onclick = () => {
+    toast("正在进入下一届…");
+    setTimeout(() => {
+      skipToGaokaoOf(state, state.player.cohortYear);
+      skipToNextCohort(state);
+      persist(); render();
+      toast("已尝试推进到下一届入学");
+    }, 20);
+  };
+}
+
+function viewLog(host) {
+  host.innerHTML = `<h3>日志</h3>${(state.log||[]).slice(0,40).map((l)=>`<div class="log-item"><b>${l.date}</b> ${l.text}</div>`).join("")}`;
+}
+
+function viewSave(host) {
+  const slots = listSlots();
+  host.innerHTML = `<h3>存档 / 读档</h3>
+    <p class="notice">刷新页面后可通过「继续存档」读取自动档。也可存到 3 个手动槽，或下载 JSON。</p>
+    <div class="row-actions">
+      <button type="button" id="auto-save">立刻自动保存</button>
+      <button type="button" id="dl">下载存档文件</button>
+      <label class="notice">读入文件 <input type="file" id="up" accept="application/json,.json" /></label>
+    </div>
+    <div class="paper">${[0,1,2].map((i)=>{
+      const sl = slots.find((s)=>s.slot===i);
+      return `<p>槽 ${i+1}：${sl && !sl.empty ? `${sl.date||""} ${sl.player||""}` : "空"}
+        <button type="button" data-sv="${i}">保存</button>
+        <button type="button" data-ld="${i}">读取</button></p>`;
+    }).join("")}</div>`;
+  host.querySelector("#auto-save").onclick = () => { persist(); toast("已自动保存"); };
+  host.querySelector("#dl").onclick = () => {
+    const blob = new Blob([toJSON(state)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `sanchi-jiangtai-${state.date}.json`;
+    a.click();
+  };
+  host.querySelector("#up").onchange = async (e) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    state = fromJSON(await f.text()); render(); toast("已读入文件存档");
+  };
+  host.querySelectorAll("[data-sv]").forEach((b)=>b.onclick=()=>{ saveSlot(state, Number(b.dataset.sv)); toast("已保存"); render(); });
+  host.querySelectorAll("[data-ld]").forEach((b)=>{
+    b.onclick=()=>{ const s=loadSlot(Number(b.dataset.ld)); if(!s){toast("空槽");return;} state=s; render(); toast("已读取"); };
+  });
+}
+
+function renderAgenda() {
+  const box = $("#agenda");
+  const next = SCHOOL_CALENDAR.find((e) => e.date >= state.date && ["exam","placement1","placement2","admission","promote"].includes(e.kind));
+  const cls = clsStudents();
+  box.innerHTML = `<h3>今日</h3>
+    <p>${formatDateCn(state.date)}</p>
+    <p class="notice">备课充分度 ${state.player.prep||0}　数学教学积累 ${Number(state.player.mathTeaching||0).toFixed(1)}</p>
+    <p class="notice">下一件大事：${next ? `${next.date} ${next.name}` : "（暂无）"}</p>
+    <h3>任教班</h3>
+    <p class="notice">${state.player.cohortYear}级卓行${state.player.classNo}班，${cls.length}人。班主任 ${state.player.homeroom}。</p>
+    <div class="row-actions"><button type="button" data-act="skip">跳到下一阶段</button></div>
+    <h3>最近日志</h3>
+    ${(state.log||[]).slice(0,8).map((l)=>`<div class="log-item"><b>${l.date}</b> ${l.text}</div>`).join("")}`;
+  box.querySelector("[data-act=skip]").onclick = () => handleAct("skip");
+}
