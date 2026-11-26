@@ -2,10 +2,11 @@
 export function yieldToPaint(yieldFn) {
   if (typeof yieldFn === "function") return yieldFn();
   return new Promise((resolve) => {
+    const later = () => setTimeout(resolve, 50);
     if (typeof requestAnimationFrame === "function") {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      requestAnimationFrame(() => requestAnimationFrame(later));
     } else {
-      setTimeout(resolve, 16);
+      later();
     }
   });
 }

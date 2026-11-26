@@ -161,10 +161,11 @@ export function createGame(seed = 20170901, playerName = PLAYER_DEFAULT_NAME) {
 
 function defaultCreateYield() {
   return new Promise((resolve) => {
+    const later = () => setTimeout(resolve, 50);
     if (typeof requestAnimationFrame === "function") {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      requestAnimationFrame(() => requestAnimationFrame(later));
     } else {
-      setTimeout(resolve, 0);
+      later();
     }
   });
 }

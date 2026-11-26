@@ -90,7 +90,12 @@ function showLoading({ title = "正在开局", label = "正在生成全校名单
   }
   mask.hidden = false;
   mask.classList.remove("hidden");
+  mask.style.display = "grid";
+  mask.style.position = "fixed";
+  mask.style.inset = "0";
+  mask.style.zIndex = "9999";
   mask.setAttribute("aria-busy", "true");
+  void mask.offsetHeight;
   const titleEl = $("#loading-title");
   const stepEl = $("#loading-step");
   const bar = $("#loading-bar");
@@ -111,6 +116,7 @@ function hideLoading() {
   if (!mask) return;
   mask.classList.add("hidden");
   mask.hidden = true;
+  mask.style.display = "none";
   mask.setAttribute("aria-busy", "false");
 }
 
@@ -161,11 +167,11 @@ export function boot() {
   });
   $("#btn-new").onclick = async () => {
     if (bootBusy) return;
+    showLoading({ title: "正在开局", label: "正在生成全校名单", progress: 6 });
     setBootBusy(true);
     const name = $("#pname").value.trim() || "林知秋";
     const typed = parseGameSeed($("#pseed")?.value);
     const seed = typed ?? freshGameSeed();
-    showLoading({ title: "正在开局", label: "正在生成全校名单", progress: 6 });
     try {
       const r = await startNewGameSession({
         playerName: name,

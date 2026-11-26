@@ -5,7 +5,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#1a281f" />
   <title>三尺讲台 · 江西省宁川中学</title>
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/style.css?v=t40u1" />
+  <style>
+    #loading-mask {
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(15, 22, 18, 0.86);
+      display: grid; place-items: center;
+      padding: 24px;
+      padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
+    }
+    #loading-mask.hidden, #loading-mask[hidden] { display: none !important; }
+    #loading-mask .loading-box {
+      width: min(440px, 92vw);
+      background: rgba(26, 40, 31, 0.96);
+      border: 1px solid rgba(232, 213, 163, 0.28);
+      box-shadow: 0 20px 60px rgba(0,0,0,.4);
+      padding: 24px 22px 18px;
+      text-align: center;
+      color: #f3efe0;
+    }
+    #loading-mask h2 { color: #e8d5a3; margin: 0 0 10px; font-size: 20px; }
+    #loading-step { margin: 0 0 14px; line-height: 1.6; color: #f3efe0; }
+    #loading-mask .loading-bar {
+      height: 10px; background: rgba(0,0,0,.35);
+      border: 1px solid rgba(232, 213, 163, 0.28);
+      border-radius: 99px; overflow: hidden;
+    }
+    #loading-bar-fill {
+      height: 100%; width: 6%; background: #e8d5a3; border-radius: 99px;
+    }
+    #loading-mask .loading-hint { margin: 12px 0 0; font-size: 12px; line-height: 1.65; color: #cfc6ae; }
+  </style>
 </head>
 <body>
   <div id="app">
@@ -83,6 +113,51 @@
       <p id="loading-hint" class="loading-hint">全校约七千名学生，手机上可能需要十几秒。生成时画面可能会短暂停住，请稍候，不是没有反应。</p>
     </div>
   </div>
-  <script type="module" src="js/main.js"></script>
+  <script>
+  (function () {
+    var mask = document.getElementById("loading-mask");
+    var boot = document.getElementById("boot");
+    var newBtn = document.getElementById("btn-new");
+    var contBtn = document.getElementById("btn-cont");
+    function show(title, step, hint) {
+      if (!mask) return;
+      mask.hidden = false;
+      mask.classList.remove("hidden");
+      mask.style.display = "grid";
+      mask.style.position = "fixed";
+      mask.style.inset = "0";
+      mask.style.zIndex = "9999";
+      var t = document.getElementById("loading-title");
+      var s = document.getElementById("loading-step");
+      var h = document.getElementById("loading-hint");
+      if (t && title) t.textContent = title;
+      if (s && step) s.textContent = step;
+      if (h && hint) h.textContent = hint;
+      void mask.offsetHeight;
+    }
+    function hide() {
+      if (!mask) return;
+      mask.classList.add("hidden");
+      mask.hidden = true;
+      mask.style.display = "none";
+    }
+    if (newBtn) newBtn.addEventListener("click", function () {
+      show("正在开局", "正在生成全校名单", "全校约七千名学生，手机上可能需要十几秒。生成时画面可能会短暂停住，请稍候，不是没有反应。");
+      newBtn.disabled = true;
+      if (contBtn) contBtn.disabled = true;
+    }, true);
+    if (contBtn) contBtn.addEventListener("click", function () {
+      show("正在读档", "正在读取存档", "正在读取自动档，请稍候。");
+      contBtn.disabled = true;
+      if (newBtn) newBtn.disabled = true;
+    }, true);
+    if (boot && typeof MutationObserver === "function") {
+      new MutationObserver(function () {
+        if (boot.classList.contains("hidden")) hide();
+      }).observe(boot, { attributes: true, attributeFilter: ["class"] });
+    }
+  })();
+  </script>
+  <script type="module" src="js/main.js?v=t40u1"></script>
 </body>
 </html>
