@@ -3,13 +3,13 @@ import {
   PLAYER_CLASS_NO, PLAYER_DEFAULT_NAME, PLAYER_ROLE, START_DATE, GRADE_YEAR, HOMEROOM_NAME, MENTOR_NAME,
 } from "./config.js";
 import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById } from "./calendar.js";
-import { generateCohort, generateOpeningSchool, classStudents, currentGrade } from "./school.js";
+import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf } from "./school.js";
 import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js";
 import { runExam } from "./examService.js";
 import { admitCohort } from "./admission.js";
 import { rngFrom, clamp } from "./prng.js";
-import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore } from "./teaching.js";
-import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, formatSlotLabel } from "./timetable.js";
+import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands } from "./teaching.js";
+import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, upcomingTutoring, formatSlotLabel, isTutoringSlot } from "./timetable.js";
 
 export const SAVE_VERSION = 1;
 
@@ -350,6 +350,8 @@ export function skipToNextStage(state) {
   state.periodId = startPeriodId(ev.date, state);
   state.talksToday = 0;
   state.reviewsToday = 0;
+  state.talksThisPeriod = 0;
+  state.tutorAnswers = 0;
   const result = applyEvent(state, ev);
   return { ok: true, event: ev, result };
 }
@@ -400,6 +402,13 @@ export function advanceDay(state) {
 function resetDailyCounters(state) {
   state.talksToday = 0;
   state.reviewsToday = 0;
+  resetPeriodCounters(state);
+}
+
+function resetPeriodCounters(state) {
+  state.talksThisPeriod = 0;
+  state.tutorAnswers = 0;
+  state.tutorSlotKey = `${state.date}|${state.periodId}`;
 }
 
 /** 按课表走到下一节（周日直接跨到周一早读）。考试/分班日若尚未结算，先结算再停在当天。 */
@@ -416,6 +425,7 @@ export function advancePeriod(state) {
   state.date = n.date;
   state.periodId = n.slot.id;
   if (rolledDay) resetDailyCounters(state);
+  else resetPeriodCounters(state);
   const updates = collectHomeworkFollowups(state, "period");
   const slot = currentSlot(state);
   const follow = updates.length
@@ -526,7 +536,7 @@ export function reviewHomework(state, studentId) {
   return r;
 }
 
-export { topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, daySchedule, currentSlot, formatSlotLabel, upcomingMath, majorEventOn, pendingMajorEvent };
+export { topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, daySchedule, currentSlot, formatSlotLabel, upcomingMath, upcomingTutoring, majorEventOn, pendingMajorEvent, isTutoringSlot, raisedHands, seatLabel, seatOf };
 
 function latestMathExam(state, studentId) {
   const reports = listExamReports(state, { entryYear: state.player.cohortYear });
@@ -570,11 +580,41 @@ function talkText(topic, s, ctx, exam) {
   return `你和${n}谈了家里和将来的打算，师生关系近了一些。`;
 }
 
+export function periodTalkScene(state) {
+  const slot = currentSlot(state);
+  if (!slot) return { kind: "day", cap: 5, label: "" };
+  if (slot.isExamDay) return { kind: "exam", cap: 2, label: `今日${slot.eventName || "停课"}` };
+  if (slot.id === "rest" || slot.kind === "rest") return { kind: "rest", cap: 3, label: "周日休息" };
+  if (slot.kind === "break" || slot.id === "noon") return { kind: "break", cap: 3, label: slot.name };
+  if (isTutoringSlot(slot)) return { kind: "tutoring", cap: 4, label: slot.subject || "晚自习" };
+  if (slot.isMath) return { kind: "math", cap: 2, label: "数学课" };
+  if (slot.id === "morning-read") return { kind: "read", cap: 2, label: slot.subject || "早读" };
+  return { kind: "otherclass", cap: 2, label: `${slot.name}「${slot.subject || ""}」` };
+}
+
+function talkSceneStamp(state, student) {
+  const slot = currentSlot(state);
+  const seat = seatLabel(student);
+  const scene = periodTalkScene(state);
+  if (scene.kind === "tutoring") return `${scene.label}，${seat}。`;
+  if (scene.kind === "math") return `数学课，${seat}。`;
+  if (scene.kind === "exam") return `${scene.label}。`;
+  if (scene.kind === "rest") return `周日休息。`;
+  if (scene.kind === "break") return `${scene.label}，${seat}。`;
+  if (scene.kind === "read") return `${scene.label}，${seat}。`;
+  if (scene.kind === "otherclass") return `${scene.label}，${seat}。`;
+  return seat ? `${seat}。` : "";
+}
+
 export function talkTo(state, studentId, topic = "鼓励") {
   const c = state.cohorts[state.player.cohortYear];
   const s = c.students.find((x) => x.id === studentId);
   if (!s) return { ok: false, reason: "找不到这名学生" };
+  const scene = periodTalkScene(state);
   if (state.talksToday >= 5) return { ok: false, reason: "今天谈话已经不少，改日再谈。" };
+  if ((state.talksThisPeriod || 0) >= scene.cap) {
+    return { ok: false, reason: `这个时段谈话已经不少（最多 ${scene.cap} 人次），下一节再谈。` };
+  }
   const table = {
     鼓励: { relation: 2, mood: 4, stress: -2 },
     询问学习: { relation: 1, mood: 1, stress: 0 },
@@ -587,11 +627,32 @@ export function talkTo(state, studentId, topic = "鼓励") {
   s.stress = clamp((s.stress || 40) + a.stress, 0, 100);
   const ctx = studentTeachingContext(s, state);
   const exam = latestMathExam(state, s.id);
-  const text = talkText(topic, s, ctx, exam);
-  s.talks = [...(s.talks || []), { date: state.date, topic, text }];
+  const body = talkText(topic, s, ctx, exam);
+  const stamp = talkSceneStamp(state, s);
+  const text = stamp ? `${stamp}${body}` : body;
+  s.talks = [...(s.talks || []), { date: state.date, topic, text, periodId: state.periodId, seat: seatLabel(s) }];
   state.talksToday += 1;
+  state.talksThisPeriod = (state.talksThisPeriod || 0) + 1;
   addLog(state, text);
-  return { ok: true, student: s, text };
+  return { ok: true, student: s, text, scene, seat: seatLabel(s) };
+}
+
+export function tutorEvening(state, mode = "巡视", studentId = null) {
+  const slot = currentSlot(state);
+  const pending = pendingMajorEvent(state);
+  if (pending) return { ok: false, reason: `今日${pending.name}，停课，晚自习和答疑也先不上。` };
+  if (slot?.isExamDay) return { ok: false, reason: `今日${slot.eventName}，全天停课，没有晚自习答疑。` };
+  if (!isTutoringSlot(slot)) {
+    const nxt = upcomingTutoring(state);
+    const hint = nxt
+      ? `下一节可答疑的是${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}。请用「下一节」走到那时。`
+      : "这几天没有排数学晚自习或数学答疑。";
+    return { ok: false, reason: `现在是${slot ? formatSlotLabel(slot) : "未排课"}，还不是数学晚自习或答疑。${hint}` };
+  }
+  const cls = snapshotPlayerClass(state);
+  const r = tutorEveningCore(state, cls, { mode, studentId, slot });
+  if (r.ok) addLog(state, r.text);
+  return r;
 }
 
 export function setPlacementPref(state, studentId, track) {

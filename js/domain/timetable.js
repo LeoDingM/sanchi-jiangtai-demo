@@ -17,16 +17,28 @@ const WEEKDAY_PERIODS = {
 };
 
 /**
- * 普通班数学周课时约 6–7 节（含一节晚自习辅导、周六上午一节）。
+ * 普通班数学正课约 6 节（含周六上午一节）。周一晚自习一是数学晚自习，
+ * 周二晚自习二是数学答疑，另算辅导时段，不按正课「上课」结算课题。
  * 早读以语文/英语为主，不把每天早读都算成数学课。
  */
 const MATH_SLOTS = {
-  1: ["p2", "evening-1"],
+  1: ["p2"],
   2: ["p4"],
   3: ["p1"],
   4: ["p3"],
   5: ["p2"],
   6: ["p3"],
+  0: [],
+};
+
+/** 数学晚自习 / 数学答疑，用于巡视、座位旁答疑和收订正。 */
+const TUTOR_SLOTS = {
+  1: ["evening-1"],
+  2: ["evening-2"],
+  3: [],
+  4: [],
+  5: [],
+  6: [],
   0: [],
 };
 
@@ -71,6 +83,14 @@ export function isMathPeriodId(wd, periodId) {
   return (MATH_SLOTS[wd] || []).includes(periodId);
 }
 
+export function isTutoringPeriodId(wd, periodId) {
+  return (TUTOR_SLOTS[wd] || []).includes(periodId);
+}
+
+export function isEveningPeriodId(periodId) {
+  return periodId === "evening-1" || periodId === "evening-2";
+}
+
 function subjectTable(track) {
   if (track === "wen") return SUBJECTS_WEN;
   if (track === "li") return SUBJECTS_LI;
@@ -108,12 +128,14 @@ export function daySchedule(date, state = null) {
       ? (p.kind === "break" || p.kind === "rest" ? (table[p.id] || p.name) : `停课 · ${major.name}`)
       : (table[p.id] || p.name);
     const isMath = !major && isMathPeriodId(wd, p.id);
+    const isTutoring = !major && isTutoringPeriodId(wd, p.id);
     return {
       ...p,
       weekday: wd,
       weekdayName: weekdayName(date),
       subject,
       isMath,
+      isTutoring,
       isExamDay: !!major,
       eventName: major?.name || null,
     };
@@ -174,6 +196,32 @@ function nextMathOnDay(date, state, afterPeriodId, skipKey) {
   return sched.slice(idx + 1).find((p) => p.isMath && `${date}|${p.id}` !== skipKey) || null;
 }
 
+export function upcomingTutoring(state, { sameDay = false } = {}) {
+  if (!state?.date) return null;
+  const cur = currentSlot(state);
+  if (cur?.isTutoring) return { date: state.date, slot: cur, sameDay: true };
+  const later = nextTutorOnDay(state.date, state, state.periodId);
+  if (later) return { date: state.date, slot: later, sameDay: true };
+  if (sameDay) return null;
+  let d = addDays(state.date, 1);
+  for (let i = 0; i < 14; i++) {
+    const slot = nextTutorOnDay(d, state, null);
+    if (slot) return { date: d, slot, sameDay: false };
+    d = addDays(d, 1);
+  }
+  return null;
+}
+
+function nextTutorOnDay(date, state, afterPeriodId) {
+  const sched = daySchedule(date, state);
+  const idx = afterPeriodId ? sched.findIndex((p) => p.id === afterPeriodId) : -1;
+  return sched.slice(idx + 1).find((p) => p.isTutoring) || null;
+}
+
+export function isTutoringSlot(slot) {
+  return !!slot?.isTutoring;
+}
+
 export function formatSlotLabel(slot) {
   if (!slot) return "";
   const time = slot.clock ? ` ${slot.clock}` : "";
@@ -184,4 +232,4 @@ export function weekMathCount() {
   return Object.values(MATH_SLOTS).reduce((n, arr) => n + arr.length, 0);
 }
 
-export { PERIODS, MATH_SLOTS };
+export { PERIODS, MATH_SLOTS, TUTOR_SLOTS };

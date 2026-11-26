@@ -1,5 +1,7 @@
-/** 教室座位表（Canvas）：7 列 × 若干排，点击查看档案。 */
-export function renderSeating(canvas, students, selectedId, onPick) {
+/** 教室座位表（Canvas）：7 列 × 若干排，点击查看档案或当堂处理。 */
+import { seatOf } from "../domain/school.js";
+
+export function renderSeating(canvas, students, selectedId, onPick, opts = {}) {
   const ctx = canvas.getContext("2d");
   const cols = students.length <= 35 ? 6 : 7;
   const rows = Math.max(6, Math.ceil(students.length / cols));
@@ -21,23 +23,36 @@ export function renderSeating(canvas, students, selectedId, onPick) {
   ctx.fillStyle = "#e8d5a3";
   ctx.font = "16px 'Songti SC', serif";
   ctx.textAlign = "center";
-  ctx.fillText("宁川中学 · 卓行16班", cssW / 2, 42);
+  const board = opts.boardTitle || "宁川中学 · 卓行16班";
+  ctx.fillText(board, cssW / 2, 42);
 
+  const marks = opts.marks || {};
   const map = new Map();
   const left = 36, top = 80, gapX = (cssW - 72) / cols, gapY = 52;
   students.forEach((s, i) => {
-    const r = (s.seat?.row || Math.floor(i / cols) + 1) - 1;
-    const c = (s.seat?.col || (i % cols) + 1) - 1;
+    const seat = seatOf(s, students.length);
+    const r = (seat.row || Math.floor(i / cols) + 1) - 1;
+    const c = (seat.col || (i % cols) + 1) - 1;
     const x = left + c * gapX + gapX / 2;
     const y = top + r * gapY;
     map.set(s.id, { x, y, s });
     const sel = s.id === selectedId;
+    const mk = marks[s.id] || {};
     ctx.beginPath();
     ctx.fillStyle = sel ? "#c45c4a" : (s.gender === "F" ? "#6b4a5d" : "#3d5c6b");
+    if (mk.drowsy && !sel) ctx.fillStyle = "#4a5248";
     ctx.arc(x, y, 18, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = sel ? "#f3efe0" : "rgba(243,239,224,.35)";
+    ctx.strokeStyle = sel ? "#f3efe0" : (mk.hand ? "#e8d5a3" : "rgba(243,239,224,.35)");
+    ctx.lineWidth = mk.hand ? 3 : 1;
     ctx.stroke();
+    ctx.lineWidth = 1;
+    if (mk.watch) {
+      ctx.beginPath();
+      ctx.fillStyle = "#c45c4a";
+      ctx.arc(x + 12, y - 12, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.fillStyle = "#f3efe0";
     ctx.font = "12px sans-serif";
     ctx.fillText(s.name.slice(0, 1), x, y + 4);

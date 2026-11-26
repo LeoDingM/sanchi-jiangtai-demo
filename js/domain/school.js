@@ -92,6 +92,7 @@ export function makeStudent({ rng, usedNames, entryYear, classNo, seq, tier, hin
     energy: clamp(Math.round(76 + gauss(rng, 0, 8)), 35, 98),
     relation: 0,
     talks: [],
+    seat,
     art: tier === "yiti",
     repeat,
     majorPref: pick(rng, hint === "wen"
@@ -186,6 +187,19 @@ export function generateOpeningSchool(seed, playerEntryYear = GRADE_YEAR) {
 
 export function studentsOfCohort(cohort) {
   return cohort.students;
+}
+
+
+export function seatOf(student, classSize = 0) {
+  if (student?.seat?.row && student?.seat?.col) return student.seat;
+  const cols = (student?.classNo === 0 || student?.classNo === 1 || (classSize && classSize <= 35)) ? 6 : 7;
+  const idx = Math.max(0, (student?.seq || 1) - 1);
+  return { row: Math.floor(idx / cols) + 1, col: (idx % cols) + 1 };
+}
+
+export function seatLabel(student, classSize = 0) {
+  const s = seatOf(student, classSize);
+  return `第${s.row}排第${s.col}座`;
 }
 
 export function classStudents(cohort, classNo) {

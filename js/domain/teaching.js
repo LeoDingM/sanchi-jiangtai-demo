@@ -3,6 +3,7 @@
  * 效果写入备课充分度与数学教学积累，并确定性影响任教班学生状态；不用 LLM 编课堂。
  */
 import { clamp, hash01, rngFrom, round1 } from "./prng.js";
+import { seatLabel } from "./school.js";
 
 export const LESSON_TOPICS = {
   1: [
@@ -505,4 +506,180 @@ export function consultMentor(state, grade = 1) {
   const hint = hints[Math.floor(hash01(state.seed, state.date, topic, "mentor") * hints.length)];
   const text = `${mentor}看了你准备的「${topic}」，提醒：${hint}备课充分度现为${state.player.prep}。`;
   return { ok: true, text, prep: state.player.prep, topic };
+}
+
+
+export const TUTOR_MODES = ["巡视", "答疑", "小组", "收订正"];
+
+function pronoun(student) {
+  return student?.gender === "F" ? "她" : "他";
+}
+
+/** 晚自习/答疑时可能举手的人：优先未了作业和课堂上走神的。 */
+export function raisedHands(state, students) {
+  const out = [];
+  for (const s of students || []) {
+    const ctx = studentTeachingContext(s, state);
+    const hw = ctx?.hw;
+    const open = isOpenHomework(hw);
+    const p = hash01(s.id, state.date, state.periodId, "hand");
+    let raise = false;
+    if (open && (hw.correction === "待订正" || hw.quality === "错题较多" || hw.quality === "未订正") && p < 0.62) raise = true;
+    else if (open && (hw.correction === "待补交" || hw.status === "缺交") && p < 0.25) raise = true;
+    else if (ctx?.flag === "走神" && p < 0.32) raise = true;
+    else if ((s.energy ?? 70) < 48 && p < 0.18) raise = true;
+    else if (p < 0.06) raise = true;
+    if (raise) out.push(s);
+  }
+  return out.slice(0, 8);
+}
+
+function resetTutorFlagsIfNeeded(state, slotKey) {
+  if (state.tutorSlotKey !== slotKey) {
+    state.tutorSlotKey = slotKey;
+    state.tutorAnswers = 0;
+    state.eveningPatrolledKey = null;
+    state.eveningCollectedKey = null;
+    state.eveningGroupKey = null;
+  }
+}
+
+/**
+ * 数学晚自习或数学答疑：巡视、到座位旁答疑、小组讲题、沿过道收订正。
+ * 不新开课题，也不占用正课「上课」。
+ */
+export function tutorEvening(state, students, { mode = "巡视", studentId = null, slot = null } = {}) {
+  const slotKey = `${state.date}|${state.periodId}`;
+  resetTutorFlagsIfNeeded(state, slotKey);
+  const when = slot?.subject || "晚自习";
+  const list = students || [];
+
+  if (mode === "巡视") {
+    if (state.eveningPatrolledKey === slotKey) return { ok: false, reason: "这节晚自习已经巡视过一轮，接下来到座位上答疑或收订正就行。" };
+    state.eveningPatrolledKey = slotKey;
+    const hands = raisedHands(state, list);
+    const watch = homeworkWatchlist(state.homework, state);
+    const sleepy = list.filter((s) => (s.energy ?? 70) < 50 || s.lastClassFlag === "走神");
+    const seen = [];
+    const used = new Set();
+    const push = (s, note) => {
+      if (!s || used.has(s.id)) return;
+      used.add(s.id);
+      seen.push({ id: s.id, name: s.name, seat: seatLabel(s), note });
+    };
+    for (const s of hands) push(s, "举手");
+    for (const r of watch) {
+      const s = list.find((x) => x.id === r.id);
+      push(s, r.correction === "待补交" || r.status === "缺交" ? "本子还空着" : "还在改订正");
+    }
+    for (const s of sleepy) push(s, "有些疲惫");
+    const shots = seen.slice(0, 4);
+    for (const s of sleepy.slice(0, 3)) {
+      s.energy = clamp((s.energy || 70) + 2, 20, 98);
+      s.stress = clamp((s.stress || 40) - 1, 0, 95);
+    }
+    const detail = shots.length
+      ? shots.map((x) => `${x.seat}${x.name}${x.note === "举手" ? "举着手" : "，" + x.note}`).join("；") + "。"
+      : "教室里比较安静，没有特别要停下的座位。";
+    const text = `${when}，你从前面慢慢走到后排。${detail}`;
+    return { ok: true, mode, text, noticed: shots };
+  }
+
+  if (mode === "收订正") {
+    if (state.eveningCollectedKey === slotKey) return { ok: false, reason: "这节已经收过一轮订正，剩下的本子下一节再催。" };
+    const rows = allHomeworkRows(state).filter((r) => r.correction === "待订正");
+    if (!rows.length) return { ok: false, reason: "眼下没有待交回的订正本。可以先答疑，或等面批后再收。" };
+    state.eveningCollectedKey = slotKey;
+    const taken = [];
+    for (const row of rows) {
+      const p = hash01(row.id, row.date, row.topic, state.date, state.periodId, "evening-collect");
+      if (p < 0.78) {
+        row.correction = "已订正待复查";
+        syncStudentHomework(state, row);
+        taken.push(row);
+      }
+    }
+    const text = taken.length
+      ? `${when}你沿过道收订正本，${taken.slice(0, 4).map((r) => r.name).join("、")}${taken.length > 4 ? "等" : ""}把本子交了上来，等你复查。`
+      : `${when}你沿过道问了一圈，订正本还没写完，只好让他们这节课内送过来。`;
+    return { ok: true, mode, text, taken: taken.length };
+  }
+
+  if (mode === "小组") {
+    if (state.eveningGroupKey === slotKey) return { ok: false, reason: "这节已经做过一次小组答疑，其余人到座位上单独问。" };
+    const hands = raisedHands(state, list);
+    const watchIds = new Set(homeworkWatchlist(state.homework, state).map((r) => r.id));
+    const picks = [];
+    const seen = new Set();
+    for (const s of [...hands, ...list.filter((x) => watchIds.has(x.id))]) {
+      if (seen.has(s.id)) continue;
+      seen.add(s.id);
+      picks.push(s);
+      if (picks.length >= 3) break;
+    }
+    if (!picks.length) return { ok: false, reason: "这节没有明显要凑在一起讲的人，改到座位上个别答疑。" };
+    state.eveningGroupKey = slotKey;
+    const topics = [...new Set(picks.map((s) => studentTeachingContext(s, state)?.topic || state.homework?.topic || state.player.lastTaught?.topic).filter(Boolean))];
+    const topic = topics[0] || "最近的练习";
+    for (const s of picks) {
+      s.relation = clamp((s.relation || 0) + 1, 0, 100);
+      s.ability.math = clamp((s.ability.math || 50) + 0.07, 0, 99);
+      s.energy = clamp((s.energy || 70) - 1, 20, 98);
+      const row = allHomeworkRows(state).find((r) => r.id === s.id && (r.correction === "待订正" || r.correction === "待面批" || r.quality === "错题较多"));
+      if (row && row.correction === "待订正" && hash01(s.id, slotKey, "group-fix") < 0.55) {
+        row.correction = "已订正待复查";
+        syncStudentHomework(state, row);
+      }
+    }
+    const text = `${when}你把${picks.map((s) => s.name).join("、")}叫到后面空位，就「${topic}」里卡住的几步一起讲了十来分钟。${picks.map((s) => seatLabel(s)).join("、")}这几处回去还得自己再写一遍。`;
+    return { ok: true, mode, text, students: picks.map((s) => s.id) };
+  }
+
+  // 答疑（默认到座位旁给一个人讲）
+  if ((state.tutorAnswers || 0) >= 4) return { ok: false, reason: "这节已经单独讲了好几个人，其余的改到下一节或让他们先写着。" };
+  let student = list.find((s) => s.id === studentId) || null;
+  if (!student) {
+    const hands = raisedHands(state, list);
+    student = hands[0] || list.find((s) => homeworkWatchlist(state.homework, state).some((r) => r.id === s.id)) || null;
+  }
+  if (!student) return { ok: false, reason: "先点一个座位，再走到那一排去答疑。" };
+  const ctx = studentTeachingContext(student, state);
+  const hw = ctx?.hw;
+  const topic = ctx?.topic || hw?.topic || state.homework?.topic || "最近的练习";
+  const seat = seatLabel(student);
+  const ta = pronoun(student);
+  state.tutorAnswers = (state.tutorAnswers || 0) + 1;
+  student.relation = clamp((student.relation || 0) + 2, 0, 100);
+  student.ability.math = clamp((student.ability.math || 50) + 0.1, 0, 99);
+  student.stress = clamp((student.stress || 40) - 1, 0, 95);
+  let text;
+  let helped = null;
+  if (hw?.correction === "待补交" || hw?.status === "缺交") {
+    hw.urged = true;
+    text = `你在${seat}停下，问${student.name}「${topic}」的本子在哪里。${ta}说还没写完，你让这节课内先补出来再举手。`;
+    helped = "催交";
+  } else if (hw?.correction === "已订正待复查") {
+    text = `你在${seat}看了${student.name}「${topic}」刚交来的订正，让${ta}先放在桌上，回头按复查来收。`;
+    helped = "待复查";
+  } else if (hw && (hw.correction === "待订正" || hw.quality === "错题较多" || hw.quality === "未订正")) {
+    const done = hash01(student.id, slotKey, "seat-tutor") < 0.7;
+    if (done) {
+      hw.correction = "已订正待复查";
+      helped = "订正交回";
+      text = `你蹲在${seat}旁边，把「${topic}」里卡住的那一步给${student.name}重新走了一遍。${ta}把订正写完，本子先放在桌上等复查。`;
+    } else {
+      helped = "讲题";
+      text = `你蹲在${seat}旁边，给${student.name}讲「${topic}」里卡住的那一步，让${ta}先自己再写一遍，写完举手。`;
+    }
+    syncStudentHomework(state, hw);
+  } else if (ctx?.flag === "走神") {
+    student.energy = clamp((student.energy || 70) + 2, 20, 98);
+    text = `你在${seat}停下，提醒${student.name}这堂课走神的地方晚上要补一补，又把「${topic}」里一个易错点随手写在${ta}本子上。`;
+    helped = "提醒";
+  } else {
+    text = `你在${seat}给${student.name}答了一道「${topic}」的问疑，${ta}点了点头，接着自己往下做。`;
+    helped = "问疑";
+  }
+  student.talks = [...(student.talks || []), { date: state.date, topic: "晚自习答疑", text, periodId: state.periodId }];
+  return { ok: true, mode: "答疑", text, student, helped };
 }

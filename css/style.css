@@ -140,3 +140,10 @@ a { color: var(--gold); }
 .tt-table tr.math td:last-child { color: var(--ok, #2c5e3f); }
 .tt-table .math-tag { color: var(--seal, #8b2b2b); font-size: 11px; }
 .office-actions { margin-bottom: 14px; }
+
+.classroom-layout { display: grid; grid-template-columns: 1fr minmax(220px, 280px); gap: 12px; align-items: start; }
+#classroom { width: 100%; display: block; }
+.desk-panel h3 { margin-top: 0; }
+@media (max-width: 960px) {
+  .classroom-layout { grid-template-columns: 1fr; }
+}

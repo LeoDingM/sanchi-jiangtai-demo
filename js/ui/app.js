@@ -4,7 +4,8 @@ import {
   applyEvent, SCHOOL_CALENDAR, gradeOf, topicsForGrade, LESSON_STYLES,
   suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext,
   urgeHomework, checkCorrection, officeMarking, consultHomeroom, consultMentor,
-  daySchedule, currentSlot, formatSlotLabel, upcomingMath,
+  daySchedule, currentSlot, formatSlotLabel, upcomingMath, upcomingTutoring,
+  tutorEvening, raisedHands, seatLabel, periodTalkScene, isTutoringSlot,
 } from "../domain/simulation.js";
 import { saveSlot, loadSlot, listSlots, toJSON, fromJSON } from "../domain/save.js";
 import { subjectById, SUBJECTS_G1 } from "../domain/config.js";
@@ -100,7 +101,7 @@ function render() {
   const slot = currentSlot(state);
   const periodEl = $("#periodline");
   if (periodEl) {
-    const tag = slot?.isMath ? " · 数学课" : slot?.isExamDay ? " · 停课" : slot?.id === "rest" ? " · 休息" : "";
+    const tag = slot?.isTutoring ? " · 可答疑" : slot?.isMath ? " · 数学课" : slot?.isExamDay ? " · 停课" : slot?.id === "rest" ? " · 休息" : "";
     periodEl.textContent = (slot ? formatSlotLabel(slot) : "") + tag;
   }
   $("#roleline").textContent = `${state.player.role} ${state.player.name} · ${state.player.cohortYear}级卓行${state.player.classNo}班 数学`;
@@ -121,9 +122,12 @@ function teachingStatus(s) {
   const bits = [];
   if (ctx.flag && ctx.topic) bits.push(`最近「${ctx.topic}」课堂上${ctx.flag}`);
   else if (ctx.flag) bits.push(`最近课堂上${ctx.flag}`);
-  if (ctx.hw) bits.push(ctx.hw.status === "缺交" ? "这趟作业缺交" : `作业${ctx.hw.quality}${ctx.hw.reviewed ? "（已面批）" : ""}`);
+  if (ctx.hw) {
+    const corr = ctx.hw.correction ? `，${ctx.hw.correction}` : "";
+    bits.push(ctx.hw.status === "缺交" || ctx.hw.correction === "待补交" ? "这趟作业缺交" : `作业${ctx.hw.quality}${ctx.hw.reviewed ? "（已面批）" : ""}${corr}`);
+  }
   if (ctx.quiz) bits.push(`随堂小测 ${ctx.quiz.score} 分`);
-  return "带班近况：" + bits.join("；") + "。";
+  return `${seatLabel(s)}。带班近况：` + bits.join("；") + "。";
 }
 
 
@@ -173,12 +177,113 @@ function examSourceNotice(report) {
   return report.sourceNote || "";
 }
 
+function seatMarks(students) {
+  const slot = currentSlot(state);
+  const watch = new Set(homeworkWatchlist(state.homework, state).map((r) => r.id));
+  const hands = slot?.isTutoring ? new Set(raisedHands(state, students).map((s) => s.id)) : new Set();
+  const marks = {};
+  for (const s of students) {
+    marks[s.id] = {
+      hand: hands.has(s.id),
+      watch: watch.has(s.id),
+      drowsy: s.lastClassFlag === "走神" || (s.energy ?? 70) < 48,
+    };
+  }
+  return marks;
+}
+
+function deskPanelHtml(student, slot, scene) {
+  const tutorBtns = slot?.isTutoring
+    ? `<div class="row-actions">
+        <button type="button" class="accent" data-tutor="巡视">巡视</button>
+        <button type="button" data-tutor="小组">小组答疑</button>
+        <button type="button" data-tutor="收订正">收订正</button>
+      </div>`
+    : "";
+  if (!student) {
+    return `<h3>座位</h3>
+      <p class="muted">点一名学生的座位，按当前课时在教室里处理：数学课上可以提醒，晚自习可以答疑，别的课只能在走廊门口简短谈话。任教班约 73 人。</p>
+      ${tutorBtns}`;
+  }
+  const ctx = studentTeachingContext(student, state);
+  const hw = ctx?.hw;
+  const hwLine = hw
+    ? (hw.correction || hw.status || "") + (hw.topic ? ` · 「${hw.topic}」` : "")
+    : "还没有本班作业记录";
+  const leftTalk = Math.max(0, scene.cap - (state.talksThisPeriod || 0));
+  const dayLeft = Math.max(0, 5 - (state.talksToday || 0));
+  const extra = [];
+  if (slot?.isTutoring) extra.push(`<button type="button" class="accent" data-tutor="答疑" data-sid="${student.id}">到座位答疑</button>`);
+  if (hw && (hw.correction === "待补交" || hw.status === "缺交")) extra.push(`<button type="button" data-urge="${student.id}">催交</button>`);
+  if (hw && hw.correction === "已订正待复查") extra.push(`<button type="button" data-chk="${student.id}">复查订正</button>`);
+  if (hw && (hw.correction === "待面批" || hw.correction === "已补交待面批")) extra.push(`<button type="button" data-rv="${student.id}">面批</button>`);
+  const talks = ["鼓励", "询问学习", "关注状态", "谈心"].map((x) => `<button type="button" data-talk="${x}">${x}</button>`).join("");
+  return `<h3>${student.name}</h3>
+    <p>${seatLabel(student)}　${student.personality || ""}　师生关系 ${student.relation || 0}</p>
+    <p class="muted">${teachingStatus(student)}</p>
+    <p class="muted">作业：${hwLine}${ctx?.flag ? "　课堂：" + ctx.flag : ""}</p>
+    ${tutorBtns}
+    <div class="row-actions">${extra.join("")}</div>
+    <p>谈话（本时段还可 ${leftTalk} 人，本日余 ${dayLeft} 人）</p>
+    <div class="row-actions">${talks}</div>
+    <div class="row-actions"><button type="button" id="to-profile">查看档案</button></div>`;
+}
+
+function bindDeskAndTutor(host) {
+  host.querySelectorAll("[data-tutor]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const sid = b.dataset.sid || selectedId;
+      const r = tutorEvening(state, b.dataset.tutor, sid || null);
+      toast(r.ok ? r.text : r.reason);
+      persist(); render();
+    };
+  });
+  host.querySelectorAll("[data-talk]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      if (!selectedId) { toast("先点一个座位"); return; }
+      const r = talkTo(state, selectedId, b.dataset.talk);
+      toast(r.ok ? r.text : r.reason);
+      persist(); render();
+    };
+  });
+  host.querySelectorAll("[data-urge]").forEach((b) => {
+    b.onclick = (ev) => { ev.stopPropagation(); selectedId = b.dataset.urge; const r = urgeHomework(state, b.dataset.urge); toast(r.ok ? r.text : r.reason); persist(); render(); };
+  });
+  host.querySelectorAll("[data-chk]").forEach((b) => {
+    b.onclick = (ev) => { ev.stopPropagation(); selectedId = b.dataset.chk; const r = checkCorrection(state, b.dataset.chk); toast(r.ok ? r.text : r.reason); persist(); render(); };
+  });
+  host.querySelectorAll("[data-rv]").forEach((b) => {
+    b.onclick = (ev) => { ev.stopPropagation(); selectedId = b.dataset.rv; const r = reviewHomework(state, b.dataset.rv); toast(r.ok ? r.text : r.reason); persist(); render(); };
+  });
+  const to = host.querySelector("#to-profile");
+  if (to) to.onclick = () => { view = "profile"; render(); };
+}
+
 function viewClassroom(host) {
   const slot = currentSlot(state);
-  const slotLine = slot ? `${formatSlotLabel(slot)}${slot.isMath ? "（本节可上课）" : slot.isExamDay ? "（今日停课）" : ""}` : "";
-  host.innerHTML = `<h3>教室座位表</h3><p class="notice">现在是${slotLine || formatDateCn(state.date)}。点击头像查看档案并谈话。任教班为 2017 年起的卓行16班，约 73 人，不是云岫 0/1 的 30—35 人编制。</p><canvas id="classroom"></canvas>`;
+  const sts = clsStudents().slice().sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0) || String(a.id).localeCompare(b.id));
+  const marks = seatMarks(sts);
+  const scene = periodTalkScene(state);
+  const sel = sts.find((s) => s.id === selectedId) || null;
+  const nxtT = upcomingTutoring(state);
+  let slotLine = slot ? formatSlotLabel(slot) : formatDateCn(state.date);
+  if (slot?.isTutoring) slotLine += "。可以巡视、到座位旁答疑或收订正";
+  else if (slot?.isMath) slotLine += "（本节可上课，也可在座位边提醒）";
+  else if (slot?.isExamDay) slotLine += "（今日停课）";
+  else if (slot && !slot.isMath && slot.kind !== "break" && slot.id !== "rest") slotLine += "。这节不是数学课，谈话请到走廊门口简短说";
+  if (nxtT && !slot?.isTutoring) slotLine += `。下一节可答疑：${nxtT.sameDay ? "" : nxtT.date + " "}${formatSlotLabel(nxtT.slot)}`;
+  host.innerHTML = `<h3>教室座位表</h3>
+    <p class="notice">现在是${slotLine}。金圈是举手，红点是作业还要盯，颜色偏暗的是走神或精力不足。点击座位按当前课时处理，不必先跳到档案。任教班为卓行16班，约 73 人。</p>
+    <div class="classroom-layout">
+      <canvas id="classroom"></canvas>
+      <div class="desk-panel paper">${deskPanelHtml(sel, slot, scene)}</div>
+    </div>`;
   const c = host.querySelector("#classroom");
-  renderSeating(c, clsStudents(), selectedId, (id) => { selectedId = id; view = "profile"; render(); });
+  const board = slot ? `${formatSlotLabel(slot)} · 卓行16班` : "宁川中学 · 卓行16班";
+  renderSeating(c, sts, selectedId, (id) => { selectedId = id; render(); }, { boardTitle: board, marks });
+  bindDeskAndTutor(host);
 }
 
 function viewRoster(host) {
@@ -272,7 +377,7 @@ function viewProfile(host) {
         <p>${ab || "—"}</p>
       </div>
       <div class="paper">
-        <p>谈话（本时段最多 5 人次）</p>
+        <p>谈话（${(() => { const sc = periodTalkScene(state); return `本时段还可 ${Math.max(0, sc.cap - (state.talksThisPeriod || 0))} 人，本日余 ${Math.max(0, 5 - (state.talksToday || 0))} 人`; })()}）</p>
         <div class="row-actions">
           ${["鼓励","询问学习","关注状态","谈心"].map((t)=>`<button type="button" data-talk="${t}">${t}</button>`).join("")}
         </div>
@@ -497,6 +602,27 @@ function bindOfficeActions(host) {
   });
 }
 
+
+function eveningTutorHtml() {
+  const slot = currentSlot(state);
+  const nxt = upcomingTutoring(state);
+  const sts = clsStudents();
+  const hands = slot?.isTutoring ? raisedHands(state, sts) : [];
+  const hint = slot?.isTutoring
+    ? `现在是${formatSlotLabel(slot)}，可以巡视、到座位旁答疑、做小组讲题或沿过道收订正。这不是新开一节正课，不另算课题进度。`
+    : `现在还不是数学晚自习或答疑。${nxt ? `下一节可答疑：${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}，请用「下一节」走到那时。` : "这几天课表里没有数学晚自习或答疑。"}`;
+  return `<div class="paper lesson-card">
+      <h3>晚自习答疑</h3>
+      <p class="muted">${hint}</p>
+      <div class="row-actions">
+        <button type="button" class="accent" data-tutor="巡视">巡视</button>
+        <button type="button" data-tutor="小组">小组答疑</button>
+        <button type="button" data-tutor="收订正">收订正</button>
+      </div>
+      ${hands.length && slot?.isTutoring ? `<p>举手或需要盯的座位：</p><div class="row-actions">${hands.map((s)=>`<button type="button" data-tutor="答疑" data-sid="${s.id}">${s.name}（${seatLabel(s)}）</button>`).join("")}</div>` : ""}
+    </div>`;
+}
+
 function viewTeach(host) {
   const grade = gradeOf(state.player.cohortYear, state.date);
   const topics = topicsForGrade(grade);
@@ -530,7 +656,7 @@ function viewTeach(host) {
   });
   const nxt = upcomingMath(state, { skipTaught: true });
   host.innerHTML = `<h3>日常教学 · 数学课</h3>
-    <p class="notice">现在是${slot ? formatSlotLabel(slot) : formatDateCn(state.date)}${slot?.isMath ? "，可以进教室上课" : "。等到数学课再进教室，或先在办公室处理作业"}。${nxt && !slot?.isMath ? `下一节数学：${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}。` : ""}先写教案，再上课；课后从缺交、错题跟到订正和复查。备课充分度和教学积累会进入下一次考试的数学成绩。</p>
+    <p class="notice">现在是${slot ? formatSlotLabel(slot) : formatDateCn(state.date)}${slot?.isTutoring ? "，可以做晚自习答疑" : slot?.isMath ? "，可以进教室上课" : "。等到数学课再进教室，或先在办公室处理作业、在座位上谈话"}。${nxt && !slot?.isMath && !slot?.isTutoring ? `下一节数学：${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}。` : ""}先写教案，再上课；晚自习另做答疑，不另开课题。课后从缺交、错题跟到订正和复查。</p>
     <div class="kpi">
       <div><span>备课充分度</span><b>${state.player.prep || 0} / 3</b></div>
       <div><span>数学教学积累</span><b>${Number(state.player.mathTeaching || 0).toFixed(1)}</b></div>
@@ -559,6 +685,7 @@ function viewTeach(host) {
         ${last ? `<p class="muted">${last.date}　${last.topic} · ${last.style}</p><ol class="notes-list">${(last.notes||[]).map((n)=>`<li>${n}</li>`).join("")}</ol>${last.quiz?`<p class="muted">小测均分 ${last.quizAvg}。前列：${last.quiz.slice(0,5).map((q)=>`${q.name}${q.score}`).join("、")}${quizLow.length?`。偏低：${quizLow.map((q)=>`${q.name}${q.score}`).join("、")}`:""}</p>`:""}` : `<p class="muted">今天还没上数学课。</p>`}
       </div>
     </div>
+    ${eveningTutorHtml()}
     ${officeCollabHtml()}
     <div class="paper lesson-card">
       <h3>作业登记、订正与复查</h3>
@@ -596,6 +723,7 @@ function viewTeach(host) {
     };
   });
   bindOfficeActions(host);
+  bindDeskAndTutor(host);
   host.querySelectorAll("tr[data-id]").forEach((tr) => {
     tr.onclick = () => { selectedId = tr.dataset.id; view = "profile"; render(); };
   });
