@@ -48,9 +48,38 @@ function syncChrome() {
   if (bar) document.documentElement.style.setProperty("--topbar-h", `${bar.offsetHeight}px`);
 }
 
+let sidenavHintOff = false;
+let agendaSchedOpen = false;
+let lastNarrowAgenda = null;
+
+function syncSidenavHint() {
+  const nav = $("#sidenav");
+  const wrap = nav?.closest(".sidenav-wrap");
+  if (!nav || !wrap) return;
+  if (nav.clientWidth <= 0) return;
+  const overflow = nav.scrollWidth > nav.clientWidth + 2;
+  const atStart = nav.scrollLeft <= 2;
+  const atEnd = nav.scrollLeft + nav.clientWidth >= nav.scrollWidth - 2;
+  wrap.classList.toggle("is-overflow", overflow);
+  wrap.classList.toggle("at-start", atStart);
+  wrap.classList.toggle("at-end", atEnd);
+  if (overflow && !atStart) sidenavHintOff = true;
+  if (sidenavHintOff) wrap.classList.add("hint-off");
+  const hint = wrap.querySelector(".sidenav-hint");
+  if (hint) hint.hidden = !(overflow && !sidenavHintOff);
+}
+
 export function boot() {
   syncChrome();
-  window.addEventListener("resize", syncChrome);
+  const nav = $("#sidenav");
+  if (nav) nav.addEventListener("scroll", syncSidenavHint, { passive: true });
+  window.addEventListener("resize", () => {
+    syncChrome();
+    syncSidenavHint();
+    if (!state) return;
+    const narrow = window.matchMedia("(max-width: 600px)").matches;
+    if (lastNarrowAgenda !== null && narrow !== lastNarrowAgenda) renderAgenda();
+  });
   $("#btn-new").onclick = () => {
     const name = $("#pname").value.trim() || "林知秋";
     state = createGame(20170901, name);
@@ -120,6 +149,7 @@ function render() {
   host.innerHTML = "";
   (map[view] || viewClassroom)(host);
   renderAgenda();
+  syncSidenavHint();
 }
 
 function clsStudents() { return playerStudents(state); }
@@ -1031,12 +1061,22 @@ function renderAgenda() {
   const sched = daySchedule(state.date, state);
   const curId = state.periodId;
   const tt = `<table class="tt-table"><tbody>${sched.map((p)=>`<tr class="${p.id===curId?"now":""}${p.isMath?" math":""}"><td>${p.clock||""}</td><td>${p.short||p.name}</td><td>${p.subject}${p.isMath?" <span class=\"math-tag\">数学</span>":""}</td></tr>`).join("")}</tbody></table>`;
-  box.innerHTML = `<h3>今日课表</h3>
-    <p>${formatDateCn(state.date)}</p>
+  const slot = currentSlot(state);
+  const nowLabel = slot ? formatSlotLabel(slot) : "";
+  const schedBody = `<p>${formatDateCn(state.date)}</p>
     ${tt}
     <div class="row-actions"><button type="button" data-act="nextperiod">下一节</button></div>
     <p class="notice">备课充分度 ${state.player.prep||0}　数学教学积累 ${Number(state.player.mathTeaching||0).toFixed(1)}</p>
-    <p class="notice">下一件大事：${next ? `${next.date} ${next.name}` : "（暂无）"}</p>
+    <p class="notice">下一件大事：${next ? `${next.date} ${next.name}` : "（暂无）"}</p>`;
+  const narrow = window.matchMedia("(max-width: 600px)").matches;
+  lastNarrowAgenda = narrow;
+  const schedBlock = narrow
+    ? `<details class="agenda-sched"${agendaSchedOpen ? " open" : ""}>
+        <summary>今日课表${nowLabel ? ` <span class="agenda-now">${nowLabel}</span>` : ""}</summary>
+        ${schedBody}
+      </details>`
+    : `<h3>今日课表</h3>${schedBody}`;
+  box.innerHTML = `${schedBlock}
     <h3>任教班</h3>
     <p class="notice">${state.player.cohortYear}级卓行${state.player.classNo}班，${cls.length}人。班主任 ${state.player.homeroom}。</p>
     <div class="row-actions"><button type="button" data-act="skip">跳到下一阶段</button></div>
@@ -1044,4 +1084,6 @@ function renderAgenda() {
     ${(state.log||[]).slice(0,8).map((l)=>`<div class="log-item"><b>${l.date}</b> ${l.text}</div>`).join("")}`;
   box.querySelector("[data-act=skip]").onclick = () => handleAct("skip");
   box.querySelector("[data-act=nextperiod]").onclick = () => handleAct("nextperiod");
+  const det = box.querySelector(".agenda-sched");
+  if (det) det.addEventListener("toggle", () => { agendaSchedOpen = det.open; });
 }

@@ -46,19 +46,26 @@
     </div>
 
     <div id="main" class="main hidden">
-      <nav id="sidenav">
-        <button type="button" data-view="classroom" class="on">教室座位</button>
-        <button type="button" data-view="roster">学生名册</button>
-        <button type="button" data-view="profile">学生档案</button>
-        <button type="button" data-view="teach">日常教学</button>
-        <button type="button" data-view="placement">分班调整</button>
-        <button type="button" data-view="grades">考试成绩</button>
-        <button type="button" data-view="office">教务处</button>
-        <button type="button" data-view="admission">录取去向</button>
-        <button type="button" data-view="auto">自动模式</button>
-        <button type="button" data-view="log">日志校历</button>
-        <button type="button" data-view="save">存档读档</button>
-      </nav>
+      <div class="sidenav-wrap">
+        <div class="sidenav-scroller">
+        <nav id="sidenav">
+          <button type="button" data-view="classroom" class="on">教室座位</button>
+          <button type="button" data-view="roster">学生名册</button>
+          <button type="button" data-view="profile">学生档案</button>
+          <button type="button" data-view="teach">日常教学</button>
+          <button type="button" data-view="placement">分班调整</button>
+          <button type="button" data-view="grades">考试成绩</button>
+          <button type="button" data-view="office">教务处</button>
+          <button type="button" data-view="admission">录取去向</button>
+          <button type="button" data-view="auto">自动模式</button>
+          <button type="button" data-view="log">日志校历</button>
+          <button type="button" data-view="save">存档读档</button>
+        </nav>
+        <div class="sidenav-edge sidenav-edge-start" aria-hidden="true"></div>
+        <div class="sidenav-edge sidenav-edge-end" aria-hidden="true"></div>
+        </div>
+        <p class="sidenav-hint" hidden>可左右滑动，查看全部页面</p>
+      </div>
       <section id="view" class="view"></section>
       <aside id="agenda" class="agenda"></aside>
     </div>

@@ -70,8 +70,14 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   background: rgba(0,0,0,.2); color: var(--chalk);
 }
 .main { flex: 1; display: grid; grid-template-columns: 140px 1fr 280px; min-height: 0; }
-#sidenav { display: flex; flex-direction: column; gap: 4px; padding: 10px 8px; border-right: 1px solid var(--line); }
+.sidenav-wrap {
+  display: flex; flex-direction: column; min-width: 0; min-height: 0;
+  border-right: 1px solid var(--line);
+}
+.sidenav-scroller { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+#sidenav { display: flex; flex-direction: column; gap: 4px; padding: 10px 8px; flex: 1; min-height: 0; }
 #sidenav button { text-align: left; }
+.sidenav-hint, .sidenav-edge { display: none; }
 .view { padding: 14px 16px; overflow: auto; background: linear-gradient(180deg, rgba(246,240,227,0.04), transparent 80px); }
 .agenda { border-left: 1px solid var(--line); padding: 14px; overflow: auto; background: rgba(0,0,0,0.15); }
 .hidden { display: none !important; }
@@ -189,6 +195,14 @@ a { color: var(--gold); }
     min-width: 0;
     min-height: 0;
   }
+  .sidenav-wrap {
+    position: sticky;
+    top: var(--topbar-h, 0px);
+    z-index: 25;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    background: #1c2b22;
+  }
   #sidenav {
     flex-direction: row;
     flex-wrap: nowrap;
@@ -196,12 +210,9 @@ a { color: var(--gold); }
     overflow-y: hidden;
     gap: 6px;
     padding: 8px 10px;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-    position: sticky;
-    top: var(--topbar-h, 0px);
-    z-index: 25;
-    background: #1c2b22;
+    padding-right: 28px;
+    flex: 0 0 auto;
+    background: transparent;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
   }
@@ -210,6 +221,48 @@ a { color: var(--gold); }
     text-align: center;
     white-space: nowrap;
   }
+  .sidenav-edge {
+    display: none;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 32px;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .sidenav-edge-start {
+    left: 0;
+    background: linear-gradient(90deg, #1c2b22 10%, transparent);
+  }
+  .sidenav-edge-start::after,
+  .sidenav-edge-end::after {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--gold);
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+    font-family: inherit;
+  }
+  .sidenav-edge-start::after { content: "‹"; left: 4px; }
+  .sidenav-edge-end {
+    right: 0;
+    background: linear-gradient(270deg, #1c2b22 15%, transparent);
+  }
+  .sidenav-edge-end::after { content: "›"; right: 6px; }
+  .sidenav-wrap.is-overflow:not(.at-start) .sidenav-edge-start { display: block; }
+  .sidenav-wrap.is-overflow:not(.at-end) .sidenav-edge-end { display: block; }
+  .sidenav-hint {
+    display: none;
+    margin: 0;
+    padding: 0 10px 6px;
+    font-size: 12px;
+    color: var(--gold);
+    letter-spacing: 0.04em;
+    pointer-events: none;
+  }
+  .sidenav-wrap.is-overflow:not(.hint-off) .sidenav-hint { display: block; }
   .view {
     overflow: visible;
     flex: 1 0 auto;
@@ -242,4 +295,46 @@ a { color: var(--gold); }
   .classroom-layout { grid-template-columns: 1fr; }
   #classroom { max-width: 100%; }
   .desk-panel { min-width: 0; }
+}
+
+@media (max-width: 600px) {
+  .agenda-sched { margin: 0 0 8px; }
+  .agenda-sched > summary {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 44px;
+    padding: 6px 10px;
+    margin: 0 -4px 0;
+    cursor: pointer;
+    user-select: none;
+    color: var(--gold);
+    font-size: 16px;
+    font-weight: 700;
+    background: rgba(243,239,224,0.06);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+  }
+  .agenda-sched > summary::-webkit-details-marker { display: none; }
+  .agenda-sched > summary::after {
+    content: "展开";
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--chalk-dim);
+  }
+  .agenda-sched[open] > summary::after { content: "收起"; }
+  .agenda-sched > summary .agenda-now {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--chalk-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .agenda-sched[open] > :not(summary) { margin-top: 10px; }
 }
