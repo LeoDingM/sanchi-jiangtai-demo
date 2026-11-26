@@ -1,2 +1,2 @@
-import { boot } from "./ui/app.js?v=t64u1";
+import { boot } from "./ui/app.js?v=t65u1";
 boot();

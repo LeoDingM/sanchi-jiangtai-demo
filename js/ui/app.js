@@ -51,32 +51,36 @@ import {
   isOpeningDayPlayDate, openingPlayDate, openingEventForPlayDate,
   isFallOpeningEvent, openingEventKindName,
   FALL_OPENING_ACTIONS, SPRING_OPENING_ACTIONS, OPENING_DAY_SOURCE_NOTE,
-} from "../domain/simulation.js?v=t64u1";
-import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t64u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t64u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t64u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t64u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t64u1";
-import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t64u1";
-import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t64u1";
-import { hydrateReport } from "../domain/simulation.js?v=t64u1";
-import { renderSeating } from "./classroom.js?v=t64u1";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t64u1";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t64u1";
-import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t64u1";
-import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t64u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t64u1";
-import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t64u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t64u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t64u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t64u1";
+  handleStudyHall, composeStudyHallBrief, studyHallOptionsFor,
+  isStudyHallOpen, isStudyHallWindow, studyHallUnavailableReason,
+  ensureStudyHallState, hasStudyHallThisSlot, latestStudyHallThisSlot,
+  STUDY_HALL_ACTIONS, STUDY_HALL_SOURCE_NOTE,
+} from "../domain/simulation.js?v=t65u1";
+import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t65u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t65u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t65u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t65u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t65u1";
+import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t65u1";
+import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t65u1";
+import { hydrateReport } from "../domain/simulation.js?v=t65u1";
+import { renderSeating } from "./classroom.js?v=t65u1";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t65u1";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t65u1";
+import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t65u1";
+import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t65u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t65u1";
+import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t65u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t65u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t65u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t65u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
   parseAiCommentary, emptyAiCommentary,
-} from "../domain/examAi.js?v=t64u1";
+} from "../domain/examAi.js?v=t65u1";
 
 let state = null;
 let view = "classroom";
@@ -993,6 +997,7 @@ function viewClassroom(host) {
   else if (isSchoolActivityOpen(state) || slot?.isActivityPeriod) slotLine += `（今日学校活动「${state.schoolActivity?.name || slot?.eventName || ""}」，可带队、看班或写记录；日期为校内安排）`;
   else if (isCalendarExamDay(state.date)) slotLine += `（今日${examEventOn(state.date)?.name || "考试"}，全日停课，按宁川中学校内考务安排监考）`;
   else if (slot?.isExamDay) slotLine += "（今日停课）";
+  else if (isStudyHallWindow(state) || (slot && slot.subject === "自习" && !slot.isMath && !slot.isTutoring && !slot.isActivityPeriod)) slotLine += isStudyHallOpen(state) ? "。现在是自习，可以进本班教室看班" : "。现在是自习，这节已经看过班了";
   else if (isOpeningDayPlayDate(state.date)) slotLine += `（今日是宁川中学校内${openingEventKindName(openingEventForPlayDate(state.date)) || "开学安排"}，可在办公室坐班或日常教学里参加；不是全日停课活动，数学正课仍可上）`;
   else if (slot && !slot.isMath && slot.kind !== "break" && slot.id !== "rest") slotLine += "。这节不是数学课，谈话请到走廊门口简短说";
   if (nxtT && !slot?.isTutoring) slotLine += `。下一节可答疑：${nxtT.sameDay ? "" : nxtT.date + " "}${formatSlotLabel(nxtT.slot)}`;
@@ -1006,6 +1011,7 @@ function viewClassroom(host) {
     ${teachersDayPanelHtml({ place: "classroom" })}
     ${isOpenClassDay(state.date) ? openClassPanelHtml() : ""}
     ${proctorPanelHtml()}
+    ${studyHallPanelHtml()}
     <div class="classroom-layout">
       <canvas id="classroom"></canvas>
       <div class="desk-panel paper">${deskPanelHtml(sel, slot, scene)}</div>
@@ -1021,6 +1027,7 @@ function viewClassroom(host) {
   bindParentActions(host);
   bindActivityActions(host);
   bindProctorActions(host);
+  bindStudyHallActions(host);
 }
 
 function viewRoster(host) {
@@ -1153,6 +1160,7 @@ function viewProfile(host) {
         ${(s.termComments || []).length ? `<p><b>数学学期评语记录</b></p>${(s.termComments||[]).map((r)=>`<p class="muted">${r.date}　${r.examName || "期中/期末"}　${r.tone === "encourage" ? "鼓励" : r.tone === "remind" ? "提醒" : "如实"}　${r.text}</p>`).join("")}` : (s.lastTermComment ? `<p><b>数学学期评语记录</b></p><p class="muted">${s.lastTermComment.date}　${s.lastTermComment.examName || ""}　${s.lastTermComment.text}</p>` : "")}
         ${(s.teachersDayNotes || []).length ? `<p><b>教师节记录</b></p>${(s.teachersDayNotes||[]).map((r)=>`<p class="muted">${r.date}　${r.gift === "flower" ? "花" : "贺卡"}　${r.reply === "encourage" ? "鼓励" : r.reply === "remind" ? "提醒认真听课" : "致谢"}　${r.text}</p>`).join("")}` : (s.lastTeachersDay ? `<p><b>教师节记录</b></p><p class="muted">${s.lastTeachersDay.date}　${s.lastTeachersDay.text}</p>` : "")}
         ${(s.activityNotes || []).length ? `<p><b>学校活动</b></p>${(s.activityNotes||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : ""}
+        ${(s.studyHallNotes || []).length ? `<p><b>自习看班</b></p>${(s.studyHallNotes||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : (s.lastStudyHall ? `<p><b>自习看班</b></p><p class="muted">${s.lastStudyHall.date}　${s.lastStudyHall.text}</p>` : "")}
         <p class="muted">学科能力（潜能为个人上限，不是当场分数；括号里是距上限的余地，不是又一张分数表）</p>
         <p>${ab || "—"}</p>
       </div>
@@ -1905,6 +1913,49 @@ function bindOpeningDayActions(host) {
   });
 }
 
+
+function studyHallPanelHtml() {
+  if (!state) return "";
+  if (!isStudyHallWindow(state)) return "";
+  ensureStudyHallState(state);
+  const rec = state.studyHall || {};
+  const done = hasStudyHallThisSlot(state);
+  if (!isStudyHallOpen(state) && !done) {
+    return `<div class="paper visit-panel study-hall-panel" data-study-hall-panel="1">
+      <h3>自习看班</h3>
+      <p class="muted">${studyHallUnavailableReason(state)} ${STUDY_HALL_SOURCE_NOTE}</p>
+    </div>`;
+  }
+  if (done) {
+    const minutes = rec.lastMinutes?.minutes || latestStudyHallThisSlot(state)?.minutes || (state.studyHalls || [])[0]?.minutes || "";
+    return `<div class="paper visit-panel study-hall-panel" data-study-hall-panel="1">
+      <h3>自习看班</h3>
+      <p class="muted">这节自习已经看过班了。下面是纪要，也可在学校日志和相关学生档案近况里查阅。同一节只能看班一次。${STUDY_HALL_SOURCE_NOTE}</p>
+      <p>${minutes}</p>
+    </div>`;
+  }
+  const brief = composeStudyHallBrief(state);
+  const options = studyHallOptionsFor(state);
+  const btns = (options.length ? options : STUDY_HALL_ACTIONS).map((o) => `<button type="button" data-study-hall="${o.id}">${o.label}</button>`).join("");
+  return `<div class="paper visit-panel study-hall-panel" data-study-hall-panel="1">
+      <h3>自习看班</h3>
+      <p class="muted">现在是课表里的自习，可以进卓行16班教室看班：巡视纪律、答一道作业问询，或记下交头接耳、走神的人。你以任课数学老师身份进教室，不是班主任，也不能主持班会。这不是学校活动停课，也不改成数学晚自习答疑。${STUDY_HALL_SOURCE_NOTE}</p>
+      <p>${brief?.shortPoints || "进本班教室看这一节自习。"}</p>
+      <div class="row-actions">${btns}</div>
+    </div>`;
+}
+
+function bindStudyHallActions(host) {
+  host.querySelectorAll("[data-study-hall]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const r = handleStudyHall(state, b.dataset.studyHall);
+      toast(r.ok ? r.text : r.reason);
+      persist(); render();
+    };
+  });
+}
+
 function officeCollabHtml() {
 
   const watch = homeworkWatchlist(state.homework, state);
@@ -2116,7 +2167,7 @@ function viewTeach(host) {
   const nxt = upcomingMath(state, { skipTaught: true });
   const examBit = isCalendarExamDay(state.date)
     ? `，今日${examEventOn(state.date)?.name || "考试"}全日停课，按宁川中学校内考务安排监考，不能上课、不能调课`
-    : (isOpenClassPeriod(state) ? "，本节是校内公开课，备课组长等组内老师来听，按平时规则上课即可" : slot?.isTutoring ? "，可以做晚自习答疑" : slot?.isMath ? "，可以进教室上课" : isOpeningDayPlayDate(state.date) ? `。今日是宁川中学校内${openingEventKindName(openingEventForPlayDate(state.date)) || "开学安排"}，可在办公室坐班参加；不是全日停课活动，等到数学课再进教室，或先在办公室处理作业` : "。等到数学课再进教室，或先在办公室处理作业、在座位上谈话");
+    : (isOpenClassPeriod(state) ? "，本节是校内公开课，备课组长等组内老师来听，按平时规则上课即可" : slot?.isTutoring ? "，可以做晚自习答疑" : slot?.isMath ? "，可以进教室上课" : isStudyHallWindow(state) ? (isStudyHallOpen(state) ? "。现在是自习，可以进本班教室看班，不是学校活动停课" : "。现在是自习，这节已经看过班了") : isOpeningDayPlayDate(state.date) ? `。今日是宁川中学校内${openingEventKindName(openingEventForPlayDate(state.date)) || "开学安排"}，可在办公室坐班参加；不是全日停课活动，等到数学课再进教室，或先在办公室处理作业` : "。等到数学课再进教室，或先在办公室处理作业、在座位上谈话");
   host.innerHTML = `<h3>日常教学 · 数学课</h3>
     <p class="notice">现在是${slot ? formatSlotLabel(slot) : formatDateCn(state.date)}${examBit}。${!isCalendarExamDay(state.date) && nxt && !slot?.isMath && !slot?.isTutoring ? `下一节数学：${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}。` : ""}先写教案，再上课；晚自习另做答疑，不另开课题。课后从缺交、错题跟到订正和复查。</p>
     ${openClassPanelHtml()}
@@ -2151,6 +2202,7 @@ function viewTeach(host) {
     </div>
     ${parentsMeetingHtml()}
     ${schoolActivityHtml()}
+    ${studyHallPanelHtml()}
     ${eveningTutorHtml()}
     ${officeCollabHtml()}
     ${doorVisitPanelHtml()}
@@ -2193,6 +2245,7 @@ function viewTeach(host) {
   bindParentActions(host);
   bindActivityActions(host);
   bindDeskAndTutor(host);
+  bindStudyHallActions(host);
   host.querySelectorAll("tr[data-id]").forEach((tr) => {
     tr.onclick = () => { selectedId = tr.dataset.id; view = "profile"; render(); };
   });
@@ -3027,11 +3080,14 @@ function viewLog(host) {
   const qualityMinutes = (state.qualityMeetings || []).map((m) => `<div class="log-item"><b>${m.date}</b> ${m.examName || "质量分析会"}　${m.minutes}</div>`);
   const groupMinutes = (state.groupPreps || []).map((m) => `<div class="log-item"><b>${m.date}</b> 集体备课${m.topic ? "「" + m.topic + "」" : ""}　${m.minutes}</div>`);
   const openingMinutes = (state.openingDays || []).map((m) => `<div class="log-item"><b>${m.date}</b> ${m.kindName || "开学安排"}　${m.minutes}</div>`);
+  const studyHallMinutes = (state.studyHalls || []).map((m) => `<div class="log-item"><b>${m.date}</b> 自习看班${m.slotLabel ? "「" + m.slotLabel + "」" : ""}　${m.minutes}</div>`);
   const minutes = qualityMinutes.concat(groupMinutes).join("");
   const openingBlock = openingMinutes.join("");
+  const studyHallBlock = studyHallMinutes.join("");
   host.innerHTML = `<h3>近期校历</h3>${cal || "<p class=\"muted\">暂无后续安排</p>"}
     ${minutes ? `<h3>备课组会议纪要</h3>${minutes}` : ""}
     ${openingBlock ? `<h3>开学纪要</h3>${openingBlock}` : ""}
+    ${studyHallBlock ? `<h3>自习看班纪要</h3>${studyHallBlock}` : ""}
     <h3>日志</h3>${(state.log||[]).slice(0,40).map((l)=>`<div class="log-item"><b>${l.date}</b> ${l.text}</div>`).join("")}`;
 }
 

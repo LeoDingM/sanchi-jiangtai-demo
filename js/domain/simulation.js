@@ -1,38 +1,38 @@
 /** 游戏状态机：上课/考试/分班/高考录取/毕业升学与自动跳阶段。 */
 import {
   PLAYER_CLASS_NO, PLAYER_DEFAULT_NAME, PLAYER_ROLE, START_DATE, GRADE_YEAR, HOMEROOM_NAME, MENTOR_NAME,
-} from "./config.js?v=t64u1";
-import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById, examParams, formatGradeTerm, formatCohortGrade, termOf } from "./calendar.js?v=t64u1";
-import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf, eraQuality, placeGraduatingRepeaters, applyRepeaterSeating } from "./school.js?v=t64u1";
-import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js?v=t64u1";
-import { runExam } from "./examService.js?v=t64u1";
-import { provincialPassCounts, schoolQuotaFromPrior, fallbackSchoolQuota, examResultLogText } from "./schoolLines.js?v=t64u1";
-import { admitCohort, packLastAdmission } from "./admission.js?v=t64u1";
-import { packLastGaokao } from "./scores.js?v=t64u1";
-import { rngFrom, clamp } from "./prng.js?v=t64u1";
-import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands, homeroomEveningRoll as homeroomEveningRollCore, compileEveningRoll, studentRecentStatus, rollCallStatusLine, classLatecomers, wrongClassroomThisPeriod } from "./teaching.js?v=t64u1";
-import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, upcomingTutoring, formatSlotLabel, isTutoringSlot, weekMathCount, weekSchedule, weekStart } from "./timetable.js?v=t64u1";
-import { swapPeriods as swapPeriodsCore, borrowIn as borrowInCore, borrowOut as borrowOutCore, respondTimetableRequest as respondTimetableRequestCore, ensureIncomingRequest, pendingTimetableRequest, weekBorrowCounts, weekTiaokeSummary, canAlterSlot, shortSlotLabel, teacherOf, ensureTiaokeState } from "./tiaoke.js?v=t64u1";
-import { openParentsMeeting as openParentsMeetingCore, meetParent as meetParentCore, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE } from "./parents.js?v=t64u1";
-import { openSchoolActivity as openSchoolActivityCore, doActivityAction as doActivityActionCore, isSchoolActivityOpen, upcomingSchoolActivity, ACTIVITY_SOURCE_NOTE, playerStageLine } from "./activities.js?v=t64u1";
-import { classCommittee, dutyStudents, weekDuty, classBrief, isHomeroomMeetingSlot, attendClassMeeting as attendClassMeetingCore, hostClassMeeting as hostClassMeetingCore, committeeTitleOf, upcomingClassMeeting, formatStudentShort, DUTY_PER_DAY, COMMITTEE_ROLES } from "./classManage.js?v=t64u1";
-import { ensureStatePeers, ensureCohortPeers, classPeersOf } from "./peers.js?v=t64u1";
-import { syncStateHealth, classAbsences, isAwayFromClass, absenceLogLine } from "./health.js?v=t64u1";
-import { ensureVisits as ensureVisitsCore, handleVisit as handleVisitCore, visitArriveLine, visitsForSlot, isVisitWindow, planDayVisits, planDayVisitPeriods, currentVisitItems, visitPlaceLabel } from "./visits.js?v=t64u1";
+} from "./config.js?v=t65u1";
+import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById, examParams, formatGradeTerm, formatCohortGrade, termOf } from "./calendar.js?v=t65u1";
+import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf, eraQuality, placeGraduatingRepeaters, applyRepeaterSeating } from "./school.js?v=t65u1";
+import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js?v=t65u1";
+import { runExam } from "./examService.js?v=t65u1";
+import { provincialPassCounts, schoolQuotaFromPrior, fallbackSchoolQuota, examResultLogText } from "./schoolLines.js?v=t65u1";
+import { admitCohort, packLastAdmission } from "./admission.js?v=t65u1";
+import { packLastGaokao } from "./scores.js?v=t65u1";
+import { rngFrom, clamp } from "./prng.js?v=t65u1";
+import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands, homeroomEveningRoll as homeroomEveningRollCore, compileEveningRoll, studentRecentStatus, rollCallStatusLine, classLatecomers, wrongClassroomThisPeriod } from "./teaching.js?v=t65u1";
+import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, upcomingTutoring, formatSlotLabel, isTutoringSlot, weekMathCount, weekSchedule, weekStart } from "./timetable.js?v=t65u1";
+import { swapPeriods as swapPeriodsCore, borrowIn as borrowInCore, borrowOut as borrowOutCore, respondTimetableRequest as respondTimetableRequestCore, ensureIncomingRequest, pendingTimetableRequest, weekBorrowCounts, weekTiaokeSummary, canAlterSlot, shortSlotLabel, teacherOf, ensureTiaokeState } from "./tiaoke.js?v=t65u1";
+import { openParentsMeeting as openParentsMeetingCore, meetParent as meetParentCore, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE } from "./parents.js?v=t65u1";
+import { openSchoolActivity as openSchoolActivityCore, doActivityAction as doActivityActionCore, isSchoolActivityOpen, upcomingSchoolActivity, ACTIVITY_SOURCE_NOTE, playerStageLine } from "./activities.js?v=t65u1";
+import { classCommittee, dutyStudents, weekDuty, classBrief, isHomeroomMeetingSlot, attendClassMeeting as attendClassMeetingCore, hostClassMeeting as hostClassMeetingCore, committeeTitleOf, upcomingClassMeeting, formatStudentShort, DUTY_PER_DAY, COMMITTEE_ROLES } from "./classManage.js?v=t65u1";
+import { ensureStatePeers, ensureCohortPeers, classPeersOf } from "./peers.js?v=t65u1";
+import { syncStateHealth, classAbsences, isAwayFromClass, absenceLogLine } from "./health.js?v=t65u1";
+import { ensureVisits as ensureVisitsCore, handleVisit as handleVisitCore, visitArriveLine, visitsForSlot, isVisitWindow, planDayVisits, planDayVisitPeriods, currentVisitItems, visitPlaceLabel } from "./visits.js?v=t65u1";
 import {
   handlePhoneVisit as handlePhoneVisitCore, handleDoorVisit as handleDoorVisitCore,
   suggestPhoneVisits, suggestDoorVisits, isPhoneVisitOpen, isDoorVisitOpen,
   phoneVisitUnavailableReason, doorVisitUnavailableReason, ensureHomeVisitState,
   PHONE_DAY_CAP, PHONE_TERM_CAP, DOOR_DAY_CAP, DOOR_TERM_CAP,
   PHONE_ACTIONS, DOOR_ACTIONS, parentCoopOf, termVisitKey,
-} from "./homeVisit.js?v=t64u1";
+} from "./homeVisit.js?v=t65u1";
 import {
   observeLesson as observeLessonCore, isObserveOpen, observeUnavailableReason, observeChoices,
   ensureObserveState, mentorObserveHook, concludeOpenClass, upcomingOpenClass, upcomingOpenClasses,
   openClassForTerm, openClassOnDate, openClassSlotOn, isOpenClassDay, isOpenClassPeriod,
   latestOpenClassReview, openClassReviewFor, listOpenClasses, composeObserveNote,
   OBSERVE_DAY_CAP, OBSERVE_TERM_CAP, OPEN_CLASS_SOURCE_NOTE, MATH_COLLEAGUES, termObserveKey,
-} from "./observe.js?v=t64u1";
+} from "./observe.js?v=t65u1";
 import {
   doProctorAction as doProctorActionCore, markClassPapers as markClassPapersCore,
   isProctorOpen, proctorUnavailableReason, proctorChoices, proctorAssignment,
@@ -42,14 +42,14 @@ import {
   examAlreadyMarked, playerCohortReports, PROCTOR_SESSION_CAP, MARK_DAY_CAP,
   MARK_PAPERS_MIN, MARK_PAPERS_MAX, PROCTOR_ACTIONS, PROCTOR_SOURCE_NOTE,
   GRADEABLE_EXAM_KINDS, NON_SCHOOL_MARK_KINDS, PROCTOR_EXAM_KINDS,
-} from "./proctor.js?v=t64u1";
+} from "./proctor.js?v=t65u1";
 import {
   handleCoaching as handleCoachingCore, suggestRemedial, suggestEnrichment, suggestCoaching,
   isCoachingOpen, isCoachingWindow, coachingUnavailableReason, ensureCoachingState,
   isCoachingTimeSlot, kindLabel, termCoachKey,
   COACH_DAY_CAP, COACH_TERM_CAP, COACH_SESSION_MIN, COACH_SESSION_MAX,
   COACH_ACTIONS, COACH_SOURCE_NOTE,
-} from "./coaching.js?v=t64u1";
+} from "./coaching.js?v=t65u1";
 import {
   handleTermComment as handleTermCommentCore, suggestTermComments, composeTermComment,
   commentOptionsFor, isCommentOpen, isCommentWindow, commentUnavailableReason,
@@ -57,7 +57,7 @@ import {
   commentPublishDate, commentWindowEnd, isCommentTimeSlot, examCommentKey,
   COMMENT_DAY_CAP, COMMENT_BATCH_MIN, COMMENT_BATCH_MAX, COMMENT_TONES, COMMENT_SOURCE_NOTE,
   COMMENT_EXAM_KINDS, isCommentExamKind,
-} from "./comments.js?v=t64u1";
+} from "./comments.js?v=t65u1";
 import {
   handleTeachersDayCard as handleTeachersDayCardCore,
   handleTeachersDayColleague as handleTeachersDayColleagueCore,
@@ -69,7 +69,7 @@ import {
   isTeachersDayBlockedDate,
   TEACHERS_DAY_CARD_MIN, TEACHERS_DAY_CARD_MAX, TEACHERS_DAY_CARD_CAP,
   TEACHERS_DAY_SOURCE_NOTE, CARD_REPLIES, COLLEAGUE_ACTIONS,
-} from "./teachersDay.js?v=t64u1";
+} from "./teachersDay.js?v=t65u1";
 import {
   handleQualityMeet as handleQualityMeetCore, composeQualityMeetBrief, qualityMeetOptionsFor,
   composeQualityMeetMinutes, isQualityMeetOpen, isQualityMeetWindow, qualityMeetUnavailableReason,
@@ -78,7 +78,7 @@ import {
   isQualityMeetExamKind, typicalErrorTopics, qualityMeetColleagues,
   QUALITY_MEET_ACTIONS, QUALITY_MEET_SOURCE_NOTE, QUALITY_MEET_EXAM_KINDS,
   QUALITY_MEET_COLLEAGUES, latestQualityMeetMinutes,
-} from "./qualityMeet.js?v=t64u1";
+} from "./qualityMeet.js?v=t65u1";
 import {
   handleGroupPrep as handleGroupPrepCore, composeGroupPrepBrief, groupPrepOptionsFor,
   composeGroupPrepMinutes, isGroupPrepOpen, isGroupPrepWindow, groupPrepUnavailableReason,
@@ -87,7 +87,7 @@ import {
   groupPrepColleagues, groupPrepAlignNote, applyGroupPrepAlign,
   GROUP_PREP_ACTIONS, GROUP_PREP_SOURCE_NOTE, GROUP_PREP_COLLEAGUES,
   GROUP_PREP_WEEK_CAP, GROUP_PREP_TERM_CAP,
-} from "./groupPrep.js?v=t64u1";
+} from "./groupPrep.js?v=t65u1";
 import {
   handleOpeningDay as handleOpeningDayCore, composeOpeningDayBrief, openingDayOptionsFor,
   composeOpeningDayMinutes, isOpeningDayOpen, isOpeningDayWindow, openingDayUnavailableReason,
@@ -96,9 +96,16 @@ import {
   openingEventForPlayDate, openingEventAround, isFallOpeningEvent, isSpringOpeningEvent,
   openingEventKind, openingEventKindName,
   FALL_OPENING_ACTIONS, SPRING_OPENING_ACTIONS, OPENING_DAY_SOURCE_NOTE,
-} from "./openingDay.js?v=t64u1";
-import { OFFICIAL_ROLE, OFFICIAL_LOG_TEXT } from "./career.js?v=t64u1";
-import { talkMathRoomBit, hasLargeRoom } from "./potential.js?v=t64u1";
+} from "./openingDay.js?v=t65u1";
+import {
+  handleStudyHall as handleStudyHallCore, composeStudyHallBrief, studyHallOptionsFor,
+  composeStudyHallMinutes, isStudyHallOpen, isStudyHallWindow, studyHallUnavailableReason,
+  ensureStudyHallState, hasStudyHallThisSlot, latestStudyHallThisSlot, latestStudyHallMinutes,
+  isStudyHallTimeSlot, isStudyHallSubject, studyHallSlotKey,
+  STUDY_HALL_ACTIONS, STUDY_HALL_SOURCE_NOTE,
+} from "./studyHall.js?v=t65u1";
+import { OFFICIAL_ROLE, OFFICIAL_LOG_TEXT } from "./career.js?v=t65u1";
+import { talkMathRoomBit, hasLargeRoom } from "./potential.js?v=t65u1";
 
 export const SAVE_VERSION = 1;
 
@@ -1164,6 +1171,13 @@ export function handleOpeningDay(state, actionId) {
   return r;
 }
 
+export function handleStudyHall(state, actionId) {
+  syncStateHealth(state);
+  const r = handleStudyHallCore(state, actionId);
+  if (r.ok) addLog(state, r.text);
+  return r;
+}
+
 export { ensureVisitsCore as ensureVisits, visitsForSlot, isVisitWindow, planDayVisits, planDayVisitPeriods, currentVisitItems, visitArriveLine, visitPlaceLabel };
 
 export {
@@ -1245,6 +1259,14 @@ export {
   openingEventForPlayDate, openingEventAround, isFallOpeningEvent, isSpringOpeningEvent,
   openingEventKind, openingEventKindName,
   FALL_OPENING_ACTIONS, SPRING_OPENING_ACTIONS, OPENING_DAY_SOURCE_NOTE,
+};
+
+export {
+  composeStudyHallBrief, studyHallOptionsFor, composeStudyHallMinutes,
+  isStudyHallOpen, isStudyHallWindow, studyHallUnavailableReason,
+  ensureStudyHallState, hasStudyHallThisSlot, latestStudyHallThisSlot, latestStudyHallMinutes,
+  isStudyHallTimeSlot, isStudyHallSubject, studyHallSlotKey,
+  STUDY_HALL_ACTIONS, STUDY_HALL_SOURCE_NOTE,
 };
 
 
