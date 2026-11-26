@@ -5,7 +5,7 @@
  */
 import { FIRST_PLACEMENT_TARGETS, CLASS_BLUEPRINT } from "./config.js";
 import { compareScoreRows } from "./scores.js";
-import { rngFrom, shuffle } from "./prng.js";
+import { hash01, rngFrom, shuffle } from "./prng.js";
 
 export function firstPlacement(students, scoreMap, { overrides = {}, seed = 1 } = {}) {
   const movable = [];
@@ -54,8 +54,14 @@ export function firstPlacement(students, scoreMap, { overrides = {}, seed = 1 } 
   const wenFromKey = movable.filter((r) => (r.student.originClassNo ?? r.student.classNo) >= 2 && (r.student.originClassNo ?? r.student.classNo) <= 4 && r.track === "wen");
   const rest = movable.filter((r) => !wenFromKey.includes(r));
   const byTrack = { li: rest.filter((r) => r.track === "li"), wen: [...wenFromKey, ...rest.filter((r) => r.track === "wen")] };
-  byTrack.li.sort(compareScoreRows);
-  byTrack.wen.sort(compareScoreRows);
+  // 可流动队列不按期末绝对分卡死：加入种子扰动，模拟名额与班级稳定，
+  // 让卓行/笃学交界有交叉，底部班仍能留下一定前部学生。
+  const jittered = (list) => list.map((r) => {
+    const j = (hash01(seed, r.studentId, "place1") - 0.5) * 36;
+    return { ...r, total: r.total + j, _raw: r.total };
+  }).sort(compareScoreRows);
+  byTrack.li = jittered(byTrack.li);
+  byTrack.wen = jittered(byTrack.wen);
 
   const liTargets = FIRST_PLACEMENT_TARGETS.li.filter((t) => !t.locked);
   const wenTargets = FIRST_PLACEMENT_TARGETS.wen.filter((t) => !t.locked);

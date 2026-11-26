@@ -52,11 +52,11 @@ export function scaleOf(grade, examKind) {
 /** 能力 → 期望得分率（难度=1、发挥=0）。按 750 分高考画像标定后再用于各卷满分。 */
 export function expectedPct(ability) {
   const a = clamp(ability, 0, 100);
-  // 锚点按 750 分制：44→456，56→492，68→531，78→561，86→590，94→655，99→685。
+  // 锚点按 750 分制：44→456，56→492，68→525，78→555，86→588，96→649，99→687。
   const pts = [
     [0, 0.22], [30, 0.50], [44, 0.608], [56, 0.656],
-    [68, 0.708], [78, 0.748], [86, 0.787], [92, 0.822],
-    [96, 0.858], [99, 0.888], [100, 0.905],
+    [68, 0.700], [78, 0.740], [86, 0.784], [92, 0.822],
+    [96, 0.865], [98, 0.895], [99, 0.916], [100, 0.930],
   ];
   for (let i = 1; i < pts.length; i++) {
     if (a <= pts[i][0]) {
@@ -115,10 +115,17 @@ export function gradeStudent(student, exam, scale, teachingBonus = 0) {
   for (const sub of subjects) {
     const teach = sub.id === "math" ? teachingBonus : 0;
     const subForm = bundle.form + (hash01(student.id, exam.id, sub.id, "sform") - 0.5) * 0.008;
+    const years = Math.max(0, (exam.growthYears ?? exam.grade ?? 1) - 1);
+    const rawA = student.ability[sub.id] ?? student.ability.math;
+    const rawP = student.potential[sub.id] ?? student.potential.math;
+    const room = Math.max(0, rawP - rawA);
+    // 低分段进步空间大，顶尖接近潜力则几乎不涨，避免高三把清北人数抬爆。
+    const gScale = rawA >= 84 ? 0.12 : rawA >= 74 ? 0.35 : rawA >= 62 ? 0.7 : 1.15;
+    const grown = rawA + years * Math.min(5.2, room * 0.28) * gScale;
     const v = scoreSubject({
       max: sub.max,
-      ability: student.ability[sub.id] ?? student.ability.math,
-      potential: student.potential[sub.id] ?? student.potential.math,
+      ability: grown,
+      potential: rawP,
       teaching: teach,
       difficulty,
       dispersion,
@@ -133,6 +140,11 @@ export function gradeStudent(student, exam, scale, teachingBonus = 0) {
     throw new Error("高一试卷不应出现生物");
   }
   const maxTotal = subjects.reduce((s, x) => s + x.max, 0);
+  // 2020 江西文科 650 分以上全省仅约 12 人，644 分约全省第 24 名。
+  // 对文科总分高尾做压缩，避免一个文科实验班出现多名清北。
+  if ((scale === SCALE_GAOKAO || scale === SCALE_G3 || scale === SCALE_G2) && track === "wen" && total > 615) {
+    total = Math.round(618 + (total - 618) * 0.36);
+  }
   return { ...scores, total, maxTotal, scale, subjects: subjects.map((s) => s.id) };
 }
 

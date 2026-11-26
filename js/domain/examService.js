@@ -16,7 +16,7 @@ export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0
   const rows = [];
   for (const s of cohort.students) {
     const bonus = teachingBonusFor(s);
-    const sc = gradeStudent(s, exam, scale, bonus);
+    const sc = gradeStudent(s, { ...exam, grade }, scale, bonus);
     rows.push(attachStudentMeta(sc, s));
   }
   const regular = rows.filter((r) => !r.repeat);

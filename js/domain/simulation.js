@@ -365,8 +365,10 @@ export function skipToGaokaoOf(state, entryYear) {
 }
 
 export function skipToNextCohort(state) {
-  const before = state.player.cohortYear;
-  return skipUntil(state, (s) => s.flags[`promoted-${s.schoolYear}`] && s.cohorts[s.schoolYear] && s.schoolYear > before, 40);
+  // 以学年推进为准，而不是“已经升过某届”的旧标记。
+  // 否则高考录取日 schoolYear 仍是上一学年、promoted 标记早已为真，会立刻停住。
+  const beforeSchoolYear = state.schoolYear;
+  return skipUntil(state, (s) => s.schoolYear > beforeSchoolYear && s.cohorts[s.schoolYear], 90);
 }
 
 export function advanceDay(state) {

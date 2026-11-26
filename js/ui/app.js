@@ -9,11 +9,14 @@ import { filterRows, sameTierCompare } from "../domain/examService.js";
 import { hydrateReport } from "../domain/simulation.js";
 import { renderSeating } from "./classroom.js";
 import { provincialLines } from "../domain/jiangxi.js";
+import { studentExamHistory, tierName, findStudentInState } from "../domain/studentHistory.js";
+import { drawScoreChart, drawRankChart } from "./charts.js";
 
 let state = null;
 let view = "classroom";
 let selectedId = null;
 let examPick = "";
+let subjectPick = "math";
 let toastTimer = 0;
 
 const $ = (s) => document.querySelector(s);
@@ -108,20 +111,86 @@ function viewRoster(host) {
   host.querySelectorAll("tr[data-id]").forEach((tr) => tr.onclick = () => { selectedId = tr.dataset.id; view = "profile"; render(); });
 }
 
+function fmtRank(rank, n) {
+  if (rank == null || n == null) return "—";
+  return `${rank}/${n}`;
+}
+
+function findStudent(id) {
+  return findStudentInState(state, id) || clsStudents().find((x) => x.id === id) || null;
+}
+
 function viewProfile(host) {
-  const s = clsStudents().find((x) => x.id === selectedId) || clsStudents()[0];
+  const roster = clsStudents();
+  const s = findStudent(selectedId) || roster[0];
   if (!s) { host.innerHTML = "<p>没有学生</p>"; return; }
   selectedId = s.id;
-  const ab = Object.entries(s.ability).map(([k, v]) => `${(subjectById(k)?.name)||k} ${v.toFixed(0)}`).join("　");
-  host.innerHTML = `<h3>${s.name} · 档案</h3>
+  const hist = studentExamHistory(state, s.id);
+  const latest = hist[hist.length - 1];
+  if (latest && !latest.subjects[subjectPick]) {
+    subjectPick = latest.subjectIds[0] || "math";
+  }
+  const ab = Object.entries(s.ability || {}).map(([k, v]) => `${(subjectById(k)?.name) || k} ${Number(v).toFixed(0)}`).join("　");
+  const inRoster = roster.some((x) => x.id === s.id);
+  const opts = roster.map((x) => `<option value="${x.id}" ${x.id === s.id ? "selected" : ""}>${x.seq ? x.seq + "号 " : ""}${x.name}</option>`).join("")
+    + (inRoster ? "" : `<option value="${s.id}" selected>${s.name}（其他班级）</option>`);
+  const subjIds = latest?.subjectIds || Object.keys(latest?.subjects || { math: 1 });
+  const subjBtns = subjIds.map((id) => {
+    const nm = (subjectById(id) || { name: id }).name;
+    return `<button type="button" class="${id === subjectPick ? "on" : ""}" data-subj="${id}">${nm}</button>`;
+  }).join("");
+  const tiersPresent = TIER_ORDER.filter((t) => hist.some((h) => h.cross[t]));
+  const examRows = hist.slice().reverse().map((h) => {
+    const crossCells = tiersPresent.map((t) => {
+      const c = h.cross[t];
+      return `<td>${c ? fmtRank(c.rank, c.n) : "—"}</td>`;
+    }).join("");
+    const schoolLabel = h.split ? `${h.track === "wen" ? "文" : "理"}科校排` : "校排";
+    return `<tr>
+      <td>${h.date}<br/><span class="muted">${h.examName}</span></td>
+      <td>${(h.difficulty || 1).toFixed(3)}</td>
+      <td>${h.total}<span class="muted">/${h.maxTotal}</span></td>
+      <td>${fmtRank(h.classRank, h.classN)}</td>
+      <td>${fmtRank(h.tierRank, h.tierN)}</td>
+      <td>${fmtRank(h.schoolRank, h.schoolN)}<br/><span class="muted">${schoolLabel}</span></td>
+      <td>${fmtRank(h.gradeRank, h.gradeN)}</td>
+      ${crossCells}
+      <td>${h.line || ""}</td>
+    </tr>`;
+  }).join("");
+  const subjRows = hist.slice().reverse().map((h) => {
+    const sub = h.subjects[subjectPick];
+    if (!sub) return "";
+    const crossCells = tiersPresent.map((t) => {
+      const c = sub.cross[t];
+      return `<td>${c ? fmtRank(c.rank, c.n) : "—"}</td>`;
+    }).join("");
+    return `<tr>
+      <td>${h.date}<br/><span class="muted">${h.examName}</span></td>
+      <td>${sub.score}<span class="muted">/${sub.max}</span></td>
+      <td>${fmtRank(sub.class.rank, sub.class.n)}</td>
+      <td>${fmtRank(sub.tier.rank, sub.tier.n)}</td>
+      <td>${fmtRank(sub.school.rank, sub.school.n)}</td>
+      <td>${fmtRank(sub.grade.rank, sub.grade.n)}</td>
+      ${crossCells}
+    </tr>`;
+  }).join("");
+  const crossHead = tiersPresent.map((t) => `<th>在${tierLabel(t)}相当于</th>`).join("");
+  const family = s.family ? `${s.family.type}。${s.family.note || ""}` : "—";
+  const trackLabel = s.trackPref === "wen" || s.track === "wen" ? "文科" : (s.trackPref === "li" || s.track === "li" ? "理科" : "—");
+
+  host.innerHTML = `<div class="profile-head">
+      <h3>${s.name} · 档案</h3>
+      <label class="notice">查看学生 <select id="stsel">${opts}</select></label>
+    </div>
     <div class="profile-grid">
       <div class="paper">
-        <p><b>学号</b> ${s.id}　<b>性别</b> ${s.gender==="F"?"女":"男"}　<b>性格</b> ${s.personality}</p>
-        <p><b>家庭</b> ${s.family.type}。${s.family.note}</p>
-        <p><b>文理意向</b> ${s.trackPref==="wen"?"文科":"理科"}　<b>专业倾向</b> ${s.majorPref||"—"}</p>
-        <p><b>心情</b> ${s.mood}　<b>压力</b> ${s.stress}　<b>精力</b> ${s.energy}　<b>师生关系</b> ${s.relation||0}</p>
+        <p><b>学号</b> ${s.id}　<b>性别</b> ${s.gender==="F"?"女":"男"}　<b>性格</b> ${s.personality || "—"}　<b>班级</b> ${tierLabel(s.tier)}${s.classNo ?? ""}班</p>
+        <p><b>家庭</b> ${family}</p>
+        <p><b>文理意向</b> ${trackLabel}　<b>专业倾向</b> ${s.majorPref||"—"}</p>
+        <p><b>心情</b> ${s.mood ?? "—"}　<b>压力</b> ${s.stress ?? "—"}　<b>精力</b> ${s.energy ?? "—"}　<b>师生关系</b> ${s.relation||0}</p>
         <p class="muted">学科能力（潜能为个人上限，不是当场分数）</p>
-        <p>${ab}</p>
+        <p>${ab || "—"}</p>
       </div>
       <div class="paper">
         <p>谈话（本时段最多 5 人次）</p>
@@ -130,11 +199,171 @@ function viewProfile(host) {
         </div>
         <div>${(s.talks||[]).slice(-6).reverse().map((t)=>`<p class="muted">${t.date}　${t.topic}：${t.text}</p>`).join("") || "<p class='muted'>还没有谈话记录。</p>"}</div>
       </div>
-    </div>`;
-  host.querySelectorAll("[data-talk]").forEach((b) => b.onclick = () => {
-    const r = talkTo(state, s.id, b.dataset.talk);
-    toast(r.ok ? r.text : r.reason);
-    persist(); render();
+    </div>
+    <h3>成绩与排名走势</h3>
+    <p class="notice">下列曲线和表格均由该生各次实考总分、单科分在当次学生池中重算，不另造统计。高一为 950 分制，图中另给出折合 750 分，便于和高二、高三对照。名次越小越靠前；跨层次是把该生成绩放入其他层次（云岫实验、云岫重点、凌霄、卓行、笃学、艺体、复卓等）学生池后的名次。</p>
+    ${hist.length ? `
+    <div class="charts">
+      <div class="chart-card">
+        <h4>总分走势（折合 750 分）</h4>
+        <canvas id="ch-total"></canvas>
+      </div>
+      <div class="chart-card">
+        <h4>班排 / 同层次排 / 校排（名次在上为靠前）</h4>
+        <canvas id="ch-ranks"></canvas>
+      </div>
+      <div class="chart-card">
+        <h4>跨层次对比（名次百分位，越小越靠前）</h4>
+        <canvas id="ch-cross"></canvas>
+      </div>
+      ${latest ? `<div class="chart-card">
+        <h4>最近一场跨层次对照 · ${latest.date} ${latest.examName}（总分 ${latest.total}）</h4>
+        <canvas id="ch-crossbar"></canvas>
+      </div>` : ""}
+    </div>
+    <div class="scroll-table paper">
+      <table>
+        <thead><tr>
+          <th>考试</th><th>难度</th><th>总分</th><th>班排</th><th>同层次排</th><th>校排</th><th>全年级排</th>
+          ${crossHead}<th>上线</th>
+        </tr></thead>
+        <tbody>${examRows}</tbody>
+      </table>
+    </div>
+    <h3>单科分数与排名</h3>
+    <div class="subj-tabs">${subjBtns}</div>
+    <div class="charts">
+      <div class="chart-card">
+        <h4>${(subjectById(subjectPick)||{name:subjectPick}).name} 分数走势</h4>
+        <canvas id="ch-subj"></canvas>
+      </div>
+      <div class="chart-card">
+        <h4>${(subjectById(subjectPick)||{name:subjectPick}).name} 班排 / 层次排 / 校排</h4>
+        <canvas id="ch-subj-ranks"></canvas>
+      </div>
+      <div class="chart-card">
+        <h4>${(subjectById(subjectPick)||{name:subjectPick}).name} 跨层次名次百分位</h4>
+        <canvas id="ch-subj-cross"></canvas>
+      </div>
+    </div>
+    <div class="scroll-table paper">
+      <table>
+        <thead><tr>
+          <th>考试</th><th>分数</th><th>班排</th><th>同层次排</th><th>校排</th><th>全年级排</th>${crossHead}
+        </tr></thead>
+        <tbody>${subjRows}</tbody>
+      </table>
+    </div>
+    ` : `<p class="notice">还没有该生的考试记录。可用「下一阶段」跳到第一次月考后再回来看曲线。</p>`}`;
+
+  const sel = host.querySelector("#stsel");
+  if (sel) sel.onchange = () => { selectedId = sel.value; render(); };
+  host.querySelectorAll("[data-talk]").forEach((b) => {
+    b.onclick = () => {
+      const r = talkTo(state, s.id, b.dataset.talk);
+      toast(r.ok ? r.text : r.reason);
+      persist(); render();
+    };
+  });
+  host.querySelectorAll("[data-subj]").forEach((b) => {
+    b.onclick = () => { subjectPick = b.dataset.subj; render(); };
+  });
+  if (!hist.length) return;
+  const labels = hist.map((h) => h.date.slice(5) + " " + String(h.examName || "").replace(/考试|第|次/g, "").slice(0, 6));
+  const pct = (rank, n) => (n ? Math.round((rank / n) * 1000) / 10 : null);
+  requestAnimationFrame(() => {
+    const el = (id) => host.querySelector(id);
+    if (el("#ch-total")) {
+      drawLineChart(el("#ch-total"), {
+        labels,
+        yLabel: "折合分",
+        series: [
+          { name: "折合 750", values: hist.map((h) => h.scaled750), color: "#c45c4a" },
+          { name: "原始总分", values: hist.map((h) => h.total), color: "#8b5e3c" },
+        ],
+      });
+    }
+    if (el("#ch-ranks")) {
+      drawLineChart(el("#ch-ranks"), {
+        labels,
+        yInvert: true,
+        yMin: 1,
+        yMax: Math.max(8, ...hist.map((h) => Math.max(h.classN || 1, Math.min(h.tierN || 1, 200), Math.min(h.schoolN || 1, 400)))),
+        yLabel: "名次",
+        series: [
+          { name: "班排", values: hist.map((h) => h.classRank), color: "#c45c4a" },
+          { name: "同层次排", values: hist.map((h) => h.tierRank), color: "#3d6b5a" },
+          { name: "校排", values: hist.map((h) => h.schoolRank), color: "#3d5c6b" },
+        ],
+      });
+    }
+    if (el("#ch-cross")) {
+      const focus = ["yunxiu_exp", "yunxiu_key", "lingxiao", "zhuoxing", "duxue"].filter((t) => tiersPresent.includes(t));
+      drawLineChart(el("#ch-cross"), {
+        labels,
+        yInvert: true,
+        yMin: 0,
+        yMax: 100,
+        yLabel: "百分位",
+        series: focus.map((t, i) => ({
+          name: "在" + tierLabel(t),
+          values: hist.map((h) => h.cross[t] ? pct(h.cross[t].rank, h.cross[t].n) : null),
+          color: ["#c45c4a", "#8b5e3c", "#3d6b5a", "#3d5c6b", "#6b4a5d"][i],
+        })),
+      });
+    }
+    if (latest && el("#ch-crossbar")) {
+      const ts = tiersPresent.filter((t) => latest.cross[t]);
+      drawBarChart(el("#ch-crossbar"), {
+        labels: ts.map((t) => tierLabel(t)),
+        values: ts.map((t) => latest.cross[t].rank),
+        yLabel: "相当于第几名",
+      });
+    }
+    const subjName = (subjectById(subjectPick) || { name: subjectPick }).name;
+    if (el("#ch-subj")) {
+      drawLineChart(el("#ch-subj"), {
+        labels,
+        yLabel: "分数",
+        series: [{ name: subjName, values: hist.map((h) => h.subjects[subjectPick]?.score ?? null), color: "#c45c4a" }],
+      });
+    }
+    if (el("#ch-subj-ranks")) {
+      drawLineChart(el("#ch-subj-ranks"), {
+        labels,
+        yInvert: true,
+        yMin: 1,
+        yMax: Math.max(8, ...hist.map((h) => {
+          const sub = h.subjects[subjectPick];
+          if (!sub) return 8;
+          return Math.max(sub.class.n || 1, Math.min(sub.tier.n || 1, 200), Math.min(sub.school.n || 1, 400));
+        })),
+        yLabel: "名次",
+        series: [
+          { name: "班排", values: hist.map((h) => h.subjects[subjectPick]?.class.rank ?? null), color: "#c45c4a" },
+          { name: "同层次排", values: hist.map((h) => h.subjects[subjectPick]?.tier.rank ?? null), color: "#3d6b5a" },
+          { name: "校排", values: hist.map((h) => h.subjects[subjectPick]?.school.rank ?? null), color: "#3d5c6b" },
+        ],
+      });
+    }
+    if (el("#ch-subj-cross")) {
+      const focus = ["yunxiu_exp", "yunxiu_key", "lingxiao", "zhuoxing", "duxue"].filter((t) => tiersPresent.includes(t));
+      drawLineChart(el("#ch-subj-cross"), {
+        labels,
+        yInvert: true,
+        yMin: 0,
+        yMax: 100,
+        yLabel: "百分位",
+        series: focus.map((t, i) => ({
+          name: "在" + tierLabel(t),
+          values: hist.map((h) => {
+            const c = h.subjects[subjectPick]?.cross[t];
+            return c ? pct(c.rank, c.n) : null;
+          }),
+          color: ["#c45c4a", "#8b5e3c", "#3d6b5a", "#3d5c6b", "#6b4a5d"][i],
+        })),
+      });
+    }
   });
 }
 
@@ -233,8 +462,11 @@ function viewOffice(host) {
       <tbody>${classTable.map((c)=>`<tr><td>${c.name||c.classNo+"班"}</td><td>${c.tier}</td><td>${c.count}</td><td>${c.avg}</td><td>${c.max}</td><td>${c.firstCount}</td><td>${c.firstRate}%</td><td>${c.secondCount}</td></tr>`).join("")}</tbody></table></div>
       <h3>学生总分与单科（当前筛选 ${rows.length} 人）</h3>
       <div class="paper"><table><thead><tr><th>筛选名次</th><th>姓名</th><th>班级</th><th>总分</th><th>${subjects.slice(0,8).map(id=>(subjectById(id)||{name:id}).name).join("</th><th>")}</th><th>上线</th></tr></thead>
-      <tbody>${rows.slice(0,200).map((r)=>`<tr><td>${r.showRank}</td><td>${r.name}</td><td>${r.classNo}班</td><td>${r.total}</td>${subjects.slice(0,8).map(id=>`<td>${r[id]??""}</td>`).join("")}<td>${r.line||""}</td></tr>`).join("")}</tbody></table>
-      ${rows.length>200?"<p class='muted'>仅显示前 200 人，可用层次筛选缩小范围。</p>":""}</div>`;
+      <tbody>${rows.slice(0,200).map((r)=>`<tr data-id="${r.studentId}"><td>${r.showRank}</td><td>${r.name}</td><td>${r.classNo}班</td><td>${r.total}</td>${subjects.slice(0,8).map(id=>`<td>${r[id]??""}</td>`).join("")}<td>${r.line||""}</td></tr>`).join("")}</tbody></table>
+      ${rows.length>200?"<p class='muted'>仅显示前 200 人，可用层次筛选缩小范围。点击姓名可看该生档案曲线。</p>":""}</div>`;
+      body.querySelectorAll("tr[data-id]").forEach((tr) => {
+        tr.onclick = () => { selectedId = tr.dataset.id; view = "profile"; render(); };
+      });
   };
   host.querySelector("#tier").onchange = draw;
   host.querySelector("#track").onchange = draw;

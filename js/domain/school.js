@@ -72,6 +72,8 @@ export function makeStudent({ rng, usedNames, entryYear, classNo, seq, tier, hin
   let mean = tp.abilityMean + quality;
   // 笃学作为重点中学底部班，保留少量前部苗子，避免整层没有一本。
   if (tier === "duxue" && rng() < 0.13) mean += 10 + rng() * 8;
+  // 云岫实验班每班至多一两位特别突出的苗子，而不是全班拉满。
+  if (tier === "yunxiu_exp" && hint === "li" && seq <= 2 && rng() < 0.7) mean += 7 + rng() * 5;
   const { ability, potential, base } = paintAbilities(rng, mean, tp.abilitySd, hint);
   const trackPref = pickTrack(rng, hint, ability);
   const family = pick(rng, FAMILY_TYPES);
@@ -158,7 +160,7 @@ export function generateRepeaters(forSeniorEntryYear, seed, usedNames, quality =
       const st = makeStudent({
         rng, usedNames, entryYear: forSeniorEntryYear - 1,
         classNo, seq, tier: tierSrc, hint: p.hint, repeat: true,
-        quality: quality + 2.2,
+        quality: quality + 0.8,
       });
       st.track = p.track;
       st.tier = "fuzhuo";
