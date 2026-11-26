@@ -15,30 +15,30 @@ import {
   attendClassMeeting, hostClassMeeting, playerClassCommittee, playerClassBrief,
   playerDutyToday, playerWeekDuty, isHomeroomMeetingSlot, upcomingClassMeeting,
   committeeTitleOf, formatStudentShort,
-} from "../domain/simulation.js?v=t48u1";
-import { addDays } from "../domain/calendar.js?v=t48u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t48u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t48u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t48u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t48u1";
-import { rankRows } from "../domain/scores.js?v=t48u1";
-import { filterRows, sameTierCompare, classStandings, classCompareRows, examReportKey, pickExamReport } from "../domain/examService.js?v=t48u1";
-import { hydrateReport } from "../domain/simulation.js?v=t48u1";
-import { renderSeating } from "./classroom.js?v=t48u1";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t48u1";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t48u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t48u1";
-import { formatAdmissionBatch, formatAdmissionDest } from "../domain/admission.js?v=t48u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t48u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t48u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t48u1";
+} from "../domain/simulation.js?v=t48u2";
+import { addDays } from "../domain/calendar.js?v=t48u2";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t48u2";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t48u2";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t48u2";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t48u2";
+import { rankRows } from "../domain/scores.js?v=t48u2";
+import { filterRows, sameTierCompare, classStandings, classCompareRows, examReportKey, pickExamReport } from "../domain/examService.js?v=t48u2";
+import { hydrateReport } from "../domain/simulation.js?v=t48u2";
+import { renderSeating } from "./classroom.js?v=t48u2";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t48u2";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t48u2";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t48u2";
+import { formatAdmissionBatch, formatAdmissionDest } from "../domain/admission.js?v=t48u2";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t48u2";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t48u2";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t48u2";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
   parseAiCommentary, emptyAiCommentary,
-} from "../domain/examAi.js?v=t48u1";
+} from "../domain/examAi.js?v=t48u2";
 
 let state = null;
 let view = "classroom";
@@ -205,7 +205,13 @@ export function boot() {
       toast(r.toast);
     } catch (err) {
       hideLoading();
-      toast("开局没有完成，请再试一次。");
+      console.error(err);
+      if (state) {
+        try { showMain(); } catch (e2) { console.error(e2); }
+        toast("已经进入游戏，但有一页没有画出来。请先看看教室，或刷新后再试。");
+      } else {
+        toast("开局没有完成，请再试一次。");
+      }
     }
   }
 
@@ -372,15 +378,17 @@ function render() {
   $("#roleline").textContent = `${state.player.role} ${state.player.name} · ${state.player.cohortYear}级卓行${state.player.classNo}班 ${playerSubjectName(state.player)}`;
   document.querySelectorAll("#sidenav [data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
   const host = $("#view");
-  const map = { classroom: viewClassroom, roster: viewRoster, profile: viewProfile, teach: viewTeach, class: viewClassManage, placement: viewPlacement, grades: viewGrades, office: viewOffice, admission: viewAdmission, auto: viewAuto, log: viewLog, save: viewSave, settings: viewSettings };
-  host.innerHTML = "";
   try {
-    (map[view] || viewClassroom)(host);
+    const map = { classroom: viewClassroom, roster: viewRoster, profile: viewProfile, teach: viewTeach, class: viewClassManage, placement: viewPlacement, grades: viewGrades, office: viewOffice, admission: viewAdmission, auto: viewAuto, log: viewLog, save: viewSave, settings: viewSettings };
+    if (host) {
+      host.innerHTML = "";
+      (map[view] || viewClassroom)(host);
+    }
+    renderAgenda();
   } catch (err) {
     console.error(err);
-    host.innerHTML = "<p class=\"notice\">这一页打开失败，请刷新后再试。如果还是空白，把现象发我即可。</p>";
+    if (host) host.innerHTML = "<p class=\"notice\">这一页打开失败，请刷新后再试。如果还是空白，把现象发我即可。</p>";
   }
-  renderAgenda();
   syncSidenavHint();
 }
 
@@ -1605,6 +1613,80 @@ function escapeHtml(s) {
 
 function examAiCacheKey(report, player) {
   return `${report?.date || ""}|${report?.examId || ""}|${player?.classNo}|${analysisScope(player)}`;
+}
+
+
+function provincialLineLabel(row, report) {
+  const year = provincialCompareYear(report.date);
+  const track = row.track === "wen" ? "wen" : "li";
+  const lines = provincialLines(year, track) || provincialLines(2020, track);
+  const max = row.maxTotal || 750;
+  const total = max === 750 ? row.total : Math.round((row.total / max) * 750);
+  if (total >= lines.first) return "省控一本";
+  if (total >= lines.second) return "省控二本";
+  return "未达省控二本";
+}
+
+function classPassSummary(report, classNo) {
+  const cls = (report.classes || []).find((c) => c.classNo === classNo);
+  const prov = classProvincialCounts(report, classNo);
+  if (report.examKind === "gaokao") {
+    return `任教班省控一本 ${prov.firstN} 人、省控二本累计 ${prov.secondN} 人；校内一本 ${cls?.firstCount ?? "—"} 人、校内二本累计 ${cls?.secondCount ?? "—"} 人。高考上线以公开省控为主，校内线只作对照。`;
+  }
+  return `任教班校内一本 ${cls?.firstCount ?? "—"} 人、校内二本累计 ${cls?.secondCount ?? "—"} 人；${describeClassProvincial(report, classNo)}。平时考试上线以校内对照为主，不是省控。`;
+}
+
+function viewGrades(host) {
+  const report = currentReport();
+  if (!report) {
+    host.innerHTML = `<h3>考试成绩</h3><p>还没有考试。可用「下一阶段」跳到第一次月考。</p>`;
+    return;
+  }
+  const mine = classStandings(report.rows || [], state.player.classNo);
+  const track = report.split ? (mine[0]?.track === "wen" ? "wen" : "li") : "mixed";
+  const note = examSourceNotice(report);
+  const isHk = report.examKind === "huikao";
+  const isGk = report.examKind === "gaokao";
+  const isJoint = report.examKind === "city" || report.examKind === "province";
+  const passN = isHk ? mine.filter((r)=>r.huikaoPass).length : null;
+  const jointKpi = isJoint ? jointLinesBlock(report) : "";
+  const head = isHk ? ["班名次","姓名","总分","年级名次","校内合格"]
+    : isJoint ? (report.examKind==="province" ? ["班名次","姓名","总分","校排","县位次","市位次","省位次","市上线","省上线"] : ["班名次","姓名","总分","校排","县位次","市位次","市上线","县上线"])
+    : isGk ? ["班名次","姓名","总分","年级名次","省控上线","校内上线"]
+    : ["班名次","姓名","总分","年级名次","校内上线"];
+  const classRankCell = (r) => r.classRank ?? r.rank ?? "";
+  const gradeRankCell = (r) => r.gradeRank ?? r.rank ?? "—";
+  const rowCells = (r) => {
+    if (isHk) return `<td>${classRankCell(r)}</td><td>${r.name}</td><td>${r.total}</td><td>${gradeRankCell(r)}</td><td>${r.huikaoPass?"合格":"不合格"}</td>`;
+    if (isJoint && report.examKind==="province") return `<td>${classRankCell(r)}</td><td>${r.name}</td><td>${r.total}</td><td>${gradeRankCell(r)}</td><td>${r.countyRank??"—"}</td><td>${r.cityRank??"—"}</td><td>${r.provinceRank??"—"}</td><td>${r.jointLine?.city||"—"}</td><td>${r.jointLine?.province||"—"}</td>`;
+    if (isJoint) return `<td>${classRankCell(r)}</td><td>${r.name}</td><td>${r.total}</td><td>${gradeRankCell(r)}</td><td>${r.countyRank??"—"}</td><td>${r.cityRank??"—"}</td><td>${r.jointLine?.city||"—"}</td><td>${r.jointLine?.county||"—"}</td>`;
+    if (isGk) return `<td>${classRankCell(r)}</td><td>${r.name}</td><td>${r.total}</td><td>${gradeRankCell(r)}</td><td>${provincialLineLabel(r, report)}</td><td>校内${r.line||""}</td>`;
+    return `<td>${classRankCell(r)}</td><td>${r.name}</td><td>${r.total}</td><td>${gradeRankCell(r)}</td><td>${r.line||""}</td>`;
+  };
+  const actingHome = isActingHomeroom(state.player, state.player.classNo);
+  const officialHome = isPlayerHomeroom(state.player, state.player.classNo);
+  const godNote = actingHome && !officialHome
+    ? `<p class="notice">上帝模式：当前按班主任身份查看本班考后分析。学校正式班主任仍是${escapeHtml(officialHomeroomName(state.player))}，任职与存档不会被改写。</p>`
+    : "";
+  const mainKpi = isJoint ? jointKpi
+    : isHk ? `<div class="kpi"><div><span>试卷难度</span><b>${(report.difficulty||1).toFixed(3)}</b></div><div><span>班内校内合格</span><b>${passN} / ${mine.length}</b></div><div><span>合格标准</span><b>卷面 60%</b></div></div>`
+    : isGk ? officialLinesBlock(report, track) + schoolLinesKpi(report, track) + `<p class="muted">${schoolLinesNote(report, track)}</p>`
+    : `<div class="kpi"><div><span>试卷难度</span><b>${(report.difficulty||1).toFixed(3)}</b></div></div>` + schoolLinesKpi(report, track) + `<p class="notice">${schoolLinesNote(report, track)}</p>`;
+  const payload = examAnalysisPayload(report);
+  host.innerHTML = `<h3>考试成绩 · 任教班</h3>
+    <div class="filters"><label>场次 <select id="exsel">${examOptions()}</select></label></div>
+    ${godNote}
+    ${clickStudentHint()}
+    ${note?`<p class="notice">${note}</p>`:""}
+    ${mainKpi}
+    ${!isHk?`<p class="notice">${lineCompareNotice(report)}</p><p class="notice">${classPassSummary(report, state.player.classNo)}</p>`:""}
+    ${isJoint?`<p class="muted">${schoolLinesNote(report, track)}</p>`:""}
+    <div class="paper"><table><thead><tr>${head.map((h)=>`<th>${h}</th>`).join("")}</tr></thead>
+    <tbody>${mine.map((r)=>`<tr data-id="${r.studentId}">${rowCells(r)}</tr>`).join("")}</tbody></table></div>
+    ${examAiPanel(report)}`;
+  host.querySelector("#exsel").onchange = (e) => { examPick = e.target.value; render(); };
+  host.querySelectorAll("tr[data-id]").forEach((tr)=>tr.onclick=()=>{selectedId=tr.dataset.id; view="profile"; render();});
+  bindExamAi(host, report, payload);
 }
 
 function viewSettings(host) {
