@@ -3,13 +3,13 @@ import {
   CLASS_BLUEPRINT, TIER, SUBJECT_IDS, PERSONALITIES, FAMILY_TYPES,
   PLAYER_CLASS_NO, GRADE_YEAR, LI_SUBJECTS, WEN_SUBJECTS,
   REPEAT_CLASS_SIZE, REPEAT_WEN_NOS, REPEAT_LI_NOS, INSERT_REPEAT_CLASS_NOS,
-} from "./config.js?v=t50u1";
-import { clamp, gauss, hash01, pick, rngFrom, shuffle } from "./prng.js?v=t50u1";
-import { generateName } from "./names.js?v=t50u1";
-import { gradeStudent, scaleOf } from "./scores.js?v=t50u1";
-import { provincialLines } from "./jiangxi.js?v=t50u1";
-import { canInsertRepeat } from "./admission.js?v=t50u1";
-import { examParams } from "./calendar.js?v=t50u1";
+} from "./config.js?v=t51u1";
+import { clamp, gauss, hash01, pick, rngFrom, shuffle } from "./prng.js?v=t51u1";
+import { generateName } from "./names.js?v=t51u1";
+import { gradeStudent, scaleOf } from "./scores.js?v=t51u1";
+import { provincialLines } from "./jiangxi.js?v=t51u1";
+import { canInsertRepeat } from "./admission.js?v=t51u1";
+import { examParams } from "./calendar.js?v=t51u1";
 
 export const ALL_SUBJECTS = [...SUBJECT_IDS, "biology"];
 

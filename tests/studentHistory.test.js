@@ -81,3 +81,26 @@ test("高考录取后一键可进入下一届，不会停在录取日", () => {
   assert.ok((g.alumni || []).length > 100);
   assert.ok(Object.values(g.cohorts).some((c) => c.students.some((s) => s.repeat || s.tier === "fuzhuo")));
 });
+
+test("同场快照对全班多次计算时，班排校排与 rankInPool 完全一致", () => {
+  const g = createGame(20170901);
+  for (let i = 0; i < 4; i++) skipToNextStage(g);
+  const reports = listExamReports(g, { entryYear: 2017 });
+  assert.ok(reports.length >= 2);
+  const cls = playerStudents(g);
+  for (const rep of reports) {
+    const school = (rep.rows || []).filter((r) => !r.repeat);
+    for (const s of cls) {
+      const snap = buildStudentExamSnapshot(s.id, rep);
+      const me = (rep.rows || []).find((r) => r.studentId === s.id);
+      assert.ok(snap && me);
+      const grade = rankInPool(me.total, school, s.id, "total");
+      assert.equal(snap.gradeRank, grade.rank);
+      assert.equal(snap.gradeN, grade.n);
+      const yun = school.filter((r) => r.tier === "yunxiu_exp");
+      const ins = rankInPool(me.total, yun, s.id, "total");
+      assert.equal(snap.cross.yunxiu_exp.rank, ins.rank);
+      assert.equal(snap.cross.yunxiu_exp.n, ins.n);
+    }
+  }
+});

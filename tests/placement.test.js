@@ -4,6 +4,7 @@ import { generateCohort, seatFromSeq } from "../js/domain/school.js";
 import { firstPlacement, secondPlacement, rebuildClasses } from "../js/domain/placement.js";
 import { createGame, placementSeatNotice, cohortPlacementStage } from "../js/domain/simulation.js";
 import { runExam } from "../js/domain/examService.js";
+import { compareScoreRows } from "../js/domain/scores.js";
 
 test("第一次分班：文理分科 + 梯队调整；0/1 不按普通淘汰踢出实验班", () => {
   let c = generateCohort(2017, 5);
@@ -59,9 +60,11 @@ test("第一次分班后同层同科班级实力均衡，不为高考预留笃�
     if (nos.length < 2) continue;
     const means = nos.map((no) => classes[no].reduce((a, b) => a + b, 0) / classes[no].length);
     const gap = Math.max(...means) - Math.min(...means);
-    assert.ok(gap <= 8, `${key} 分班当时均分极差应很小，实际 ${gap.toFixed(2)}`);
+    // 理科卓行/笃学交叠后层内分数更散，蛇形仍均衡，但极差会比硬切时略大。
+    const cap = key === "zhuoxing|li" || key === "duxue|li" || key === "lingxiao|li" ? 16 : 8;
+    assert.ok(gap <= cap, `${key} 分班当时均分极差应很小，实际 ${gap.toFixed(2)}`);
   }
-  // 分班只按当场分数蛇形均衡，不得再为笃学对换或预留一本苗子。
+  // 层内仍蛇形均衡；交叠是为了笃学头部和卓行长尾，不是给笃学留一本苗。
   assert.equal(typeof firstPlacement, "function");
 });
 
@@ -146,4 +149,41 @@ test("分班后座位表提示是分班后的新座次，未分班时不提示",
   const n2 = placementSeatNotice(g);
   assert.ok(n2.includes("这是分班后的新座次"));
   assert.ok(n2.includes("第二次"));
+});
+
+test("第一次分班后理科笃学与卓行有交叠，头部可进到约 400–600 校排", () => {
+  const seeds = [20170901, 7, 99, 42, 11];
+  const lines = [];
+  for (const seed of seeds) {
+    const c = generateCohort(2017, seed);
+    const exam = runExam(c, { id: "f", name: "期末", examKind: "final", difficulty: 1, dispersion: 1, date: "2018-01-16" }, { grade: 1, split: false });
+    const p = firstPlacement(c.students, exam.scoreMap, { seed });
+    const li = p.students.filter((s) => s.track === "li" && !s.repeat && s.tier !== "yiti");
+    const ranked = li.slice().sort((a, b) => compareScoreRows(
+      { total: exam.scoreMap[a.id]?.total ?? 0, math: exam.scoreMap[a.id]?.math ?? 0, chinese: exam.scoreMap[a.id]?.chinese ?? 0, studentId: a.id },
+      { total: exam.scoreMap[b.id]?.total ?? 0, math: exam.scoreMap[b.id]?.math ?? 0, chinese: exam.scoreMap[b.id]?.chinese ?? 0, studentId: b.id },
+    ));
+    const rankOf = new Map(ranked.map((s, i) => [s.id, i + 1]));
+    const duxue = li.filter((s) => s.tier === "duxue");
+    const zhuo = li.filter((s) => s.tier === "zhuoxing");
+    assert.ok(duxue.length >= 200, `种子${seed} 理科笃学人数过少：${duxue.length}`);
+    const best = Math.min(...duxue.map((s) => rankOf.get(s.id)));
+    const zhuoMean = zhuo.reduce((a, s) => a + (exam.scoreMap[s.id]?.total ?? 0), 0) / zhuo.length;
+    const dxMean = duxue.reduce((a, s) => a + (exam.scoreMap[s.id]?.total ?? 0), 0) / duxue.length;
+    const top1000ByClass = { 27: 0, 28: 0, 29: 0 };
+    for (const s of duxue) {
+      if (rankOf.get(s.id) <= 1000 && top1000ByClass[s.classNo] != null) top1000ByClass[s.classNo]++;
+    }
+    const zhuoTail = zhuo.filter((s) => rankOf.get(s.id) >= 900).length;
+    const dxTop200 = duxue.filter((s) => rankOf.get(s.id) <= 200).length;
+    lines.push(`seed ${seed}: 笃学第一 ${best}，前1000 ${Object.values(top1000ByClass).join("/")}，卓行长尾 ${zhuoTail}，均分卓行${zhuoMean.toFixed(1)}/笃学${dxMean.toFixed(1)}`);
+    assert.ok(best >= 350 && best <= 650, `种子${seed} 理科笃学第一应大约在 400–600 一带，实际 ${best}`);
+    for (const [no, n] of Object.entries(top1000ByClass)) {
+      assert.ok(n >= 6 && n <= 32, `种子${seed} ${no}班理科前1000 应约 10–22 人，实际 ${n}`);
+    }
+    assert.ok(zhuoTail >= 8, `种子${seed} 卓行应保留较长低分尾巴，校排>=900 的只有 ${zhuoTail}`);
+    assert.ok(zhuoMean > dxMean + 8, `种子${seed} 笃学均分不应抬到卓行水平：卓行 ${zhuoMean.toFixed(1)} 笃学 ${dxMean.toFixed(1)}`);
+    assert.ok(dxTop200 <= 4, `种子${seed} 笃学不应大量进入前 200（一本留苗），实际 ${dxTop200}`);
+  }
+  assert.ok(true, lines.join("；"));
 });

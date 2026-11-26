@@ -1,7 +1,7 @@
 /** 从各次真实考试成绩汇总一名学生的分数与排名轨迹。不另造统计。 */
-import { TIER } from "./config.js?v=t50u1";
-import { listExamReports } from "./simulation.js?v=t50u1";
-import { subjectsFor } from "./scores.js?v=t50u1";
+import { TIER } from "./config.js?v=t51u1";
+import { listExamReports } from "./simulation.js?v=t51u1";
+import { subjectsFor } from "./scores.js?v=t51u1";
 
 export const TIER_ORDER = ["yunxiu_exp", "yunxiu_key", "lingxiao", "zhuoxing", "duxue", "yiti", "fuzhuo"];
 
@@ -58,7 +58,72 @@ function poolRows(report, { tier, track, classNo } = {}) {
   });
 }
 
-function packRank(score, rows, studentId, key) {
+const POOL_CACHE = new WeakMap();
+const RANK_CACHE = new WeakMap();
+
+function cachedPool(report, filt) {
+  let by = POOL_CACHE.get(report);
+  if (!by) {
+    by = new Map();
+    POOL_CACHE.set(report, by);
+  }
+  const k = `${filt.tier || ""}|${report.split && filt.track ? filt.track : ""}|${filt.classNo ?? ""}`;
+  if (!by.has(k)) by.set(k, poolRows(report, filt));
+  return by.get(k);
+}
+
+function buildRankIndex(rows, key) {
+  const sorted = (rows || []).slice().sort((a, b) => (b[key] ?? -1) - (a[key] ?? -1) || String(a.studentId).localeCompare(String(b.studentId)));
+  const map = new Map();
+  let rank = 1;
+  for (let i = 0; i < sorted.length; i++) {
+    if (i > 0 && (sorted[i][key] ?? -1) < (sorted[i - 1][key] ?? -1)) rank = i + 1;
+    map.set(sorted[i].studentId, { rank, n: sorted.length, inserted: false });
+  }
+  return { map, sorted, n: sorted.length, key };
+}
+
+function cachedIndex(report, rows, key) {
+  let byRows = RANK_CACHE.get(report);
+  if (!byRows) {
+    byRows = new WeakMap();
+    RANK_CACHE.set(report, byRows);
+  }
+  let byKey = byRows.get(rows);
+  if (!byKey) {
+    byKey = new Map();
+    byRows.set(rows, byKey);
+  }
+  if (!byKey.has(key)) byKey.set(key, buildRankIndex(rows, key));
+  return byKey.get(key);
+}
+
+function insertRank(index, score, _studentId) {
+  const sc = score ?? -1;
+  const key = index.key;
+  const sorted = index.sorted;
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    const ms = sorted[mid][key] ?? -1;
+    if (ms > sc) lo = mid + 1;
+    else hi = mid;
+  }
+  return { rank: lo + 1, n: sorted.length + 1, inserted: true };
+}
+
+function packRank(score, rows, studentId, key, report) {
+  if (report && rows) {
+    const index = cachedIndex(report, rows, key);
+    const hit = studentId != null ? index.map.get(studentId) : null;
+    if (hit) return { rank: hit.rank, n: hit.n, inserted: false };
+    if (studentId != null) {
+      const ins = insertRank(index, score, studentId);
+      // rankInPool 在插入后命中循环时不带 inserted，保持同样的标志以免快照字段分叉。
+      return { rank: ins.rank, n: ins.n, inserted: false };
+    }
+  }
   const r = rankInPool(score, rows, studentId, key);
   return { rank: r.rank, n: r.n, inserted: !!r.inserted };
 }
@@ -69,43 +134,43 @@ export function buildStudentExamSnapshot(studentId, report) {
   const all = report.rows || [];
   const me = all.find((r) => r.studentId === studentId);
   if (!me) return null;
-  const classRows = poolRows(report, { classNo: me.classNo });
-  const tierRows = poolRows(report, { tier: me.tier, track: me.track });
-  const schoolRows = poolRows(report, { track: me.track });
-  const gradeRows = poolRows(report, {});
-  const gradeR = packRank(me.total, gradeRows, studentId, "total");
-  const classR = packRank(me.total, classRows, studentId, "total");
-  const tierR = packRank(me.total, tierRows, studentId, "total");
-  const schoolR = packRank(me.total, schoolRows, studentId, "total");
+  const classRows = cachedPool(report, { classNo: me.classNo });
+  const tierRows = cachedPool(report, { tier: me.tier, track: me.track });
+  const schoolRows = cachedPool(report, { track: me.track });
+  const gradeRows = cachedPool(report, {});
+  const gradeR = packRank(me.total, gradeRows, studentId, "total", report);
+  const classR = packRank(me.total, classRows, studentId, "total", report);
+  const tierR = packRank(me.total, tierRows, studentId, "total", report);
+  const schoolR = packRank(me.total, schoolRows, studentId, "total", report);
   const { next, top } = strongerTiers(me.tier);
   const cross = {};
   for (const tid of TIER_ORDER) {
-    const rows = poolRows(report, { tier: tid, track: me.track });
-    const packed = { tier: tid, name: tierName(tid), ...packRank(me.total, rows, studentId, "total") };
+    const rows = cachedPool(report, { tier: tid, track: me.track });
+    const packed = { tier: tid, name: tierName(tid), ...packRank(me.total, rows, studentId, "total", report) };
     cross[tid] = packed;
     if (tid === next) cross.next = packed;
     if (tid === top && top !== me.tier) cross.top = packed;
   }
   if (next && !cross.next) {
-    const rows = poolRows(report, { tier: next, track: me.track });
-    cross.next = { tier: next, name: tierName(next), ...packRank(me.total, rows, studentId, "total") };
+    const rows = cachedPool(report, { tier: next, track: me.track });
+    cross.next = { tier: next, name: tierName(next), ...packRank(me.total, rows, studentId, "total", report) };
   }
   if (top && top !== me.tier && !cross.top) {
-    const rows = poolRows(report, { tier: top, track: me.track });
-    cross.top = { tier: top, name: tierName(top), ...packRank(me.total, rows, studentId, "total") };
+    const rows = cachedPool(report, { tier: top, track: me.track });
+    cross.top = { tier: top, name: tierName(top), ...packRank(me.total, rows, studentId, "total", report) };
   }
   const subjects = {};
   for (const sid of me.subjects || []) {
     if (me[sid] == null) continue;
-    const c = packRank(me[sid], classRows, studentId, sid);
-    const t = packRank(me[sid], tierRows, studentId, sid);
-    const sch = packRank(me[sid], schoolRows, studentId, sid);
-    const gradeS = packRank(me[sid], gradeRows, studentId, sid);
+    const c = packRank(me[sid], classRows, studentId, sid, report);
+    const t = packRank(me[sid], tierRows, studentId, sid, report);
+    const sch = packRank(me[sid], schoolRows, studentId, sid, report);
+    const gradeS = packRank(me[sid], gradeRows, studentId, sid, report);
     const subCross = {};
     for (const tid of TIER_ORDER) {
-      const prow = poolRows(report, { tier: tid, track: me.track });
+      const prow = cachedPool(report, { tier: tid, track: me.track });
       if (!prow.length && tid !== me.tier) continue;
-      subCross[tid] = { tier: tid, name: tierName(tid), ...packRank(me[sid], prow, studentId, sid) };
+      subCross[tid] = { tier: tid, name: tierName(tid), ...packRank(me[sid], prow, studentId, sid, report) };
     }
     const list = subjectsFor(report.scale, report.split ? (me.track === "wen" ? "wen" : "li") : "mixed");
     const max = list.find((s) => s.id === sid)?.max || 100;

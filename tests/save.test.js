@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createGame, skipToNextStage, playerStudents, teach } from "../js/domain/simulation.js";
+import { createGame, skipToNextStage, playerStudents, teach, listExamReports } from "../js/domain/simulation.js";
 import { toJSON, fromJSON, saveSlot, loadSlotResult, writeFailureReason } from "../js/domain/save.js";
 import { startNewGameSession, continueGameSession } from "../js/domain/bootFlow.js";
 import { CLASS_BLUEPRINT, PLAYER_CLASS_NO } from "../js/domain/config.js";
@@ -100,4 +100,21 @@ test("继续存档在没有档或读失败时给出中文原因，不假装进�
   const broken = loadSlotResult("auto", { getItem() { throw new Error("nope"); } });
   assert.equal(broken.ok, false);
   assert.match(broken.reason, /失败|损坏/);
+});
+
+test("写入存档时去掉考试的 scoreMap 和 cutoffs.ranked，读回来成绩仍完整", () => {
+  const a = createGame(20170901, "林知秋");
+  skipToNextStage(a);
+  const reports = listExamReports(a, { entryYear: 2017 });
+  assert.ok(reports.length >= 1);
+  assert.ok(reports[0].scoreMap, "hydrate 后内存里仍有 scoreMap，便于查分");
+  assert.ok(reports[0].cutoffs && reports[0].cutoffs.ranked, "hydrate 后内存里仍有 ranked");
+  const json = toJSON(a);
+  assert.equal(json.includes('"scoreMap"'), false);
+  assert.equal(/"ranked"\s*:\s*\{/.test(json), false);
+  const b = fromJSON(json);
+  const again = listExamReports(b, { entryYear: 2017 });
+  assert.equal(again.length, reports.length);
+  assert.equal(again[0].rows.length, reports[0].rows.length);
+  assert.equal(again[0].rows[0].total, reports[0].rows[0].total);
 });

@@ -1,12 +1,12 @@
 /** 组织一次考试：出分、文理分列排名、分数线、层次筛选、单科第一。 */
-import { CUTOFF_FIRST_RANK, CUTOFF_SECOND_RANK } from "./config.js?v=t50u1";
+import { CUTOFF_FIRST_RANK, CUTOFF_SECOND_RANK } from "./config.js?v=t51u1";
 import {
   attachStudentMeta, cutoffRanks, cutoffsFromRanked, gradeStudent, rankRows,
   scaleOf, subjectRanks, summarizeClass, subjectsFor,
-} from "./scores.js?v=t50u1";
-import { provincialLines } from "./jiangxi.js?v=t50u1";
-import { attachJointExam, JOINT_SOURCE_NOTE } from "./jointExam.js?v=t50u1";
-import { fallbackSchoolQuota, classProvincialCounts, provincialCompareYear } from "./schoolLines.js?v=t50u1";
+} from "./scores.js?v=t51u1";
+import { provincialLines } from "./jiangxi.js?v=t51u1";
+import { attachJointExam, JOINT_SOURCE_NOTE } from "./jointExam.js?v=t51u1";
+import { fallbackSchoolQuota, classProvincialCounts, provincialCompareYear } from "./schoolLines.js?v=t51u1";
 
 export function studentTrackForExam(student, split) {
   if (!split || student.track === "mixed" || !student.track) return "mixed";
@@ -23,7 +23,7 @@ export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0
   }
   const regular = rows.filter((r) => !r.repeat);
   const repeaters = rows.filter((r) => r.repeat);
-  // 高三（含高考校内对照）把补习班算进同一个校内名次池；高一高二本年级没有补习班，只在应届池里划线。
+  // 高三（含高考校内对照）把补习班算进同一个校内名次池；高一高二教务处榜单会并入同日高三补习班。
   // 名额仍按上一届高考本校省控实际人数（或兜底），理科二本取该池前 1000 名。
   const reallySplit = !!split;
   const includeRepeat = Number(grade) >= 3;
@@ -228,11 +228,46 @@ export function filterClasses(classes, { track, tier, repeat } = {}) {
 
 export function classCompareRows(report, { tier, track, includeRepeat } = {}) {
   const year = provincialCompareYear(report?.date);
-  const allowRepeat = includeRepeat || tier === "fuzhuo" || report?.grade >= 3;
+  const allowRepeat = includeRepeat !== false || tier === "fuzhuo" || report?.grade >= 3;
   return filterClasses(report?.classes || [], { tier, track, repeat: allowRepeat ? undefined : false }).map((c) => {
     const prov = classProvincialCounts(report, c.classNo);
     return { ...c, provYear: year, provFirst: prov.firstN, provSecond: prov.secondN };
   });
+}
+
+/** 同日高三场次（补习班在这一场）。用于教务处把复读班列入当前榜单。 */
+export function sameDaySeniorReport(reports, live) {
+  const list = reports || [];
+  if (!live) return null;
+  const hasRepeat = (e) => (e?.rows || []).some((r) => r.repeat) || (e?.classes || []).some((c) => c.repeat || c.tier === "fuzhuo");
+  if (Number(live.grade) >= 3 && hasRepeat(live)) return null;
+  const sameId = list.find((e) => e !== live && e.date === live.date && e.examId === live.examId && Number(e.grade) >= 3 && hasRepeat(e));
+  if (sameId) return sameId;
+  return list.find((e) => e !== live && e.date === live.date && Number(e.grade) >= 3 && hasRepeat(e)) || null;
+}
+
+function repeaterOnly(report) {
+  if (!report) return { rows: [], classes: [] };
+  const classes = (report.classes || []).filter((c) => c.repeat || c.tier === "fuzhuo");
+  const classNos = new Set(classes.map((c) => c.classNo));
+  const rows = (report.rows || []).filter((r) => r.repeat || r.tier === "fuzhuo" || classNos.has(r.classNo));
+  return { rows, classes };
+}
+
+/** 当前场次应届（及本场已有复读）加上同日高三补习班，供教务处榜单使用。 */
+export function officeBoard(report, reports, { tier, track } = {}) {
+  const senior = sameDaySeniorReport(reports, report);
+  const extra = senior ? repeaterOnly(senior) : { rows: [], classes: [] };
+  const merged = {
+    ...report,
+    rows: [...(report?.rows || []), ...extra.rows],
+    classes: [...(report?.classes || []), ...extra.classes],
+  };
+  const wantTier = tier && tier !== "all" ? tier : null;
+  const wantTrack = track && track !== "all" && track !== "mixed" ? track : null;
+  const rows = rankRows(filterRows(merged.rows, { tier: wantTier, track: wantTrack }));
+  const classTable = classCompareRows(merged, { tier: wantTier || "all", track: wantTrack || "all", includeRepeat: true });
+  return { merged, rows, classTable, senior, addedRepeat: extra.classes.length };
 }
 
 export function examReportKey(report) {

@@ -5,7 +5,7 @@ import { generateCohort } from "../js/domain/school.js";
 import { firstPlacement, rebuildClasses } from "../js/domain/placement.js";
 import {
   runExam, classStandings, classCompareRows, filterClasses, filterRows,
-  examReportKey, pickExamReport,
+  examReportKey, pickExamReport, officeBoard, sameDaySeniorReport,
 } from "../js/domain/examService.js";
 import { rankRows, compareScoreRows } from "../js/domain/scores.js";
 import { createGame, skipToGaokaoOf, listExamReports } from "../js/domain/simulation.js";
@@ -156,4 +156,55 @@ test("高考主口径展示公开省控（2020 带一分一段位次），校内
   const schoolRow = report.classes.find((c) => c.classNo === 16);
   assert.ok(cls.secondN < schoolRow.secondCount, "省控二本应明显少于校内二本，主口径应是前者");
   assert.ok(schoolRow.secondCount >= 50, "校内二本人数多是现行名额规则的自然结果，不能靠改线做小");
+});
+
+test("教务处榜单把同日高三补习班并入高二场次，高三各班对照也含补习班", () => {
+  const sophomore = {
+    date: "2019-11-15", examId: "midterm", examName: "期中考试", grade: 2, entryYear: 2018, split: true,
+    rows: [
+      { studentId: "a", name: "甲", classNo: 16, tier: "zhuoxing", track: "li", total: 500, math: 100, chinese: 100, repeat: false },
+    ],
+    classes: [
+      { classNo: 16, name: "卓行16班", tier: "zhuoxing", track: "li", count: 1, avg: 500, max: 500, firstCount: 0, secondCount: 1, firstRate: 0, repeat: false },
+    ],
+  };
+  const senior = {
+    date: "2019-11-15", examId: "midterm", examName: "期中考试", grade: 3, entryYear: 2017, split: true,
+    rows: [
+      { studentId: "c", name: "丙", classNo: 16, tier: "zhuoxing", track: "li", total: 530, math: 110, chinese: 110, repeat: false },
+      { studentId: "b", name: "乙", classNo: 37, tier: "fuzhuo", track: "li", total: 520, math: 110, chinese: 100, repeat: true },
+    ],
+    classes: [
+      { classNo: 16, name: "卓行16班", tier: "zhuoxing", track: "li", count: 1, avg: 530, max: 530, firstCount: 1, secondCount: 1, firstRate: 100, repeat: false },
+      { classNo: 37, name: "补习37班", tier: "fuzhuo", track: "li", count: 1, avg: 520, max: 520, firstCount: 0, secondCount: 1, firstRate: 0, repeat: true },
+    ],
+  };
+  const reports = [sophomore, senior];
+  const found = sameDaySeniorReport(reports, sophomore);
+  assert.equal(found, senior);
+  const board = officeBoard(sophomore, reports, { tier: "all", track: "li" });
+  assert.ok(board.addedRepeat >= 1);
+  assert.ok(board.classTable.some((c) => c.classNo === 37 && c.tier === "fuzhuo"));
+  assert.ok(board.classTable.some((c) => c.classNo === 16));
+  assert.equal(board.classTable.filter((c) => c.classNo === 16).length, 1, "只并入补习班，不把高三应届班混进高二对照");
+  assert.ok(board.rows.some((r) => r.studentId === "b"));
+  assert.ok(board.rows.some((r) => r.studentId === "a"));
+  const onlyFuzhuo = officeBoard(sophomore, reports, { tier: "fuzhuo", track: "li" });
+  assert.ok(onlyFuzhuo.rows.length >= 1 && onlyFuzhuo.rows.every((r) => r.tier === "fuzhuo" || r.repeat));
+  const seniorBoard = officeBoard(senior, reports, { tier: "all", track: "li" });
+  assert.equal(seniorBoard.addedRepeat, 0);
+  assert.ok(seniorBoard.classTable.some((c) => c.classNo === 37));
+});
+
+test("教务处和校内线说明不再写不含补习班或只在应届池", () => {
+  const files = [
+    new URL("../js/ui/app.js", import.meta.url),
+    new URL("../js/domain/schoolLines.js", import.meta.url),
+    new URL("../js/domain/simulation.js", import.meta.url),
+    new URL("../js/domain/examService.js", import.meta.url),
+  ];
+  for (const url of files) {
+    const src = readFileSync(url, "utf8");
+    assert.doesNotMatch(src, /不含复读|尚无补习班|只在应届池/);
+  }
 });

@@ -3,10 +3,10 @@
  * 第一次：高一上期末后，文理分科 + 凌霄及以下梯队晋级淘汰；0/1 不参与普通淘汰，2—4 保持顶尖梯队。
  * 第二次：高一下期末后，不再分文理、不跨梯队，只在同科类同梯队内部均衡重组。
  */
-import { FIRST_PLACEMENT_TARGETS, CLASS_BLUEPRINT } from "./config.js?v=t50u1";
-import { compareScoreRows } from "./scores.js?v=t50u1";
-import { rngFrom, shuffle } from "./prng.js?v=t50u1";
-import { reseatClasses, syncSeatsToSeq, seatFromSeq, applyRepeaterSeating } from "./school.js?v=t50u1";
+import { FIRST_PLACEMENT_TARGETS, CLASS_BLUEPRINT } from "./config.js?v=t51u1";
+import { compareScoreRows } from "./scores.js?v=t51u1";
+import { rngFrom, shuffle } from "./prng.js?v=t51u1";
+import { reseatClasses, syncSeatsToSeq, seatFromSeq, applyRepeaterSeating } from "./school.js?v=t51u1";
 
 export function firstPlacement(students, scoreMap, { overrides = {}, seed = 1 } = {}) {
   const movable = [];
@@ -69,7 +69,8 @@ export function firstPlacement(students, scoreMap, { overrides = {}, seed = 1 } 
   byTrack.wen.sort(compareScoreRows);
 
   // 按期末实考分划入梯队，再在同一层次内蛇形分班，只保证分班当时同层各班均衡。
-  // 不做交界抖动，也不把人预留到笃学去照顾三年后的高考。
+  // 理科凌霄/卓行/笃学在切层时做名次交叠，避免硬切把笃学头部全部划进卓行；
+  // 不给笃学留一本苗，也不把笃学整体抬到卓行水平。
   fillTiersByRankThenBalance(byTrack.li, liTargets, assign, "li", seed);
   fillTiersByRankThenBalance(byTrack.wen, wenTargets, assign, "wen", seed);
 
@@ -97,7 +98,7 @@ export function firstPlacement(students, scoreMap, { overrides = {}, seed = 1 } 
 
 
 
-/** 先按成绩切梯队，再在同一层次的班级里蛇形均衡。 */
+/** 先按成绩切梯队，再在同一层次的班级里蛇形均衡。理科可流动层次做名次交叠。 */
 function fillTiersByRankThenBalance(ranked, targets, assign, track, seed) {
   if (!targets.length) return;
   const groups = [];
@@ -106,14 +107,85 @@ function fillTiersByRankThenBalance(ranked, targets, assign, track, seed) {
     if (last && last.tier === t.tier) last.list.push(t);
     else groups.push({ tier: t.tier, list: [t] });
   }
+  const slices = sliceTiersWithOverlap(ranked, groups, track, seed);
+  for (let g = 0; g < groups.length; g++) {
+    snakeIntoClasses(slices[g], groups[g].list, assign, track, seed);
+  }
+}
+
+/**
+ * 理科凌霄 / 卓行 / 笃学交叠：硬切会把笃学变成「没进卓行的剩余」。
+ * 不抖动凌霄头部，以免把一本实力送进卓行；只从凌霄尾和卓行中前段
+ * 抽少数人换进笃学，再把一批卓行中后段与笃学对换，形成卓行长尾。
+ * 不改班级名额，也不从云岫实验/重点里抽人。
+ */
+function sliceTiersWithOverlap(ranked, groups, track, seed) {
+  const hard = [];
   let i = 0;
   for (let g = 0; g < groups.length; g++) {
     const isLast = g === groups.length - 1;
     const n = groups[g].list.reduce((s, t) => s + t.size, 0);
     const take = isLast ? ranked.slice(i) : ranked.slice(i, i + n);
     i += take.length;
-    snakeIntoClasses(take, groups[g].list, assign, track, seed);
+    hard.push(take);
   }
+  const tiers = new Set(groups.map((g) => g.tier));
+  if (track !== "li" || !tiers.has("zhuoxing") || !tiers.has("duxue")) return hard;
+  const rng = rngFrom(seed, "tier-overlap-li", ranked.length);
+  return swapAcrossTiers(hard, groups, ranked, rng);
+}
+
+function shuffleInPlace(rng, list) {
+  const out = list.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const tmp = out[i];
+    out[i] = out[j];
+    out[j] = tmp;
+  }
+  return out;
+}
+
+/** 从指定名次段把人换进目标层次，换出该层里名次更靠后、且不在保护段的人。 */
+function swapFromBand(slices, groups, ranked, origin, toTier, lo, hi, need, rng, protectLo = 0, protectHi = 0) {
+  const ti = groups.findIndex((g) => g.tier === toTier);
+  if (ti < 0 || need <= 0) return;
+  const inTo = new Set(slices[ti]);
+  const have = slices[ti].filter((r) => {
+    const i = origin.get(r);
+    return i >= lo && i < hi;
+  }).length;
+  const want = [];
+  for (let i = lo; i < hi && i < ranked.length; i++) {
+    if (!inTo.has(ranked[i])) want.push(ranked[i]);
+  }
+  const outgoing = slices[ti].filter((r) => {
+    const i = origin.get(r) ?? 0;
+    return i < protectLo || i >= protectHi;
+  }).sort((a, b) => (origin.get(b) ?? 0) - (origin.get(a) ?? 0));
+  const shuffled = shuffleInPlace(rng, want);
+  const takeN = Math.min(Math.max(0, need - have), shuffled.length, outgoing.length);
+  for (let n = 0; n < takeN; n++) {
+    const incoming = shuffled[n];
+    const fromIdx = slices.findIndex((list) => list.includes(incoming));
+    const leaving = outgoing[n];
+    if (fromIdx < 0 || fromIdx === ti || !leaving) continue;
+    const iIn = slices[fromIdx].indexOf(incoming);
+    const iOut = slices[ti].indexOf(leaving);
+    if (iIn < 0 || iOut < 0) continue;
+    slices[fromIdx][iIn] = leaving;
+    slices[ti][iOut] = incoming;
+  }
+}
+
+function swapAcrossTiers(slices, groups, ranked, rng) {
+  const origin = new Map(ranked.map((row, idx) => [row, idx]));
+  // 不从凌霄中前段抽人，以免高考把一本实力留给笃学。
+  // 只从卓行中前段抽头部（大约落到理科校排 400–560 一带，视云岫锁定席而定），
+  // 再从卓行中后段对换一批，保证各班都有人进前 1000，并让卓行保留长尾。
+  swapFromBand(slices, groups, ranked, origin, "duxue", 380, 560, 16, rng, 0, 650);
+  swapFromBand(slices, groups, ranked, origin, "duxue", 650, 860, 36, rng, 0, 650);
+  return slices;
 }
 
 function trackLean(row) {

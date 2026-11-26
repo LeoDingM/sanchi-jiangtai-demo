@@ -5,9 +5,9 @@
 import {
   SUBJECTS_G1, SUBJECT_IDS, SUBJECT_MAX, G1_TOTAL, CUTOFF_FIRST_RANK, CUTOFF_SECOND_RANK,
   LI_SUBJECTS, WEN_SUBJECTS, TIER, examById,
-} from "./config.js?v=t50u1";
-import { clamp, gauss, hash01, rngFrom, round1, round2 } from "./prng.js?v=t50u1";
-import { resolveSchoolQuota } from "./schoolLines.js?v=t50u1";
+} from "./config.js?v=t51u1";
+import { clamp, gauss, hash01, rngFrom, round1, round2 } from "./prng.js?v=t51u1";
+import { resolveSchoolQuota } from "./schoolLines.js?v=t51u1";
 
 export const SCALE_G1 = "g1-950";
 export const SCALE_G2 = "g2-750";
@@ -226,7 +226,7 @@ export function subjectRanks(rows, subjectId) {
  * 分科前：一本取上一届文理合计省控一本人数，二本取全年级前 1000 名。
  * 分科后：理科一本取上一届理科省控一本实际人数（无数据时约 460），二本取该划线池前 1000 名（不超过池内人数）；
  * 文科取上一届该科类省控实际一本/二本人数，绝不用 1000。
- * 高三划线池含补习班；应届省控上线统计仍不含复读。
+ * 高三划线池含补习班。滚动校内线名额仍用应届省控实际上线人数。
  * 第四个参数可以是 { track, quotas }；仍接受旧的 (n, split, trackSize) 调用，此时用兜底名额。
  */
 export function cutoffRanks(n, split, trackSize, firstOrOpts, secondTarget) {

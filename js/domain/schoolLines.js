@@ -1,10 +1,10 @@
 /**
  * 校内一本/二本名额：按上一届高考本校省控实际上线人数滚动，
  * 不再把全校 400/1000 按文理人数分摊。
- * 高三校内线按「应届 + 补习班」同一池取名次；应届省控上线统计仍不含复读/补习班。
+ * 高三校内线按应届与补习班同一池取名次。滚动到下一届的校内线名额仍用应届省控实际上线人数。
  */
-import { FALLBACK_SCHOOL_QUOTA } from "./config.js?v=t50u1";
-import { provincialLines, officialProvincialPack } from "./jiangxi.js?v=t50u1";
+import { FALLBACK_SCHOOL_QUOTA } from "./config.js?v=t51u1";
+import { provincialLines, officialProvincialPack } from "./jiangxi.js?v=t51u1";
 
 function clampRank(want, n) {
   const cap = Math.max(1, n);
@@ -30,7 +30,7 @@ export function schoolQuotaFromPrior(prior) {
     li: { firstN: liFirst, secondN: 1000 },
     wen: { firstN: wenFirst, secondN: wenSecond },
     mixed: { firstN: liFirst + wenFirst, secondN: 1000 },
-    source: prior.source || `${prior.entryYear}级${prior.gaokaoYear}年高考本校省控实际上线人数（应届，不含复读）。`,
+    source: prior.source || `${prior.entryYear}级${prior.gaokaoYear}年高考本校省控实际上线人数。`,
     fallback: false,
     priorYear: prior.gaokaoYear,
     priorEntryYear: prior.entryYear,
@@ -96,7 +96,7 @@ function finishMixed(pack) {
   return pack;
 }
 
-/** 应届生对照某年公开省控的实际上线人数。复读不计入。 */
+/** 滚动校内线名额用的应届上线人数。补习班另在教务处榜单里计省控上线，不进这个名额。 */
 export function provincialPassCounts(students, scoreMap, year) {
   const pack = emptyCounts(year);
   for (const s of students) {
@@ -142,13 +142,13 @@ export function isG1Scale(report) {
 function classTrackOf(report, classNo) {
   const cls = (report.classes || []).find((c) => c.classNo === classNo);
   if (cls?.track && cls.track !== "mixed") return cls.track;
-  const row = (report.rows || []).find((r) => r.classNo === classNo && !r.repeat);
+  const row = (report.rows || []).find((r) => r.classNo === classNo);
   return rowTrackForProvincial(row || {}, report.split);
 }
 
 export function classProvincialCounts(report, classNo) {
   const year = provincialCompareYear(report.date);
-  const rows = (report.rows || []).filter((r) => !r.repeat && r.classNo === classNo);
+  const rows = (report.rows || []).filter((r) => r.classNo === classNo);
   const pack = provincialPassCountsFromRows(rows, year, report.split);
   const track = classTrackOf(report, classNo);
   const bucket = report.split ? pack[track] : pack.mixed;
@@ -231,23 +231,17 @@ export function schoolCutoffView(report, track = "li") {
 
 export function describeSchoolCutoff(quota, split, opts = {}) {
   const q = quota?.li && quota?.wen && quota?.mixed ? quota : fallbackSchoolQuota();
+  const pool = opts.includeRepeat
+    ? "高三校内名次按应届与补习班同一池划"
+    : "校内名次按本场考生排序";
   if (q.fallback) {
-    const pool = opts.includeRepeat
-      ? "高三校内线按应届与补习班合在同一池中的校内名次划"
-      : "本年级尚无补习班，只在应届池里划线";
-    return `${q.source}${pool}。应届省控上线人数不含复读`;
+    return `${q.source}${pool}，只作对照，不是国家线`;
   }
   const tag = `${q.priorEntryYear}级${q.priorYear}年高考`;
   if (!split) {
-    const pool = opts.includeRepeat
-      ? "高三校内线按应届与补习班合在同一池中的校内名次划"
-      : "本年级尚无补习班，只在应届池里划线";
-    return `分科前校内一本按上一届（${tag}）文理合计省控一本 ${q.mixed.firstN} 人，二本取全年级前 ${q.mixed.secondN} 名（${pool}）。应届省控上线人数不含复读`;
+    return `分科前校内一本按上一届（${tag}）文理合计省控一本 ${q.mixed.firstN} 人，二本取全年级前 ${q.mixed.secondN} 名（${pool}），只作对照，不是国家线`;
   }
-  const pool = opts.includeRepeat
-    ? "高三校内线按应届与补习班合在同一池中的校内名次划"
-    : "本年级尚无补习班，只在应届池里划线";
-  return `理科校内一本按上一届（${tag}）理科省控一本实际 ${q.li.firstN} 人，二本取该池前 ${q.li.secondN} 名；文科按同一届文科省控实际一本 ${q.wen.firstN} 人、二本累计 ${q.wen.secondN} 人（${pool}）。应届省控上线人数不含复读`;
+  return `理科校内一本按上一届（${tag}）理科省控一本实际 ${q.li.firstN} 人，二本取该池前 ${q.li.secondN} 名；文科按同一届文科省控实际一本 ${q.wen.firstN} 人、二本累计 ${q.wen.secondN} 人（${pool}），只作对照，不是国家线`;
 }
 
 export function provincialCompareNote(report) {

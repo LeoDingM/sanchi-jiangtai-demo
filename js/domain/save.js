@@ -1,14 +1,27 @@
 /** 存档 / 读档。浏览器走 localStorage，Node 测试走纯 JSON。 */
-import { SAVE_VERSION } from "./simulation.js?v=t50u1";
-import { ensureStatePeers } from "./peers.js?v=t50u1";
-import { syncStateHealth } from "./health.js?v=t50u1";
+import { SAVE_VERSION } from "./simulation.js?v=t51u1";
+import { ensureStatePeers } from "./peers.js?v=t51u1";
+import { syncStateHealth } from "./health.js?v=t51u1";
 
 export const STORAGE_KEY = "sanchi-jiangtai-v1";
 export const SLOT_KEYS = [0, 1, 2].map((i) => `${STORAGE_KEY}-slot-${i}`);
 export const AUTO_KEY = `${STORAGE_KEY}-auto`;
 
+function examsForSave(exams) {
+  const out = {};
+  for (const [k, ex] of Object.entries(exams || {})) {
+    if (!ex || typeof ex !== "object") { out[k] = ex; continue; }
+    const cut = ex.cutoffs ? { ...ex.cutoffs, ranked: undefined } : ex.cutoffs;
+    const { scoreMap, ...rest } = ex;
+    out[k] = { ...rest, cutoffs: cut };
+  }
+  return out;
+}
+
 export function toJSON(state) {
-  return JSON.stringify({ v: SAVE_VERSION, savedAt: new Date().toISOString(), state });
+  const payload = { v: SAVE_VERSION, savedAt: new Date().toISOString(), state };
+  if (state && state.exams) payload.state = { ...state, exams: examsForSave(state.exams) };
+  return JSON.stringify(payload);
 }
 
 export function fromJSON(text) {
