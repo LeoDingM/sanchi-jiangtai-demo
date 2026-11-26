@@ -3,7 +3,7 @@
  * 不再把全校 400/1000 按文理人数分摊。复读不占应届名额。
  */
 import { FALLBACK_SCHOOL_QUOTA } from "./config.js";
-import { provincialLines } from "./jiangxi.js";
+import { provincialLines, officialProvincialPack } from "./jiangxi.js";
 
 function clampRank(want, n) {
   const cap = Math.max(1, n);
@@ -187,10 +187,45 @@ export function describeZhuoxingPeers(report, classNo) {
   const sS = midRange(peers.map((c) => c.schoolSecond));
   const pS = midRange(peers.map((c) => c.provSecond));
   const label = track === "wen" ? "卓行文科" : track === "li" ? "卓行理科" : "卓行";
+  if (report.examKind === "gaokao") {
+    const mine = me
+      ? `任教班省控一本 ${me.provFirst} 人、省控二本累计 ${me.provSecond} 人；校内一本 ${me.schoolFirst} 人、校内二本累计 ${me.schoolSecond} 人`
+      : "";
+    return `${label}各班省控一本 ${pF.min}–${pF.max} 人（中位 ${pF.mid}），省控二本累计 ${pS.min}–${pS.max} 人（中位 ${pS.mid}）；校内一本 ${sF.min}–${sF.max} 人（中位 ${sF.mid}），校内二本累计 ${sS.min}–${sS.max} 人（中位 ${sS.mid}）。${mine}。`;
+  }
   const mine = me
     ? `任教班校内一本 ${me.schoolFirst} 人、二本累计 ${me.schoolSecond} 人；对照省控一本 ${me.provFirst} 人、二本累计 ${me.provSecond} 人`
     : "";
   return `${label}各班校内一本 ${sF.min}–${sF.max} 人（中位 ${sF.mid}），二本累计 ${sS.min}–${sS.max} 人（中位 ${sS.mid}）；对照省控一本 ${pF.min}–${pF.max} 人（中位 ${pF.mid}），二本累计 ${pS.min}–${pS.max} 人（中位 ${pS.mid}）。${mine}。`;
+}
+
+/** 高考主卡片用的公开省控（国家线）说明。非 2020 年不含估算位次。 */
+export function describeOfficialProvincialLines(year, tracks = ["li", "wen"]) {
+  const pack = officialProvincialPack(year);
+  const bits = (tracks.length ? tracks : ["li", "wen"]).map((tr) => {
+    const t = tr === "wen" ? pack.wen : pack.li;
+    const label = tr === "wen" ? "文科" : "理科";
+    const ranks = t.ranks ? `，一本全省前 ${t.ranks.firstN} 名、二本全省前 ${t.ranks.secondN} 名` : "";
+    return `${label}一本 ${t.first}、二本 ${t.second}，分差 ${t.gap}${ranks}`;
+  });
+  return `${pack.year}年公开省控（国家线）：${bits.join("；")}。${pack.sourceNote}`;
+}
+
+export function schoolCutoffView(report, track = "li") {
+  const cut = report?.split ? (track === "wen" ? report.cutoffs?.wen : report.cutoffs?.li) : report?.cutoffs?.mixed;
+  if (!cut) return null;
+  const label = report.split ? (track === "wen" ? "文科" : "理科") : "";
+  return {
+    track: report.split ? (track === "wen" ? "wen" : "li") : "mixed",
+    label,
+    firstLine: cut.firstLine,
+    firstN: cut.firstN,
+    secondLine: cut.secondLine,
+    secondN: cut.secondN,
+    gap: (cut.firstLine ?? 0) - (cut.secondLine ?? 0),
+    firstTitle: `校内${label}一本线（第${cut.firstN}名）`,
+    secondTitle: `校内${label}二本线（第${cut.secondN}名）`,
+  };
 }
 
 export function describeSchoolCutoff(quota, split) {

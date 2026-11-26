@@ -6,7 +6,7 @@ import {
 } from "./scores.js";
 import { provincialLines } from "./jiangxi.js";
 import { attachJointExam, JOINT_SOURCE_NOTE } from "./jointExam.js";
-import { fallbackSchoolQuota } from "./schoolLines.js";
+import { fallbackSchoolQuota, classProvincialCounts, provincialCompareYear } from "./schoolLines.js";
 
 export function studentTrackForExam(student, split) {
   if (!split || student.track === "mixed" || !student.track) return "mixed";
@@ -193,9 +193,71 @@ export function filterRows(rows, { track, tier, classNo, repeat } = {}) {
 }
 
 export function sameTierCompare(report, tier) {
-  const classes = report.classes.filter((c) => c.tier === tier && !c.repeat);
+  const classes = filterClasses(report.classes || [], { tier, repeat: false });
   const rows = report.rows.filter((r) => r.tier === tier && !r.repeat);
   return { classes, rows: rankRows(rows) };
+}
+
+/** 本班应届按当次总分重排（同分并列规则与全校 rankRows 一致）。 */
+export function classStandings(rows, classNo) {
+  const list = (rows || []).filter((r) => r.classNo === classNo && !r.repeat);
+  const gradeRank = new Map(list.map((r) => [r.studentId, r.rank]));
+  return rankRows(list).map((r) => ({
+    ...r,
+    classRank: r.rank,
+    gradeRank: gradeRank.has(r.studentId) ? gradeRank.get(r.studentId) : r.rank,
+  }));
+}
+
+export function filterClasses(classes, { track, tier, repeat } = {}) {
+  return (classes || []).filter((c) => {
+    if (repeat === false && c.repeat) return false;
+    if (repeat === true && !c.repeat) return false;
+    if (tier && tier !== "all" && c.tier !== tier) return false;
+    if (track && track !== "all" && track !== "mixed" && c.track !== track) return false;
+    return true;
+  });
+}
+
+export function classCompareRows(report, { tier, track } = {}) {
+  const year = provincialCompareYear(report?.date);
+  return filterClasses(report?.classes || [], { tier, track, repeat: false }).map((c) => {
+    const prov = classProvincialCounts(report, c.classNo);
+    return { ...c, provYear: year, provFirst: prov.firstN, provSecond: prov.secondN };
+  });
+}
+
+export function examReportKey(report) {
+  if (!report) return "";
+  return `${report.date}|${report.examId}|${report.entryYear ?? ""}|${report.grade ?? ""}`;
+}
+
+/** 按场次键查找报告；键不完整时优先同一届，避免教务处落到其他年级的最近一场。 */
+export function pickExamReport(list, pick, { preferEntryYear } = {}) {
+  const reports = list || [];
+  if (pick) {
+    const exact = reports.find((e) => examReportKey(e) === pick);
+    if (exact) return exact;
+    const [date, examId, entryYear, grade] = String(pick).split("|");
+    const match = reports.find((e) => {
+      if (e.date !== date || e.examId !== examId) return false;
+      if (entryYear && String(e.entryYear) !== String(entryYear)) return false;
+      if (grade && String(e.grade) !== String(grade)) return false;
+      return true;
+    });
+    if (match) return match;
+    if (preferEntryYear != null) {
+      const sameCohort = reports.find((e) => e.date === date && e.examId === examId && Number(e.entryYear) === Number(preferEntryYear));
+      if (sameCohort) return sameCohort;
+    }
+    const byDateId = reports.find((e) => e.date === date && e.examId === examId);
+    if (byDateId) return byDateId;
+  }
+  if (preferEntryYear != null) {
+    const same = reports.find((e) => Number(e.entryYear) === Number(preferEntryYear));
+    if (same) return same;
+  }
+  return reports[0] || null;
 }
 
 export { CUTOFF_FIRST_RANK, CUTOFF_SECOND_RANK, provincialLines };

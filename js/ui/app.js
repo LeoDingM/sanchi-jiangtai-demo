@@ -16,13 +16,14 @@ import { addDays } from "../domain/calendar.js";
 import { parentTalkPriority, composeParentBrief } from "../domain/parents.js";
 import { saveSlot, loadSlot, listSlots, toJSON, fromJSON } from "../domain/save.js";
 import { subjectById, SUBJECTS_G1 } from "../domain/config.js";
-import { filterRows, sameTierCompare } from "../domain/examService.js";
+import { rankRows } from "../domain/scores.js";
+import { filterRows, sameTierCompare, classStandings, classCompareRows, examReportKey, pickExamReport } from "../domain/examService.js";
 import { hydrateReport } from "../domain/simulation.js";
 import { renderSeating } from "./classroom.js";
-import { provincialLines } from "../domain/jiangxi.js";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial } from "../domain/schoolLines.js";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js";
 import { studentExamHistory, tierName, findStudentInState } from "../domain/studentHistory.js";
-import { drawScoreChart, drawRankChart } from "./charts.js";
+import { drawLineChart, drawBarChart } from "./charts.js";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
@@ -482,19 +483,19 @@ function viewProfile(host) {
     <div class="charts">
       <div class="chart-card">
         <h4>总分走势（折合 750 分）</h4>
-        <canvas id="ch-total"></canvas>
+        <canvas id="ch-total" width="640" height="230"></canvas>
       </div>
       <div class="chart-card">
         <h4>班排 / 同层次排 / 校排（名次在上为靠前）</h4>
-        <canvas id="ch-ranks"></canvas>
+        <canvas id="ch-ranks" width="640" height="230"></canvas>
       </div>
       <div class="chart-card">
         <h4>跨层次对比（名次百分位，越小越靠前）</h4>
-        <canvas id="ch-cross"></canvas>
+        <canvas id="ch-cross" width="640" height="230"></canvas>
       </div>
       ${latest ? `<div class="chart-card">
         <h4>最近一场跨层次对照 · ${latest.date} ${latest.examName}（总分 ${latest.total}）</h4>
-        <canvas id="ch-crossbar"></canvas>
+        <canvas id="ch-crossbar" width="640" height="200"></canvas>
       </div>` : ""}
     </div>
     <div class="scroll-table paper">
@@ -511,15 +512,15 @@ function viewProfile(host) {
     <div class="charts">
       <div class="chart-card">
         <h4>${(subjectById(subjectPick)||{name:subjectPick}).name} 分数走势</h4>
-        <canvas id="ch-subj"></canvas>
+        <canvas id="ch-subj" width="640" height="230"></canvas>
       </div>
       <div class="chart-card">
         <h4>${(subjectById(subjectPick)||{name:subjectPick}).name} 班排 / 层次排 / 校排</h4>
-        <canvas id="ch-subj-ranks"></canvas>
+        <canvas id="ch-subj-ranks" width="640" height="230"></canvas>
       </div>
       <div class="chart-card">
         <h4>${(subjectById(subjectPick)||{name:subjectPick}).name} 跨层次名次百分位</h4>
-        <canvas id="ch-subj-cross"></canvas>
+        <canvas id="ch-subj-cross" width="640" height="230"></canvas>
       </div>
     </div>
     <div class="scroll-table paper">
@@ -1089,33 +1090,86 @@ function viewPlacement(host) {
       <tbody>${[...p2in, ...p2out].map((s)=>`<tr class="${s.classNo===state.player.classNo?"me":""}"><td>${s.name}</td><td>${s.placement2.from}班</td><td>${s.placement2.to}班</td><td>${tierLabel(s.tier)}</td><td>${s.track==="wen"?"文":"理"}</td></tr>`).join("") || "<tr><td colspan='5'>本班在第二次分班中没有换到其他卓行班。</td></tr>"}</tbody></table></div>` : `<p class="notice">第二次分班要等第一次完成、并且高一下学期期末之后。推进校历时会按规则自动重组，可在本页查看换班名单和同层对照，不会与第一次的文理分科、跨梯队调整混在一起。</p>`}`;
 }
 
-function examOptions() {
-  const list = listExamReports(state, { entryYear: state.player.cohortYear });
-  if (!list.length) return "";
-  if (!examPick || !list.some((e) => `${e.date}|${e.examId}` === examPick)) examPick = `${list[0].date}|${list[0].examId}`;
-  return list.map((e) => {
-    const v = `${e.date}|${e.examId}`;
+function clickStudentHint() {
+  return `<p class="notice">点击学生可看成绩和排名曲线。曲线在「学生档案」里，含总分折线、班排/同层次排/校排变化，以及单科对照。</p>`;
+}
+
+function examOptions(list) {
+  const rows = list || listExamReports(state, { entryYear: state.player.cohortYear });
+  if (!rows.length) return "";
+  const cur = pickExamReport(rows, examPick, { preferEntryYear: state.player.cohortYear }) || rows[0];
+  examPick = examReportKey(cur);
+  return rows.map((e) => {
+    const v = examReportKey(e);
     return `<option value="${v}" ${v===examPick?"selected":""}>${e.date} ${e.examName}（难度${(e.difficulty||1).toFixed(2)}）</option>`;
   }).join("");
 }
 
 function currentReport() {
   const list = listExamReports(state, { entryYear: state.player.cohortYear });
-  return list.find((e) => `${e.date}|${e.examId}` === examPick) || list[0] || null;
+  return pickExamReport(list, examPick, { preferEntryYear: state.player.cohortYear });
 }
 
 function lineCompareNotice(report, classNo = state.player.classNo) {
   if (!report || report.examKind === "huikao") return "";
-  const parts = [
-    describeSchoolCutoff(report.quota, report.split) + "。",
-    describeSchoolProvincial(report) + "。",
-  ];
+  const parts = [];
+  if (report.examKind === "gaokao") {
+    const year = provincialCompareYear(report.date);
+    parts.push(describeOfficialProvincialLines(year) + " ");
+  }
+  parts.push(describeSchoolCutoff(report.quota, report.split) + "。");
+  parts.push(describeSchoolProvincial(report) + "。");
   if (classNo != null) {
     parts.push(`任教班${describeClassProvincial(report, classNo)}。`);
     const peers = describeZhuoxingPeers(report, classNo);
     if (peers) parts.push(`同层次平行班对比：${peers}`);
   }
   return parts.join("");
+}
+
+function officialLinesBlock(report, track = "li") {
+  const year = provincialCompareYear(report.date);
+  const pack = officialProvincialPack(year);
+  const tr = track === "wen" ? "wen" : "li";
+  const t = pack[tr];
+  const other = tr === "li" ? pack.wen : pack.li;
+  const label = tr === "wen" ? "文科" : "理科";
+  const otherLabel = tr === "wen" ? "理科" : "文科";
+  const rankFirst = t.ranks ? `（全省前 ${t.ranks.firstN} 名）` : "";
+  const rankSecond = t.ranks ? `（全省前 ${t.ranks.secondN} 名）` : "";
+  const otherRanks = other.ranks
+    ? `，一本全省前 ${other.ranks.firstN} 名、二本全省前 ${other.ranks.secondN} 名`
+    : "";
+  return `<div class="kpi">
+      <div><span>${year}年公开省控${label}一本（国家线）${rankFirst}</span><b>${t.first}</b></div>
+      <div><span>公开省控${label}二本（国家线）${rankSecond}</span><b>${t.second}</b></div>
+      <div><span>国家线分差</span><b>${t.gap}</b></div>
+      <div><span>试卷难度</span><b>${(report.difficulty||1).toFixed(3)}</b></div>
+    </div>
+    <p class="notice">${pack.sourceNote} ${otherLabel}一本 ${other.first}、二本 ${other.second}，分差 ${other.gap}${otherRanks}。</p>`;
+}
+
+function schoolLinesNote(report, track = "li") {
+  const cut = schoolCutoffView(report, track);
+  const cutW = report.split && track !== "wen" ? schoolCutoffView(report, "wen") : null;
+  if (!cut) return "";
+  const ordinary = report.examKind !== "gaokao" && report.examKind !== "city" && report.examKind !== "province";
+  const why = ordinary
+    ? "平时考试没有国家线，以上是校内对照，不是省控。"
+    : "以上校内线按上一届本校该科类省控一本人数、理科二本取前 1000 名从当次排序得出，只作对照，不是国家线。";
+  const extra = cutW ? `文科${cutW.firstTitle} ${cutW.firstLine}，${cutW.secondTitle} ${cutW.secondLine}，分差 ${cutW.gap}。` : "";
+  return `${cut.firstTitle} ${cut.firstLine}，${cut.secondTitle} ${cut.secondLine}，分差 ${cut.gap}。${extra}${why}`;
+}
+
+function schoolLinesKpi(report, track = "li") {
+  const cut = schoolCutoffView(report, track);
+  if (!cut) return "";
+  return `<div class="kpi school-cut-kpi">
+      <div><span>${cut.firstTitle}</span><b>${cut.firstLine ?? "—"}</b></div>
+      <div><span>${cut.secondTitle}</span><b>${cut.secondLine ?? "—"}</b></div>
+      <div><span>校内线分差</span><b>${cut.gap}</b></div>
+      <div><span>年级第一/第二差</span><b>${(report.split ? (track==="wen"?report.cutoffs?.wen:report.cutoffs?.li) : report.cutoffs?.mixed)?.topGap ?? "—"}</b></div>
+    </div>`;
 }
 
 function escapeHtml(s) {
@@ -1219,52 +1273,72 @@ function bindExamAi(host, report) {
   };
 }
 
+function provincialLineLabel(row, report) {
+  const year = provincialCompareYear(report.date);
+  const track = row.track === "wen" ? "wen" : "li";
+  const lines = provincialLines(year, track) || provincialLines(2020, track);
+  const max = row.maxTotal || 750;
+  const total = max === 750 ? row.total : Math.round((row.total / max) * 750);
+  if (total >= lines.first) return "省控一本";
+  if (total >= lines.second) return "省控二本";
+  return "未达省控二本";
+}
+
+function classPassSummary(report, classNo) {
+  const cls = (report.classes || []).find((c) => c.classNo === classNo);
+  const prov = classProvincialCounts(report, classNo);
+  if (report.examKind === "gaokao") {
+    return `任教班省控一本 ${prov.firstN} 人、省控二本累计 ${prov.secondN} 人；校内一本 ${cls?.firstCount ?? "—"} 人、校内二本累计 ${cls?.secondCount ?? "—"} 人。高考上线以公开省控为主，校内线只作对照。`;
+  }
+  return `任教班校内一本 ${cls?.firstCount ?? "—"} 人、校内二本累计 ${cls?.secondCount ?? "—"} 人；${describeClassProvincial(report, classNo)}。平时考试上线以校内对照为主，不是省控。`;
+}
+
 function viewGrades(host) {
   const report = currentReport();
   if (!report) {
     host.innerHTML = `<h3>考试成绩</h3><p>还没有考试。可用「下一阶段」跳到第一次月考。</p>`;
     return;
   }
-  const mine = (report.rows||[]).filter((r) => r.classNo === state.player.classNo && !r.repeat)
-    .sort((a,b)=> (a.rank||0)-(b.rank||0) || b.total-a.total);
-  const cut = report.split ? report.cutoffs.li : report.cutoffs.mixed;
-  const cutW = report.split ? report.cutoffs.wen : null;
+  const mine = classStandings(report.rows || [], state.player.classNo);
+  const track = report.split ? (mine[0]?.track === "wen" ? "wen" : "li") : "mixed";
   const note = examSourceNotice(report);
   const isHk = report.examKind === "huikao";
+  const isGk = report.examKind === "gaokao";
   const isJoint = report.examKind === "city" || report.examKind === "province";
   const passN = isHk ? mine.filter((r)=>r.huikaoPass).length : null;
-  const jLi = report.joint?.city?.li;
   const jointKpi = isJoint ? jointLinesBlock(report) : "";
   const head = isHk ? ["班名次","姓名","总分","年级名次","校内合格"]
     : isJoint ? (report.examKind==="province" ? ["班名次","姓名","总分","校排","县位次","市位次","省位次","市上线","省上线"] : ["班名次","姓名","总分","校排","县位次","市位次","市上线","县上线"])
+    : isGk ? ["班名次","姓名","总分","年级名次","省控上线","校内上线"]
     : ["班名次","姓名","总分","年级名次","校内上线"];
-  const rowCells = (r,i) => {
-    if (isHk) return `<td>${i+1}</td><td>${r.name}</td><td>${r.total}</td><td>${r.rank||"—"}</td><td>${r.huikaoPass?"合格":"不合格"}</td>`;
-    if (isJoint && report.examKind==="province") return `<td>${i+1}</td><td>${r.name}</td><td>${r.total}</td><td>${r.rank||"—"}</td><td>${r.countyRank??"—"}</td><td>${r.cityRank??"—"}</td><td>${r.provinceRank??"—"}</td><td>${r.jointLine?.city||"—"}</td><td>${r.jointLine?.province||"—"}</td>`;
-    if (isJoint) return `<td>${i+1}</td><td>${r.name}</td><td>${r.total}</td><td>${r.rank||"—"}</td><td>${r.countyRank??"—"}</td><td>${r.cityRank??"—"}</td><td>${r.jointLine?.city||"—"}</td><td>${r.jointLine?.county||"—"}</td>`;
-    return `<td>${i+1}</td><td>${r.name}</td><td>${r.total}</td><td>${r.rank||"—"}</td><td>${r.line||""}</td>`;
+  const classRankCell = (r) => r.classRank ?? r.rank ?? "";
+  const gradeRankCell = (r) => r.gradeRank ?? r.rank ?? "—";
+  const rowCells = (r) => {
+    if (isHk) return `<td>${classRankCell(r)}</td><td>${r.name}</td><td>${r.total}</td><td>${gradeRankCell(r)}</td><td>${r.huikaoPass?"合格":"不合格"}</td>`;
+    if (isJoint && report.examKind==="province") return `<td>${classRankCell(r)}</td><td>${r.name}</td><td>${r.total}</td><td>${gradeRankCell(r)}</td><td>${r.countyRank??"—"}</td><td>${r.cityRank??"—"}</td><td>${r.provinceRank??"—"}</td><td>${r.jointLine?.city||"—"}</td><td>${r.jointLine?.province||"—"}</td>`;
+    if (isJoint) return `<td>${classRankCell(r)}</td><td>${r.name}</td><td>${r.total}</td><td>${gradeRankCell(r)}</td><td>${r.countyRank??"—"}</td><td>${r.cityRank??"—"}</td><td>${r.jointLine?.city||"—"}</td><td>${r.jointLine?.county||"—"}</td>`;
+    if (isGk) return `<td>${classRankCell(r)}</td><td>${r.name}</td><td>${r.total}</td><td>${gradeRankCell(r)}</td><td>${provincialLineLabel(r, report)}</td><td>校内${r.line||""}</td>`;
+    return `<td>${classRankCell(r)}</td><td>${r.name}</td><td>${r.total}</td><td>${gradeRankCell(r)}</td><td>${r.line||""}</td>`;
   };
   const actingHome = isActingHomeroom(state.player, state.player.classNo);
   const officialHome = isPlayerHomeroom(state.player, state.player.classNo);
   const godNote = actingHome && !officialHome
     ? `<p class="notice">上帝模式：当前按班主任身份查看本班考后分析。学校正式班主任仍是${escapeHtml(officialHomeroomName(state.player))}，任职与存档不会被改写。</p>`
     : "";
+  const mainKpi = isJoint ? jointKpi
+    : isHk ? `<div class="kpi"><div><span>试卷难度</span><b>${(report.difficulty||1).toFixed(3)}</b></div><div><span>班内校内合格</span><b>${passN} / ${mine.length}</b></div><div><span>合格标准</span><b>卷面 60%</b></div></div>`
+    : isGk ? officialLinesBlock(report, track) + schoolLinesKpi(report, track) + `<p class="muted">${schoolLinesNote(report, track)}</p>`
+    : `<div class="kpi"><div><span>试卷难度</span><b>${(report.difficulty||1).toFixed(3)}</b></div></div>` + schoolLinesKpi(report, track) + `<p class="notice">${schoolLinesNote(report, track)}</p>`;
   host.innerHTML = `<h3>考试成绩 · 任教班</h3>
     <div class="filters"><label>场次 <select id="exsel">${examOptions()}</select></label></div>
     ${godNote}
+    ${clickStudentHint()}
     ${note?`<p class="notice">${note}</p>`:""}
-    ${isJoint?jointKpi:`<div class="kpi">
-      <div><span>试卷难度</span><b>${(report.difficulty||1).toFixed(3)}</b></div>
-      ${isHk?`<div><span>班内校内合格</span><b>${passN} / ${mine.length}</b></div><div><span>合格标准</span><b>卷面 60%</b></div>`:`<div><span>${report.split?"理科":""}一本线（第${cut?.firstN}名）</span><b>${cut?.firstLine ?? "—"}</b></div>
-      <div><span>二本线（第${cut?.secondN}名）</span><b>${cut?.secondLine ?? "—"}</b></div>
-      <div><span>线差分</span><b>${cut && cut.firstLine-cut.secondLine}</b></div>
-      <div><span>年级第一/第二差</span><b>${cut?.topGap ?? "—"}</b></div>`}
-    </div>
-    ${!isHk && cutW?`<p class="notice">文科校内一本线 ${cutW.firstLine}（第${cutW.firstN}名），二本线 ${cutW.secondLine}，分差 ${cutW.firstLine-cutW.secondLine}。分数线由当次个人成绩排序得出，难度变化时会明显波动。</p>`:""}
-    ${!isHk?`<p class="notice">${lineCompareNotice(report)}</p>`:""}`}
-    ${isJoint?`<p class="muted">校内模拟线（第 ${cut?.firstN} / ${cut?.secondN} 名）理科 ${cut?.firstLine??"—"} / ${cut?.secondLine??"—"}，只作校内对照，不是市线或省线。${cutW?`文科校内 ${cutW.firstLine} / ${cutW.secondLine}。`:""}</p>`:""}
+    ${mainKpi}
+    ${!isHk?`<p class="notice">${lineCompareNotice(report)}</p><p class="notice">${classPassSummary(report, state.player.classNo)}</p>`:""}
+    ${isJoint?`<p class="muted">${schoolLinesNote(report, track)}</p>`:""}
     <div class="paper"><table><thead><tr>${head.map((h)=>`<th>${h}</th>`).join("")}</tr></thead>
-    <tbody>${mine.map((r,i)=>`<tr data-id="${r.studentId}">${rowCells(r,i)}</tr>`).join("")}</tbody></table></div>
+    <tbody>${mine.map((r)=>`<tr data-id="${r.studentId}">${rowCells(r)}</tr>`).join("")}</tbody></table></div>
     ${examAiPanel(report)}`;
   host.querySelector("#exsel").onchange = (e) => { examPick = e.target.value; render(); };
   host.querySelectorAll("tr[data-id]").forEach((tr)=>tr.onclick=()=>{selectedId=tr.dataset.id; view="profile"; render();});
@@ -1295,10 +1369,7 @@ function examAiPanel(report) {
 
 function viewOffice(host) {
   const all = listExamReports(state);
-  const byDate = {};
-  for (const r of all) (byDate[r.date+" "+r.examName] ??= []).push(r);
-  const names = Object.keys(byDate);
-  if (!names.length) {
+  if (!all.length) {
     host.innerHTML = `<h3>教务处</h3>
       ${officeCollabHtml()}
       <p class="muted">全校成绩要等第一次考试结算之后才会出现在这里。办公室坐班、班主任通报和备课请教现在就可以做。</p>`;
@@ -1306,36 +1377,28 @@ function viewOffice(host) {
     bindParentActions(host);
     return;
   }
-  const pick = examPick && names.find((n)=>n.includes(examPick.split("|")[0])) || names[0];
-  const reports = byDate[pick] || byDate[names[0]];
-  const report = reports.find((r)=>r.entryYear==null) || reports[0];
-  // 合并同年级：list already per cohort; 选玩家当前年级或可筛选
-  const gradeRep = reports.find((r) => r.grade === 1 || r.grade) || reports[0];
-  const use = hydrateReport(JSON.parse(JSON.stringify(gradeRep)));
-  // allow choosing any stored report
-  const flat = all;
-  const cur = flat.find((e)=> `${e.date}|${e.examId}|${e.grade}` === examPick) || flat[0];
-  const live = hydrateReport(cur);
+  const live = hydrateReport(pickExamReport(all, examPick, { preferEntryYear: state.player.cohortYear }) || all[0]);
+  examPick = examReportKey(live);
   const tiers = [["all","全部层次"],["yunxiu_exp","云岫实验 0/1"],["yunxiu_key","云岫重点 2—4"],["lingxiao","凌霄"],["zhuoxing","卓行"],["duxue","笃学"],["yiti","艺体"],["fuzhuo","复卓"]];
   const tracks = live.split ? [["all","文理全部"],["li","理科"],["wen","文科"]] : [["all","未分科"]];
   host.innerHTML = `<h3>教务处 · 全校成绩</h3>
     ${officeCollabHtml()}
+    ${clickStudentHint()}
     <div class="filters">
-      <label>场次 <select id="exsel">${flat.map((e)=>{const v=`${e.date}|${e.examId}`; return `<option value="${v}" ${`${e.date}|${e.examId}`===`${live.date}|${live.examId}`?"selected":""}>${e.date} ${e.examName} · 高${e.grade}</option>`;}).join("")}</select></label>
+      <label>场次 <select id="exsel">${all.map((e)=>{const v=examReportKey(e); return `<option value="${v}" ${v===examPick?"selected":""}>${e.date} ${e.examName} · ${e.entryYear}级高${e.grade}</option>`;}).join("")}</select></label>
       <label>层次 <select id="tier">${tiers.map(([v,n])=>`<option value="${v}">${n}</option>`).join("")}</select></label>
       <label>科类 <select id="track">${tracks.map(([v,n])=>`<option value="${v}">${n}</option>`).join("")}</select></label>
     </div>
     <div id="office-body"></div>`;
   const sel = host.querySelector("#exsel");
-  sel.value = `${live.date}|${live.examId}`;
+  sel.value = examPick;
   sel.onchange = () => { examPick = sel.value; render(); };
   const draw = () => {
     const tier = host.querySelector("#tier").value;
     const track = host.querySelector("#track").value;
-    let rows = filterRows(live.rows||[], { tier: tier==="all"?null:tier, track: track==="all"?null:track, repeat: false });
-    rows = rows.slice().sort((a,b)=>b.total-a.total).map((r,i)=>({...r, showRank:i+1}));
+    const cutTrack = live.split ? (track === "wen" ? "wen" : "li") : "mixed";
+    let rows = rankRows(filterRows(live.rows||[], { tier: tier==="all"?null:tier, track: track==="all"?null:track, repeat: false }));
     const body = host.querySelector("#office-body");
-    const cut = live.split ? (track==="wen"?live.cutoffs.wen:live.cutoffs.li) : live.cutoffs.mixed;
     const subjects = live.subjectIds || [];
     const toppers = live.toppers || {};
     const scope = tier==="all" ? (track==="wen"?"wen":track==="li"?"li":"all") : tier;
@@ -1345,19 +1408,44 @@ function viewOffice(host) {
       const nm = (subjectById(id)||{name:id}).name;
       return t ? `${nm}第一：${t.name}（${t.score}）` : "";
     }).filter(Boolean).join("　");
-    const classTable = (live.classes||[]).filter((c)=> (tier==="all"||c.tier===tier) && !c.repeat);
+    const isHk = live.examKind === "huikao";
+    const isGk = live.examKind === "gaokao";
+    const isJoint = live.examKind === "city" || live.examKind === "province";
+    const classTable = classCompareRows(live, { tier, track });
+    const classHead = isGk
+      ? ["班","层次","科类","人数","均分","最高","省控一本","省控二本累计","校内一本","校内二本累计"]
+      : ["班","层次","科类","人数","均分","最高","校内一本","校内一本率","校内二本累计"];
+    const classCells = (c) => {
+      const tr = c.track === "wen" ? "文" : c.track === "li" ? "理" : "未分科";
+      if (isGk) return `<td>${c.name||c.classNo+"班"}</td><td>${c.tier}</td><td>${tr}</td><td>${c.count}</td><td>${c.avg}</td><td>${c.max}</td><td>${c.provFirst}</td><td>${c.provSecond}</td><td>${c.firstCount}</td><td>${c.secondCount}</td>`;
+      return `<td>${c.name||c.classNo+"班"}</td><td>${c.tier}</td><td>${tr}</td><td>${c.count}</td><td>${c.avg}</td><td>${c.max}</td><td>${c.firstCount}</td><td>${c.firstRate}%</td><td>${c.secondCount}</td>`;
+    };
+    const mainKpi = isHk
+      ? `<div class="kpi"><div><span>校内合格标准</span><b>卷面 60%</b></div><div><span>合格人数</span><b>${(live.rows||[]).filter((r)=>!r.repeat && r.huikaoPass).length}</b></div></div>`
+      : isJoint
+        ? jointLinesBlock(live) + `<p class="muted">${schoolLinesNote(live, cutTrack)}</p>`
+        : isGk
+          ? officialLinesBlock(live, cutTrack) + schoolLinesKpi(live, cutTrack) + `<p class="muted">${schoolLinesNote(live, cutTrack)}</p>`
+          : `<div class="kpi"><div><span>试卷难度</span><b>${(live.difficulty||1).toFixed(3)}</b></div></div>` + schoolLinesKpi(live, cutTrack) + `<p class="notice">${schoolLinesNote(live, cutTrack)}</p>`;
+    const lineHead = isGk ? "<th>省控上线</th><th>校内上线</th>" : `<th>${live.examKind==="province"?"省位次":live.examKind==="city"?"市位次":"校内上线"}</th>`;
+    const lineCells = (r) => {
+      if (isGk) return `<td>${provincialLineLabel(r, live)}</td><td>校内${r.line||""}</td>`;
+      if (live.examKind==="province") return `<td>${r.provinceRank??"—"}</td>`;
+      if (live.examKind==="city") return `<td>${r.cityRank??"—"}</td>`;
+      return `<td>${r.line||""}</td>`;
+    };
     body.innerHTML = `
-      <p class="notice">难度 ${(live.difficulty||1).toFixed(3)}　离散 ${(live.dispersion||1).toFixed(3)}。${live.examKind==="city"||live.examKind==="province"?"市/省/县线由模拟考生池位次算出，校内线只作校内对照。":"校内线按上一届高考本校省控实际人数划线，分数由当次排序得出。"}班级汇总全部由个人成绩加总，不另造统计。${examSourceNotice(live)?" "+examSourceNotice(live):""}</p>
-      ${live.examKind==="huikao"?"":`<p class="notice">${lineCompareNotice(live, state.player.classNo)}</p>`}
-      ${live.examKind==="huikao"?`<div class="kpi"><div><span>校内合格标准</span><b>卷面 60%</b></div><div><span>合格人数</span><b>${(live.rows||[]).filter((r)=>!r.repeat && r.huikaoPass).length}</b></div><div><span>第一名</span><b>${cut?.top??"—"}</b></div></div>`:(live.examKind==="city"||live.examKind==="province"?jointLinesBlock(live)+`<p class="muted">校内模拟线（第 ${cut?.firstN} / ${cut?.secondN} 名）${cut?.firstLine??"—"} / ${cut?.secondLine??"—"}，不是市线或省线。</p>`:`<div class="kpi"><div><span>一本线</span><b>${cut?.firstLine??"—"}</b></div><div><span>二本线</span><b>${cut?.secondLine??"—"}</b></div><div><span>分差</span><b>${cut?cut.firstLine-cut.secondLine:"—"}</b></div><div><span>第一名</span><b>${cut?.top??"—"}</b></div></div>`)}
+      <p class="notice">难度 ${(live.difficulty||1).toFixed(3)}　离散 ${(live.dispersion||1).toFixed(3)}。${isJoint?"市/省/县线由模拟考生池位次算出，校内线只作校内对照。":isGk?"高考上线以公开省控（国家线）为主，校内线只作对照。":"平时考试没有国家线，校内线按上一届高考本校省控实际人数划线，只作校内对照，不是省控。"}班级汇总全部由个人成绩加总，不另造统计。${examSourceNotice(live)?" "+examSourceNotice(live):""}</p>
+      ${isHk?"":`<p class="notice">${lineCompareNotice(live, state.player.classNo)}</p>`}
+      ${mainKpi}
       <p class="notice">${topLine}</p>
       <h3>各班对照</h3>
-      <div class="paper"><table><thead><tr><th>班</th><th>层次</th><th>人数</th><th>均分</th><th>最高</th><th>一本</th><th>一本率</th><th>二本累计</th></tr></thead>
-      <tbody>${classTable.map((c)=>`<tr><td>${c.name||c.classNo+"班"}</td><td>${c.tier}</td><td>${c.count}</td><td>${c.avg}</td><td>${c.max}</td><td>${c.firstCount}</td><td>${c.firstRate}%</td><td>${c.secondCount}</td></tr>`).join("")}</tbody></table></div>
+      <div class="paper"><table><thead><tr>${classHead.map((h)=>`<th>${h}</th>`).join("")}</tr></thead>
+      <tbody>${classTable.map((c)=>`<tr>${classCells(c)}</tr>`).join("")}</tbody></table></div>
       <h3>学生总分与单科（当前筛选 ${rows.length} 人）</h3>
-      <div class="paper"><table><thead><tr><th>筛选名次</th><th>姓名</th><th>班级</th><th>总分</th><th>${subjects.slice(0,8).map(id=>(subjectById(id)||{name:id}).name).join("</th><th>")}</th><th>${live.examKind==="province"?"省位次":live.examKind==="city"?"市位次":"校内上线"}</th>${live.examKind==="city"||live.examKind==="province"?`<th>${live.examKind==="province"?"市位次":"县位次"}</th>${live.examKind==="province"?"<th>县位次</th>":""}<th>市上线</th>`:""}${live.examKind==="province"?"<th>省上线</th>":""}</tr></thead>
-      <tbody>${rows.slice(0,200).map((r)=>`<tr data-id="${r.studentId}"><td>${r.showRank}</td><td>${r.name}</td><td>${r.classNo}班</td><td>${r.total}</td>${subjects.slice(0,8).map(id=>`<td>${r[id]??""}</td>`).join("")}<td>${live.examKind==="province"?(r.provinceRank??"—"):live.examKind==="city"?(r.cityRank??"—"):(r.line||"")}</td>${live.examKind==="city"||live.examKind==="province"?`<td>${live.examKind==="province"?(r.cityRank??"—"):(r.countyRank??"—")}</td>${live.examKind==="province"?`<td>${r.countyRank??"—"}</td>`:""}<td>${r.jointLine?.city||"—"}</td>`:""}${live.examKind==="province"?`<td>${r.jointLine?.province||"—"}</td>`:""}</tr>`).join("")}</tbody></table>
-      ${rows.length>200?"<p class='muted'>仅显示前 200 人，可用层次筛选缩小范围。点击姓名可看该生档案曲线。</p>":""}</div>`;
+      <div class="paper"><table><thead><tr><th>筛选名次</th><th>姓名</th><th>班级</th><th>总分</th><th>${subjects.slice(0,8).map(id=>(subjectById(id)||{name:id}).name).join("</th><th>")}</th>${lineHead}${isJoint?`<th>${live.examKind==="province"?"市位次":"县位次"}</th>${live.examKind==="province"?"<th>县位次</th>":""}<th>市上线</th>`:""}${live.examKind==="province"?"<th>省上线</th>":""}</tr></thead>
+      <tbody>${rows.map((r)=>`<tr data-id="${r.studentId}"><td>${r.rank}</td><td>${r.name}</td><td>${r.classNo}班</td><td>${r.total}</td>${subjects.slice(0,8).map(id=>`<td>${r[id]??""}</td>`).join("")}${lineCells(r)}${isJoint?`<td>${live.examKind==="province"?(r.cityRank??"—"):(r.countyRank??"—")}</td>${live.examKind==="province"?`<td>${r.countyRank??"—"}</td>`:""}<td>${r.jointLine?.city||"—"}</td>`:""}${live.examKind==="province"?`<td>${r.jointLine?.province||"—"}</td>`:""}</tr>`).join("")}</tbody></table>
+      ${rows.length>400?"<p class='muted'>名单较长，可用层次或科类筛选缩小范围。点击姓名可看该生档案曲线。</p>":""}</div>`;
       body.querySelectorAll("tr[data-id]").forEach((tr) => {
         tr.onclick = () => { selectedId = tr.dataset.id; view = "profile"; render(); };
       });
@@ -1388,8 +1476,15 @@ function viewAdmission(host) {
     <p class="notice">${describeAdmissionContext(state, pack)}</p>
     ${picker}
     <p class="notice">对照江西${pack.year}年公开省控线。院校投档与省位次以 2020 年公开投档线和一分一段为底；其他年份按当年与 2020 年省控分差平移，表格中会标明，不是当年完整投档表或一分一段。艺体生目前只对照文化课成绩，尚未收录术科专业分，不编造术科分。师范意向只影响在已有院校池中的匹配偏好，没有单独的师范提前批投档表。不随机派校名，也不为喜报虚造清北。</p>
-    <div class="kpi"><div><span>清北</span><b>${qb.length}</b></div><div><span>一批</span><b>${first.length}</b></div><div><span>二本以上</span><b>${second.length}</b></div><div><span>公布人数</span><b>${list.length}</b></div></div>
-    <p class="notice">公布人数是本届应届与复读全员（含专科及未达专科线），不是二本以上人数。一批、二本以上按江西${pack.year}年公开省控线统计。</p>
+    <p class="notice">${describeOfficialProvincialLines(pack.year)}</p>
+    <div class="kpi">
+      <div><span>${pack.year}年公开省控理科一本</span><b>${officialProvincialPack(pack.year).li.first}</b></div>
+      <div><span>公开省控理科二本</span><b>${officialProvincialPack(pack.year).li.second}</b></div>
+      <div><span>理科国家线分差</span><b>${officialProvincialPack(pack.year).li.gap}</b></div>
+      ${officialProvincialPack(pack.year).li.ranks ? `<div><span>理科一本全省位次</span><b>前 ${officialProvincialPack(pack.year).li.ranks.firstN}</b></div>` : ""}
+    </div>
+    <div class="kpi"><div><span>清北</span><b>${qb.length}</b></div><div><span>一批（省控）</span><b>${first.length}</b></div><div><span>二本以上（省控）</span><b>${second.length}</b></div><div><span>公布人数</span><b>${list.length}</b></div></div>
+    <p class="notice">公布人数是本届应届与复读全员（含专科及未达专科线），不是二本以上人数。一批、二本以上按江西${pack.year}年公开省控（国家线）统计，不是校内线。</p>
     <div class="filters"><input id="q" placeholder="搜索姓名或大学" /></div>
     <div class="paper" id="adm-table"></div>`;
   const yearSel = host.querySelector("#adm-year");

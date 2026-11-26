@@ -47,6 +47,35 @@ export function provincialRank(score, track, year = 2020) {
   return last;
 }
 
+/** 仅 2020 年返回考试院一分一段累计位次；其他年份不把平移估算写成官方位次。 */
+export function officialSegmentRanks(year, track) {
+  if (Number(year) !== 2020) return null;
+  const lines = provincialLines(2020, track);
+  if (!lines) return null;
+  return {
+    firstN: provincialRank(lines.first, track, 2020),
+    secondN: provincialRank(lines.second, track, 2020),
+  };
+}
+
+export function officialProvincialPack(year) {
+  const y = PROVINCIAL[year] ? Number(year) : 2020;
+  const wen = provincialLines(y, "wen");
+  const li = provincialLines(y, "li");
+  const official = !!PROVINCIAL[year];
+  return {
+    year: y,
+    official,
+    wen: { first: wen.first, second: wen.second, special: wen.special, gap: wen.first - wen.second, ranks: officialSegmentRanks(y, "wen") },
+    li: { first: li.first, second: li.second, special: li.special, gap: li.first - li.second, ranks: officialSegmentRanks(y, "li") },
+    source: (PROVINCIAL[y] || {}).source || JX_SOURCE_NOTES.provincialLines,
+    rankSource: y === 2020 ? JX_SOURCE_NOTES.rankTables : null,
+    sourceNote: y === 2020
+      ? "分数线和位次来自江西省教育考试院公开分数线及2020年一分一段累计人数。"
+      : "分数线来自江西省教育考试院公开省控线。2017–2019 年完整一分一段未收入，这里不把平移到 2020 表的估算位次写成官方位次。",
+  };
+}
+
 export function universities() {
   return JX_DATA.universities;
 }
