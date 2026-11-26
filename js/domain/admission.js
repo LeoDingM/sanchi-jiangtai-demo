@@ -1,7 +1,7 @@
 /** 按江西公开投档线/位次将高考分数对应到真实大学，文理、年份、批次分开。 */
-import { provincialLines, provincialRank, universities, uniTier, QINGBEI } from "./jiangxi.js?v=t55u1";
-import { INSERT_REPEAT_CLASS_NOS, TIER } from "./config.js?v=t55u1";
-import { hash01 } from "./prng.js?v=t55u1";
+import { provincialLines, provincialRank, universities, uniTier, QINGBEI } from "./jiangxi.js?v=t56u1";
+import { INSERT_REPEAT_CLASS_NOS, TIER } from "./config.js?v=t56u1";
+import { hash01 } from "./prng.js?v=t56u1";
 
 /** 校内规则示意：不是官方征集志愿名单，也不计入省控一本上线人数。 */
 export const SUPPLEMENT_SOURCE = "校内规则示意：离一本省控线很近的二本可能被弱一本院校的冷门专业征集，不是官方征集志愿名单，也不计入省控一本上线人数。";

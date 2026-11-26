@@ -2,11 +2,11 @@
  * 日常教学：备课、上课、作业登记、课后面批。
  * 效果写入备课充分度与数学教学积累，并确定性影响任教班学生状态；不用 LLM 编课堂。
  */
-import { clamp, hash01, rngFrom, round1 } from "./prng.js?v=t55u1";
-import { seatLabel } from "./school.js?v=t55u1";
-import { deskChatPairs, deskMateOf, missingDeskPairs, peerStatusLine } from "./peers.js?v=t55u1";
-import { isAwayFromClass, classAbsences, healthStatusLine } from "./health.js?v=t55u1";
-import { lessonPotentialNote } from "./potential.js?v=t55u1";
+import { clamp, hash01, rngFrom, round1 } from "./prng.js?v=t56u1";
+import { seatLabel } from "./school.js?v=t56u1";
+import { deskChatPairs, deskMateOf, missingDeskPairs, peerStatusLine } from "./peers.js?v=t56u1";
+import { isAwayFromClass, classAbsences, healthStatusLine } from "./health.js?v=t56u1";
+import { lessonPotentialNote } from "./potential.js?v=t56u1";
 
 export const LESSON_TOPICS = {
   1: [
@@ -228,6 +228,9 @@ export function studentRecentStatus(student, state, { placed = false } = {}) {
   }
   if (student.lastVisit) {
     bits.push(student.lastVisit.statusLine || `${student.lastVisit.date}来访：已处理`);
+  }
+  if (student.lastHomeVisit) {
+    bits.push(student.lastHomeVisit.statusLine || `${student.lastHomeVisit.date}${student.lastHomeVisit.kind === "door" ? "上门家访" : "电话家访"}：已与家长谈过`);
   }
   if (student.lastClassLate?.date) {
     bits.push(`${student.lastClassLate.date}正课迟到，上课铃后才进教室`);

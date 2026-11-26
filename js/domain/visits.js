@@ -3,17 +3,17 @@
  * 由日期、节次和种子确定性生成，不用 LLM 编文本。
  * 不改学科能力、分数生成、省控或校内线。
  */
-import { clamp, hash01 } from "./prng.js?v=t55u1";
-import { weekday } from "./calendar.js?v=t55u1";
-import { HOMEROOM_NAME } from "./config.js?v=t55u1";
+import { clamp, hash01 } from "./prng.js?v=t56u1";
+import { weekday } from "./calendar.js?v=t56u1";
+import { HOMEROOM_NAME } from "./config.js?v=t56u1";
 import {
   currentSlot, daySchedule, isClassPeriodId, isEveningPeriodId,
   majorEventOn, activityEventOn,
-} from "./timetable.js?v=t55u1";
-import { isAwayFromClass } from "./health.js?v=t55u1";
-import { dutyStudents } from "./classManage.js?v=t55u1";
-import { allHomeworkRows, isOpenHomework, suggestedTopic, topicsForGrade } from "./teaching.js?v=t55u1";
-import { classPeersOf } from "./peers.js?v=t55u1";
+} from "./timetable.js?v=t56u1";
+import { isAwayFromClass } from "./health.js?v=t56u1";
+import { dutyStudents } from "./classManage.js?v=t56u1";
+import { allHomeworkRows, isOpenHomework, suggestedTopic, topicsForGrade } from "./teaching.js?v=t56u1";
+import { classPeersOf } from "./peers.js?v=t56u1";
 
 export const VISIT_TYPES = ["question", "homework", "peer", "duty", "leave"];
 
