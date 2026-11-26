@@ -44,9 +44,33 @@ function paintAbilities(rng, mean, sd, hint) {
       if (["history", "politics", "geography", "chinese"].includes(id)) offset += 4.2;
       if (["physics", "chemistry", "biology"].includes(id)) offset -= 4.8;
     }
-    const a = clamp(base + offset, 16, 99);
+    let a;
+    if (id === "chinese" || id === "english") {
+      // 语文、英语各层分差收窄，平行班也可以单科冒尖。上层少拉、下层多拉，以免重点/凌霄语英被削掉后高考一本整体下滑。
+      const pull = base >= 80 ? 0.08 : base >= 66 ? 0.16 : 0.3;
+      const langMean = (1 - pull) * (base + offset) + pull * 58;
+      a = clamp(langMean + gauss(rng, 0, 8), 16, 99);
+    } else {
+      a = clamp(base + offset, 16, 99);
+    }
     ability[id] = round1(a);
     potential[id] = round1(clamp(a + 4 + rng() * 10, a, 99.5));
+  }
+  // 平行班语英被拉高后，从该生计分科目里扣回等量，避免高考二本被整体抬过线。
+  if (base < 58) {
+    const lift = (ability.chinese + ability.english) / 2 - base;
+    if (lift > 0) {
+      const others = hint === "wen"
+        ? ["math", "politics", "history", "geography"]
+        : ["math", "physics", "chemistry", "biology"];
+      const take = (lift * 2) / others.length;
+      for (const id of others) {
+        const v = clamp(ability[id] - take, 16, 99);
+        const room = Math.max(0, potential[id] - ability[id]);
+        ability[id] = round1(v);
+        potential[id] = round1(clamp(v + room, v, 99.5));
+      }
+    }
   }
   return { ability, potential, base };
 }
@@ -72,6 +96,10 @@ export function makeStudent({ rng, usedNames, entryYear, classNo, seq, tier, hin
   let mean = tp.abilityMean + quality;
   // 云岫实验班每班至多一两位特别突出的苗子，而不是全班拉满。不给笃学做一本兜底。
   if (tier === "yunxiu_exp" && hint === "li" && seq <= 2 && rng() < 0.7) mean += 7 + rng() * 5;
+  // 少数人的头尾交叠，不抬整层均值：卓行上沿可摸到校排 130–180，笃学上沿可到 400–560，重点左尾可掉出校内一本。
+  if (tier === "zhuoxing" && rng() < 0.04) mean += 6 + rng() * 5;
+  if (tier === "duxue" && rng() < 0.035) mean += 14 + rng() * 7;
+  if (tier === "yunxiu_key" && rng() < 0.08) mean -= 6 + rng() * 4;
   const { ability, potential, base } = paintAbilities(rng, mean, tp.abilitySd, hint);
   const trackPref = pickTrack(rng, hint, ability);
   const family = pick(rng, FAMILY_TYPES);

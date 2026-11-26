@@ -49,11 +49,13 @@ export const LI_SUBJECTS = ["physics", "chemistry", "math"];
 export const WEN_SUBJECTS = ["politics", "history", "geography"];
 
 export const TIER = {
+  // 按 2016 级高二理科期中联考成绩表量级加大交叠：卓行上沿与凌霄下沿、笃学上沿与卓行下沿、重点班左尾可掉出校内一本。
+  // 不抬卓行整体均值，以免高考省控一本/二本膨胀；也不给笃学做一本留苗。
   yunxiu_exp: { id: "yunxiu_exp", name: "云岫实验", rank: 0, abilityMean: 86, abilitySd: 5, potMean: 94, potSd: 3 },
-  yunxiu_key: { id: "yunxiu_key", name: "云岫重点", rank: 1, abilityMean: 78, abilitySd: 6, potMean: 88, potSd: 4 },
-  lingxiao: { id: "lingxiao", name: "凌霄", rank: 2, abilityMean: 68, abilitySd: 7, potMean: 80, potSd: 5 },
+  yunxiu_key: { id: "yunxiu_key", name: "云岫重点", rank: 1, abilityMean: 78, abilitySd: 7.2, potMean: 88, potSd: 5 },
+  lingxiao: { id: "lingxiao", name: "凌霄", rank: 2, abilityMean: 68, abilitySd: 7.8, potMean: 80, potSd: 5.5 },
   zhuoxing: { id: "zhuoxing", name: "卓行", rank: 3, abilityMean: 52, abilitySd: 10.5, potMean: 74, potSd: 7 },
-  duxue: { id: "duxue", name: "笃学", rank: 4, abilityMean: 45, abilitySd: 12, potMean: 66, potSd: 8 },
+  duxue: { id: "duxue", name: "笃学", rank: 4, abilityMean: 45.5, abilitySd: 12.5, potMean: 67, potSd: 8.5 },
   yiti: { id: "yiti", name: "艺体", rank: 5, abilityMean: 42, abilitySd: 12, potMean: 60, potSd: 8 },
 };
 

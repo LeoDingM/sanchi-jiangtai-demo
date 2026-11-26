@@ -95,7 +95,7 @@ export function scoreSubject({ max, ability, potential, teaching = 0, difficulty
   return clamp(Math.round(pct * max), 0, max);
 }
 
-export function studentFormBundle(student, examId, difficultyKey = "") {
+export function studentFormBundle(student, examId, difficultyKey = "", examKind = "") {
   const stab = student.stability ?? 60;
   const sig = formSigma(stab);
   const rng = rngFrom(student.id, examId, "form", difficultyKey);
@@ -106,6 +106,8 @@ export function studentFormBundle(student, examId, difficultyKey = "") {
     const dir = hash01(student.id, examId, "outlier-dir") < 0.48 ? -1 : 1;
     form += dir * (0.02 + rng() * 0.045);
   }
+  // 期中发挥波动略大于高考，用于拉开同层次班第一的校排；不改高考抽签，以免省控标定漂移。
+  if (examKind === "midterm") form *= 1.32;
   const fit = (hash01(student.id, examId, "fit") - 0.5) * 0.02 * (1.15 - stab / 200);
   const cond = ((student.energy ?? 70) - 70) * 0.00012 - ((student.stress ?? 40) - 40) * 0.00014;
   return { form, fit, condition: cond };
@@ -116,7 +118,7 @@ export function gradeStudent(student, exam, scale, teachingBonus = 0) {
   const subjects = subjectsFor(scale, scale === SCALE_G1 ? "mixed" : track);
   const difficulty = exam.difficulty ?? 1;
   const dispersion = exam.dispersion ?? 1;
-  const bundle = studentFormBundle(student, exam.id, `${difficulty}|${dispersion}`);
+  const bundle = studentFormBundle(student, exam.id, `${difficulty}|${dispersion}`, exam.examKind);
   const scores = {};
   let total = 0;
   for (const sub of subjects) {

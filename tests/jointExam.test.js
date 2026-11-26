@@ -62,7 +62,8 @@ test("省联考划省/市/县线并给出省排市排校排，分差接近公开
   const li = r.rows.filter((x) => !x.repeat && x.track === "li");
   assert.ok(li.every((x) => x.provinceRank >= 1 && x.cityRank >= 1 && x.rank >= 1));
   assert.ok(li.every((x) => x.provinceRank >= x.cityRank && x.cityRank >= x.countyRank));
-  assert.notEqual(pLi.firstLine, r.cutoffs.li.firstLine);
+  assert.notEqual(pLi.firstN, r.cutoffs.li.firstN, "省联考一本名额应来自省模拟池，不是校内线名额");
+  // 模拟池划出的分数线可能碰巧与校内一本线相同，不能靠分值是否相等来判断来源。
 });
 
 test("联考分数线随难度波动，由模拟池位次算出而不是手写", () => {

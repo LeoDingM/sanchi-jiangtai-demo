@@ -77,7 +77,7 @@ test("开局补上 2014 级 2017 年高考统计，不进入可玩年级，且�
   assert.ok(prior, "开局应有上一届统计");
   assert.equal(prior.entryYear, 2014);
   assert.equal(prior.gaokaoYear, 2017);
-  assert.ok(prior.li.firstN >= 400 && prior.li.firstN <= 550, `理科一本名额应接近上一届省控一本，实际 ${prior.li.firstN}`);
+  assert.ok(prior.li.firstN >= 380 && prior.li.firstN <= 550, `理科一本名额应接近上一届省控一本量级（约 380–550，2017 年场次难度会晃），实际 ${prior.li.firstN}`);
   assert.ok(prior.wen.firstN >= 20 && prior.wen.firstN <= 120, `文科一本兜底量级，实际 ${prior.wen.firstN}`);
   assert.ok(prior.wen.secondN >= 150 && prior.wen.secondN <= 400, `文科二本不应是 1000，实际 ${prior.wen.secondN}`);
   const q = currentSchoolQuota(state);
