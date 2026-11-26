@@ -2,11 +2,11 @@
  * 日常教学：备课、上课、作业登记、课后面批。
  * 效果写入备课充分度与数学教学积累，并确定性影响任教班学生状态；不用 LLM 编课堂。
  */
-import { clamp, hash01, rngFrom, round1 } from "./prng.js?v=t56u1";
-import { seatLabel } from "./school.js?v=t56u1";
-import { deskChatPairs, deskMateOf, missingDeskPairs, peerStatusLine } from "./peers.js?v=t56u1";
-import { isAwayFromClass, classAbsences, healthStatusLine } from "./health.js?v=t56u1";
-import { lessonPotentialNote } from "./potential.js?v=t56u1";
+import { clamp, hash01, rngFrom, round1 } from "./prng.js?v=t57u1";
+import { seatLabel } from "./school.js?v=t57u1";
+import { deskChatPairs, deskMateOf, missingDeskPairs, peerStatusLine } from "./peers.js?v=t57u1";
+import { isAwayFromClass, classAbsences, healthStatusLine } from "./health.js?v=t57u1";
+import { lessonPotentialNote } from "./potential.js?v=t57u1";
 
 export const LESSON_TOPICS = {
   1: [

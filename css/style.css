@@ -158,6 +158,8 @@ a { color: var(--gold); }
 .tt-table tr.now td { background: rgba(232, 213, 163, 0.22); font-weight: 600; }
 .tt-table tr.math td:last-child { color: var(--ok, #2c5e3f); }
 .tt-table .math-tag { color: var(--seal, #8b2b2b); font-size: 11px; }
+.tt-table .open-class-tag { color: var(--gold); font-size: 11px; margin-left: 4px; }
+.tt-table tr.open-class td { box-shadow: inset 0 -2px 0 var(--gold); }
 .tt-table tr.exam td:last-child, .tt-table tr.activity td:last-child { color: #7a4a1c; }
 .activity-panel { margin: 0 0 12px; }
 .activity-roster { margin: 8px 0 10px; padding-left: 1.2em; }

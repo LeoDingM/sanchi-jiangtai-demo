@@ -1,33 +1,40 @@
 /** 游戏状态机：上课/考试/分班/高考录取/毕业升学与自动跳阶段。 */
 import {
   PLAYER_CLASS_NO, PLAYER_DEFAULT_NAME, PLAYER_ROLE, START_DATE, GRADE_YEAR, HOMEROOM_NAME, MENTOR_NAME,
-} from "./config.js?v=t56u1";
-import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById, examParams, formatGradeTerm, formatCohortGrade, termOf } from "./calendar.js?v=t56u1";
-import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf, eraQuality, placeGraduatingRepeaters, applyRepeaterSeating } from "./school.js?v=t56u1";
-import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js?v=t56u1";
-import { runExam } from "./examService.js?v=t56u1";
-import { provincialPassCounts, schoolQuotaFromPrior, fallbackSchoolQuota, examResultLogText } from "./schoolLines.js?v=t56u1";
-import { admitCohort, packLastAdmission } from "./admission.js?v=t56u1";
-import { packLastGaokao } from "./scores.js?v=t56u1";
-import { rngFrom, clamp } from "./prng.js?v=t56u1";
-import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands, homeroomEveningRoll as homeroomEveningRollCore, compileEveningRoll, studentRecentStatus, rollCallStatusLine, classLatecomers, wrongClassroomThisPeriod } from "./teaching.js?v=t56u1";
-import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, upcomingTutoring, formatSlotLabel, isTutoringSlot, weekMathCount, weekSchedule, weekStart } from "./timetable.js?v=t56u1";
-import { swapPeriods as swapPeriodsCore, borrowIn as borrowInCore, borrowOut as borrowOutCore, respondTimetableRequest as respondTimetableRequestCore, ensureIncomingRequest, pendingTimetableRequest, weekBorrowCounts, weekTiaokeSummary, canAlterSlot, shortSlotLabel, teacherOf, ensureTiaokeState } from "./tiaoke.js?v=t56u1";
-import { openParentsMeeting as openParentsMeetingCore, meetParent as meetParentCore, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE } from "./parents.js?v=t56u1";
-import { openSchoolActivity as openSchoolActivityCore, doActivityAction as doActivityActionCore, isSchoolActivityOpen, upcomingSchoolActivity, ACTIVITY_SOURCE_NOTE, playerStageLine } from "./activities.js?v=t56u1";
-import { classCommittee, dutyStudents, weekDuty, classBrief, isHomeroomMeetingSlot, attendClassMeeting as attendClassMeetingCore, hostClassMeeting as hostClassMeetingCore, committeeTitleOf, upcomingClassMeeting, formatStudentShort, DUTY_PER_DAY, COMMITTEE_ROLES } from "./classManage.js?v=t56u1";
-import { ensureStatePeers, ensureCohortPeers, classPeersOf } from "./peers.js?v=t56u1";
-import { syncStateHealth, classAbsences, isAwayFromClass, absenceLogLine } from "./health.js?v=t56u1";
-import { ensureVisits as ensureVisitsCore, handleVisit as handleVisitCore, visitArriveLine, visitsForSlot, isVisitWindow, planDayVisits, planDayVisitPeriods, currentVisitItems, visitPlaceLabel } from "./visits.js?v=t56u1";
+} from "./config.js?v=t57u1";
+import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById, examParams, formatGradeTerm, formatCohortGrade, termOf } from "./calendar.js?v=t57u1";
+import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf, eraQuality, placeGraduatingRepeaters, applyRepeaterSeating } from "./school.js?v=t57u1";
+import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js?v=t57u1";
+import { runExam } from "./examService.js?v=t57u1";
+import { provincialPassCounts, schoolQuotaFromPrior, fallbackSchoolQuota, examResultLogText } from "./schoolLines.js?v=t57u1";
+import { admitCohort, packLastAdmission } from "./admission.js?v=t57u1";
+import { packLastGaokao } from "./scores.js?v=t57u1";
+import { rngFrom, clamp } from "./prng.js?v=t57u1";
+import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands, homeroomEveningRoll as homeroomEveningRollCore, compileEveningRoll, studentRecentStatus, rollCallStatusLine, classLatecomers, wrongClassroomThisPeriod } from "./teaching.js?v=t57u1";
+import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, upcomingTutoring, formatSlotLabel, isTutoringSlot, weekMathCount, weekSchedule, weekStart } from "./timetable.js?v=t57u1";
+import { swapPeriods as swapPeriodsCore, borrowIn as borrowInCore, borrowOut as borrowOutCore, respondTimetableRequest as respondTimetableRequestCore, ensureIncomingRequest, pendingTimetableRequest, weekBorrowCounts, weekTiaokeSummary, canAlterSlot, shortSlotLabel, teacherOf, ensureTiaokeState } from "./tiaoke.js?v=t57u1";
+import { openParentsMeeting as openParentsMeetingCore, meetParent as meetParentCore, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE } from "./parents.js?v=t57u1";
+import { openSchoolActivity as openSchoolActivityCore, doActivityAction as doActivityActionCore, isSchoolActivityOpen, upcomingSchoolActivity, ACTIVITY_SOURCE_NOTE, playerStageLine } from "./activities.js?v=t57u1";
+import { classCommittee, dutyStudents, weekDuty, classBrief, isHomeroomMeetingSlot, attendClassMeeting as attendClassMeetingCore, hostClassMeeting as hostClassMeetingCore, committeeTitleOf, upcomingClassMeeting, formatStudentShort, DUTY_PER_DAY, COMMITTEE_ROLES } from "./classManage.js?v=t57u1";
+import { ensureStatePeers, ensureCohortPeers, classPeersOf } from "./peers.js?v=t57u1";
+import { syncStateHealth, classAbsences, isAwayFromClass, absenceLogLine } from "./health.js?v=t57u1";
+import { ensureVisits as ensureVisitsCore, handleVisit as handleVisitCore, visitArriveLine, visitsForSlot, isVisitWindow, planDayVisits, planDayVisitPeriods, currentVisitItems, visitPlaceLabel } from "./visits.js?v=t57u1";
 import {
   handlePhoneVisit as handlePhoneVisitCore, handleDoorVisit as handleDoorVisitCore,
   suggestPhoneVisits, suggestDoorVisits, isPhoneVisitOpen, isDoorVisitOpen,
   phoneVisitUnavailableReason, doorVisitUnavailableReason, ensureHomeVisitState,
   PHONE_DAY_CAP, PHONE_TERM_CAP, DOOR_DAY_CAP, DOOR_TERM_CAP,
   PHONE_ACTIONS, DOOR_ACTIONS, parentCoopOf, termVisitKey,
-} from "./homeVisit.js?v=t56u1";
-import { OFFICIAL_ROLE, OFFICIAL_LOG_TEXT } from "./career.js?v=t56u1";
-import { talkMathRoomBit, hasLargeRoom } from "./potential.js?v=t56u1";
+} from "./homeVisit.js?v=t57u1";
+import {
+  observeLesson as observeLessonCore, isObserveOpen, observeUnavailableReason, observeChoices,
+  ensureObserveState, mentorObserveHook, concludeOpenClass, upcomingOpenClass, upcomingOpenClasses,
+  openClassForTerm, openClassOnDate, openClassSlotOn, isOpenClassDay, isOpenClassPeriod,
+  latestOpenClassReview, openClassReviewFor, listOpenClasses, composeObserveNote,
+  OBSERVE_DAY_CAP, OBSERVE_TERM_CAP, OPEN_CLASS_SOURCE_NOTE, MATH_COLLEAGUES, termObserveKey,
+} from "./observe.js?v=t57u1";
+import { OFFICIAL_ROLE, OFFICIAL_LOG_TEXT } from "./career.js?v=t57u1";
+import { talkMathRoomBit, hasLargeRoom } from "./potential.js?v=t57u1";
 
 export const SAVE_VERSION = 1;
 
@@ -913,6 +920,11 @@ export function teach(state, style = "精讲例题", callId = null) {
   r.periodId = state.periodId;
   r.slot = currentSlot(state);
   state.taughtPeriodKey = `${state.date}|${state.periodId}`;
+  const review = concludeOpenClass(state, r);
+  if (review?.text) {
+    r.text = `${r.text} ${review.text}`;
+    r.openClassReview = review;
+  }
   const after = nextPeriodAfter(state);
   if (after && after.date === state.date) {
     const moved = advancePeriod(state);
@@ -983,6 +995,16 @@ export function playerWeekDuty(state) {
 export function consultMentor(state) {
   const grade = gradeOf(state.player.cohortYear, state.date);
   const r = consultMentorCore(state, grade);
+  if (r.ok) {
+    const hook = mentorObserveHook(state);
+    if (hook) r.text = `${r.text}${hook}`;
+    addLog(state, r.text);
+  }
+  return r;
+}
+
+export function observeLesson(state, teacherId) {
+  const r = observeLessonCore(state, teacherId);
   if (r.ok) addLog(state, r.text);
   return r;
 }
@@ -1023,6 +1045,14 @@ export {
   phoneVisitUnavailableReason, doorVisitUnavailableReason, ensureHomeVisitState,
   PHONE_DAY_CAP, PHONE_TERM_CAP, DOOR_DAY_CAP, DOOR_TERM_CAP,
   PHONE_ACTIONS, DOOR_ACTIONS, parentCoopOf, termVisitKey,
+};
+
+export {
+  isObserveOpen, observeUnavailableReason, observeChoices, ensureObserveState,
+  upcomingOpenClass, upcomingOpenClasses, openClassForTerm, openClassOnDate,
+  openClassSlotOn, isOpenClassDay, isOpenClassPeriod, latestOpenClassReview,
+  openClassReviewFor, listOpenClasses, composeObserveNote, concludeOpenClass,
+  OBSERVE_DAY_CAP, OBSERVE_TERM_CAP, OPEN_CLASS_SOURCE_NOTE, MATH_COLLEAGUES, termObserveKey,
 };
 
 export { topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, daySchedule, currentSlot, formatSlotLabel, upcomingMath, upcomingTutoring, majorEventOn, pendingMajorEvent, isTutoringSlot, raisedHands, seatLabel, seatOf, compileEveningRoll, studentRecentStatus, rollCallStatusLine, classLatecomers, wrongClassroomThisPeriod, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE, isSchoolActivityOpen, upcomingSchoolActivity, ACTIVITY_SOURCE_NOTE, playerStageLine, weekMathCount, weekSchedule, weekStart, ensureIncomingRequest, pendingTimetableRequest, weekBorrowCounts, weekTiaokeSummary, canAlterSlot, shortSlotLabel, teacherOf, classCommittee, dutyStudents, weekDuty, classBrief, isHomeroomMeetingSlot, committeeTitleOf, upcomingClassMeeting, formatStudentShort, DUTY_PER_DAY, COMMITTEE_ROLES };

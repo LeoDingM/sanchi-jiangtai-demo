@@ -19,32 +19,35 @@ import {
   handlePhoneVisit, handleDoorVisit, suggestPhoneVisits, suggestDoorVisits,
   isPhoneVisitOpen, isDoorVisitOpen, phoneVisitUnavailableReason, doorVisitUnavailableReason,
   ensureHomeVisitState, PHONE_DAY_CAP, PHONE_TERM_CAP, DOOR_DAY_CAP, DOOR_TERM_CAP,
-} from "../domain/simulation.js?v=t56u1";
-import { addDays, weekday } from "../domain/calendar.js?v=t56u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t56u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t56u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t56u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t56u1";
-import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t56u1";
-import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t56u1";
-import { hydrateReport } from "../domain/simulation.js?v=t56u1";
-import { renderSeating } from "./classroom.js?v=t56u1";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t56u1";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t56u1";
-import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t56u1";
-import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t56u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t56u1";
-import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t56u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t56u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t56u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t56u1";
+  observeLesson, isObserveOpen, observeUnavailableReason, observeChoices, ensureObserveState,
+  upcomingOpenClass, upcomingOpenClasses, openClassSlotOn, isOpenClassPeriod, isOpenClassDay,
+  latestOpenClassReview, openClassReviewFor, OBSERVE_DAY_CAP, OBSERVE_TERM_CAP, OPEN_CLASS_SOURCE_NOTE,
+} from "../domain/simulation.js?v=t57u1";
+import { addDays, weekday } from "../domain/calendar.js?v=t57u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t57u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t57u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t57u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t57u1";
+import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t57u1";
+import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t57u1";
+import { hydrateReport } from "../domain/simulation.js?v=t57u1";
+import { renderSeating } from "./classroom.js?v=t57u1";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t57u1";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t57u1";
+import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t57u1";
+import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t57u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t57u1";
+import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t57u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t57u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t57u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t57u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
   parseAiCommentary, emptyAiCommentary,
-} from "../domain/examAi.js?v=t56u1";
+} from "../domain/examAi.js?v=t57u1";
 
 let state = null;
 let view = "classroom";
@@ -804,6 +807,8 @@ function viewClassroom(host) {
   const nxtT = upcomingTutoring(state);
   let slotLine = slot ? formatSlotLabel(slot) : formatDateCn(state.date);
   if (slot?.isTutoring) slotLine += "。可以巡视、到座位旁答疑、收订正，或请班主任点名";
+  else if (isOpenClassPeriod(state) && slot?.isMath) slotLine += "（本节是校内公开课，备课组长等组内老师来听，按平时规则上课即可）";
+  else if (isOpenClassDay(state.date) && slot?.isMath) slotLine += "（今日有校内公开课，按平时规则上课即可）";
   else if (slot?.isMath) slotLine += "（本节可上课，也可在座位边提醒）";
   else if (isParentsMeetingOpen(state) || (slot?.isExamDay && state.parentsMeeting?.date === state.date)) slotLine += "（今日家长会，由班主任主持，你可作为数学老师与本班家长面谈）";
   else if (isSchoolActivityOpen(state) || slot?.isActivityPeriod) slotLine += `（今日学校活动「${state.schoolActivity?.name || slot?.eventName || ""}」，可带队、看班或写记录；日期为校内安排）`;
@@ -816,6 +821,7 @@ function viewClassroom(host) {
     <p class="notice">现在是${slotLine}${absenceNotice(sts)}。金圈是举手，红点是作业还要盯，颜色偏暗的是走神或精力不足，橙点是这节正课迟到，空灰位是今天请假。点开座位后，浅金圈是同桌，淡绿圈是要好的同学。点击座位按当前课时处理，不必先跳到档案。任教班为卓行16班，74 人。</p>
     ${visitPanelHtml()}
     ${doorVisitPanelHtml()}
+    ${isOpenClassDay(state.date) ? openClassPanelHtml() : ""}
     <div class="classroom-layout">
       <canvas id="classroom"></canvas>
       <div class="desk-panel paper">${deskPanelHtml(sel, slot, scene)}</div>
@@ -1420,6 +1426,75 @@ function bindTiaokeActions(host) {
   });
 }
 
+function observePanelHtml() {
+  if (!state) return "";
+  ensureObserveState(state);
+  const rec = state.observe || {};
+  const count = rec.count || 0;
+  const open = isObserveOpen(state);
+  if (!open) {
+    return `<div class="paper visit-panel observe-panel" data-observe-panel="1">
+      <h3>听课</h3>
+      <p class="muted">${observeUnavailableReason(state)}本学期已听 ${count} / ${OBSERVE_TERM_CAP} 节。听课是任课数学老师的教研活动，不是接任备课组长。</p>
+    </div>`;
+  }
+  const rows = observeChoices(state).map((v) => {
+    return `<p><b>${v.title}${v.name}</b>　${v.classLabel}　${v.reason}</p><div class="row-actions"><button type="button" data-observe="${v.id}">去听这节课</button></div>`;
+  }).join("");
+  return `<div class="paper visit-panel observe-panel" data-observe-panel="1">
+      <h3>听课</h3>
+      <p class="muted">办公室坐班时可以去听备课组长或其他数学老师的一节课。每天最多 1 节，本学期已听 ${count} / ${OBSERVE_TERM_CAP} 节（每学期大约六到八节）。记下的是校内听课笔记，不是市级评比。</p>
+      ${rows || `<p class="muted">眼下没有可听的老师。</p>`}
+    </div>`;
+}
+
+function bindObserveActions(host) {
+  host.querySelectorAll("[data-observe]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const r = observeLesson(state, b.dataset.observe);
+      toast(r.ok ? r.text : r.reason);
+      persist(); render();
+    };
+  });
+}
+
+function openClassLine() {
+  if (!state) return "";
+  const today = openClassSlotOn(state.date, state);
+  if (today) {
+    const review = openClassReviewFor(state, state.date);
+    if (review) return `今日${today.name}已上完。评语：${review.text}`;
+    const when = today.slot ? formatSlotLabel(today.slot) : today.periodId;
+    return `今日有${today.name}，落在${when}。备课组长${state.player.mentor || "陈正衡"}等组内老师会来听。请按平时规则上课，上完后留下校内评语。${OPEN_CLASS_SOURCE_NOTE}`;
+  }
+  const nxt = upcomingOpenClass(state.date);
+  if (!nxt) return "校历上尚未排到下一场公开课。日期是宁川中学校内安排，不是某所实校或教育局公告的公开课周。";
+  return `下场公开课：${nxt.date} ${nxt.name}（${nxt.periodId === "p1" ? "第1节" : nxt.periodId === "p2" ? "第2节" : nxt.periodId === "p3" ? "第3节" : nxt.periodId === "p4" ? "第4节" : nxt.periodId}数学）。${OPEN_CLASS_SOURCE_NOTE}`;
+}
+
+function openClassPanelHtml() {
+  if (!state) return "";
+  const today = openClassSlotOn(state.date, state);
+  const review = today ? openClassReviewFor(state, state.date) : latestOpenClassReview(state);
+  const showToday = !!today;
+  const showReview = review && (!today || review.date === state.date || isOpenClassPeriod(state));
+  if (!showToday && !review) {
+    const nxt = upcomingOpenClass(state.date);
+    return `<div class="paper visit-panel open-class-panel" data-open-class-panel="1">
+      <h3>公开课</h3>
+      <p class="muted">${openClassLine()}</p>
+    </div>`;
+  }
+  const body = showToday && !review
+    ? `<p>今天这节是宁川中学校内安排的公开课。${isOpenClassPeriod(state) ? "备课组长或组内老师现在就在后排听课。" : "到了那节数学课，备课组长或组内老师会来听。"}你仍按现有规则上课，不必另写一套课。若还没备课，也可以上课，评语会写得谨慎一些，不会卡住「下一节」或自动模式。</p><p class="muted">${OPEN_CLASS_SOURCE_NOTE}</p>`
+    : (review ? `<p><b>校内评语</b></p><p class="muted">${review.date}　${review.text}</p>` : `<p class="muted">${openClassLine()}</p>`);
+  return `<div class="paper visit-panel open-class-panel" data-open-class-panel="1">
+      <h3>${showToday ? (today.name || "公开课") : "公开课"}</h3>
+      ${body}
+    </div>`;
+}
+
 function officeLeaveLine() {
   const away = classAbsences(clsStudents(), state);
   if (!away.length) return "";
@@ -1435,7 +1510,7 @@ function officeCollabHtml() {
   return `${visitPanelHtml()}
     <div class="paper lesson-card office-actions">
       <h3>办公室与班主任</h3>
-      <p class="muted">现在是${slot ? formatSlotLabel(slot) : formatDateCn(state.date)}。${nxt ? `下一节数学：${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}。` : ""}${officeLeaveLine()}不是空菜单：坐班改作业、向班主任通报、向备课组长请教都会留下记录，并且用确定性规则推进作业订正。</p>
+      <p class="muted">现在是${slot ? formatSlotLabel(slot) : formatDateCn(state.date)}。${nxt ? `下一节数学：${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}。` : ""}${officeLeaveLine()}不是空菜单：坐班改作业、向班主任通报、向备课组长请教、听课都会留下记录，并且用确定性规则推进作业订正。</p>
       <div class="row-actions">
         <button type="button" class="accent" id="do-mark">坐班批改</button>
         <button type="button" id="do-home">向班主任通报本班</button>
@@ -1444,6 +1519,7 @@ function officeCollabHtml() {
       ${names.length ? `<p>需要盯的人：${names.slice(0, 8).join("、")}${names.length > 8 ? "等" : ""}。也可单独通报：</p>
         <div class="row-actions">${watch.slice(0, 8).map((r)=>`<button type="button" data-home="${r.id}">通报${r.name}</button>`).join("")}</div>` : `<p class="muted">眼下没有特别要盯的缺交或订正。仍可和班主任对一下班情，或向${state.player.mentor}请教下一课。</p>`}
     </div>
+    ${observePanelHtml()}
     ${phoneVisitPanelHtml()}
     ${tiaokePanelHtml()}`;
 }
@@ -1457,6 +1533,7 @@ function bindOfficeActions(host) {
   if (mentor) mentor.onclick = () => { const r = consultMentor(state); toast(r.ok ? r.text : r.reason); persist(); render(); };
   bindVisitActions(host);
   bindHomeVisitActions(host);
+  bindObserveActions(host);
   host.querySelectorAll("[data-home]").forEach((b) => {
     b.onclick = (ev) => { ev.stopPropagation(); selectedId = b.dataset.home; const r = consultHomeroom(state, b.dataset.home); toast(r.ok ? r.text : r.reason); persist(); render(); };
   });
@@ -1619,7 +1696,8 @@ function viewTeach(host) {
   });
   const nxt = upcomingMath(state, { skipTaught: true });
   host.innerHTML = `<h3>日常教学 · 数学课</h3>
-    <p class="notice">现在是${slot ? formatSlotLabel(slot) : formatDateCn(state.date)}${slot?.isTutoring ? "，可以做晚自习答疑" : slot?.isMath ? "，可以进教室上课" : "。等到数学课再进教室，或先在办公室处理作业、在座位上谈话"}。${nxt && !slot?.isMath && !slot?.isTutoring ? `下一节数学：${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}。` : ""}先写教案，再上课；晚自习另做答疑，不另开课题。课后从缺交、错题跟到订正和复查。</p>
+    <p class="notice">现在是${slot ? formatSlotLabel(slot) : formatDateCn(state.date)}${isOpenClassPeriod(state) ? "，本节是校内公开课，备课组长等组内老师来听，按平时规则上课即可" : slot?.isTutoring ? "，可以做晚自习答疑" : slot?.isMath ? "，可以进教室上课" : "。等到数学课再进教室，或先在办公室处理作业、在座位上谈话"}。${nxt && !slot?.isMath && !slot?.isTutoring ? `下一节数学：${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}。` : ""}先写教案，再上课；晚自习另做答疑，不另开课题。课后从缺交、错题跟到订正和复查。</p>
+    ${openClassPanelHtml()}
     <div class="kpi">
       <div><span>备课充分度</span><b>${state.player.prep || 0} / 3</b></div>
       <div><span>数学教学积累</span><b>${Number(state.player.mathTeaching || 0).toFixed(1)}</b></div>
@@ -2324,7 +2402,7 @@ function viewOffice(host) {
   if (!all.length) {
     host.innerHTML = `<h3>教务处</h3>
       ${officeCollabHtml()}
-      <p class="muted">全校成绩要等第一次考试结算之后才会出现在这里。办公室坐班、班主任通报和备课请教现在就可以做。</p>`;
+      <p class="muted">全校成绩要等第一次考试结算之后才会出现在这里。办公室坐班、班主任通报、备课请教和听课现在就可以做。</p>`;
     bindOfficeActions(host);
     bindParentActions(host);
     return;
@@ -2517,9 +2595,10 @@ function viewAuto(host) {
 }
 
 function viewLog(host) {
-  const upcoming = SCHOOL_CALENDAR.filter((e) => e.date >= state.date).slice(0, 14);
+  const calEvents = SCHOOL_CALENDAR.filter((e) => e.date >= state.date).concat(upcomingOpenClasses(state.date, 8)).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const upcoming = calEvents.slice(0, 16);
   const cal = upcoming.map((e) => {
-    const tag = e.kind === "activity" ? "（学校活动，校内安排）" : (e.kind === "parents" ? "（校内安排）" : "");
+    const tag = e.kind === "openClass" ? "（校内公开课）" : (e.kind === "activity" ? "（学校活动，校内安排）" : (e.kind === "parents" ? "（校内安排）" : ""));
     return `<div class="log-item"><b>${e.date}</b> ${e.name}${tag}</div>`;
   }).join("");
   host.innerHTML = `<h3>近期校历</h3>${cal || "<p class=\"muted\">暂无后续安排</p>"}
@@ -2578,7 +2657,8 @@ function renderAgenda() {
   const cls = clsStudents();
   const sched = daySchedule(state.date, state);
   const curId = state.periodId;
-  const tt = `<table class="tt-table"><tbody>${sched.map((p)=>`<tr class="${p.id===curId?"now":""}${p.isMath?" math":""}${p.isExamDay?" exam":""}${p.isActivityPeriod&&!p.isExamDay?" activity":""}"><td>${p.clock||""}</td><td>${p.short||p.name}</td><td>${p.subject}${p.isMath?" <span class=\"math-tag\">数学</span>":""}</td></tr>`).join("")}</tbody></table>`;
+  const ocSlot = openClassSlotOn(state.date, state);
+  const tt = `<table class="tt-table"><tbody>${sched.map((p)=>`<tr class="${p.id===curId?"now":""}${p.isMath?" math":""}${p.isExamDay?" exam":""}${p.isActivityPeriod&&!p.isExamDay?" activity":""}${ocSlot&&p.id===ocSlot.periodId?" open-class":""}"><td>${p.clock||""}</td><td>${p.short||p.name}</td><td>${p.subject}${p.isMath?" <span class=\"math-tag\">数学</span>":""}${ocSlot&&p.id===ocSlot.periodId?" <span class=\"open-class-tag\">公开课</span>":""}</td></tr>`).join("")}</tbody></table>`;
   const slot = currentSlot(state);
   const nowLabel = slot ? formatSlotLabel(slot) : "";
   const schedBody = `<p>${formatDateCn(state.date)}</p>
@@ -2586,7 +2666,8 @@ function renderAgenda() {
     <div class="row-actions"><button type="button" data-act="nextperiod">下一节</button></div>
     <p class="notice">备课充分度 ${state.player.prep||0}　数学教学积累 ${Number(state.player.mathTeaching||0).toFixed(1)}</p>
     ${(() => { const req = pendingTimetableRequest(state); return req && req.status === "pending" ? `<p class="notice">有调课或借课请求：${req.peer}想${req.type === "borrow-out" ? "借走一节数学课" : "对调一节课"}。可在「日常教学」或「教务处」里处理。</p>` : ""; })()}
-    <p class="notice">下一件大事：${next ? `${next.date} ${next.name}` : "（暂无）"}</p>`;
+    <p class="notice">下一件大事：${next ? `${next.date} ${next.name}` : "（暂无）"}</p>
+    <p class="notice">${openClassLine()}</p>`;
   const narrow = window.matchMedia("(max-width: 600px)").matches;
   lastNarrowAgenda = narrow;
   const schedBlock = narrow
