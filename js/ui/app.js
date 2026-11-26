@@ -1,5 +1,5 @@
 import {
-  createGame, freshGameSeed, parseGameSeed, playerStudents, skipToNextStage, skipToGaokaoOf, skipToNextCohort,
+  createGame, createGameAsync, freshGameSeed, parseGameSeed, playerStudents, skipToNextStage, skipToGaokaoOf, skipToNextCohort,
   advanceDay, advancePeriod, prepareLesson, teach, talkTo, reviewHomework, listExamReports, formatDateCn,
   applyEvent, SCHOOL_CALENDAR, gradeOf, topicsForGrade, LESSON_STYLES,
   formatGradeTerm, describePlayerStage, describeStageAdvance, describeAdmissionContext,
@@ -9,12 +9,14 @@ import {
   tutorEvening, raisedHands, seatLabel, periodTalkScene, isTutoringSlot,
   homeroomEveningRoll, placementSeatNotice, cohortPlacementStage, studentRecentStatus,
   meetParent, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE,
+  doActivityAction, isSchoolActivityOpen, upcomingSchoolActivity, ACTIVITY_SOURCE_NOTE,
   weekSchedule, weekStart, weekMathCount, swapPeriods, borrowIn, respondTimetableRequest,
   ensureIncomingRequest, pendingTimetableRequest, weekTiaokeSummary, classLatecomers,
 } from "../domain/simulation.js";
 import { addDays } from "../domain/calendar.js";
 import { parentTalkPriority, composeParentBrief } from "../domain/parents.js";
-import { saveSlot, loadSlot, listSlots, toJSON, fromJSON } from "../domain/save.js";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js";
+import { startNewGameSession, continueGameSession } from "../domain/bootFlow.js";
 import { subjectById, SUBJECTS_G1 } from "../domain/config.js";
 import { rankRows } from "../domain/scores.js";
 import { filterRows, sameTierCompare, classStandings, classCompareRows, examReportKey, pickExamReport } from "../domain/examService.js";
@@ -56,8 +58,68 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.add("hidden"), hold);
 }
 
-function persist() {
-  if (state) saveSlot(state, "auto");
+let persistWarned = false;
+let bootBusy = false;
+
+function persist({ notify = false } = {}) {
+  if (!state) return { ok: false, reason: "没有可保存的进度。" };
+  const r = saveSlot(state, "auto");
+  if (r.ok) persistWarned = false;
+  else if (notify || !persistWarned) {
+    toast(r.reason || "自动档没有写上。游戏仍可继续。");
+    persistWarned = true;
+  }
+  return r;
+}
+
+function showLoading({ title = "正在开局", label = "正在生成全校名单", progress = 6, hint = "" } = {}) {
+  let mask = $("#loading-mask");
+  if (!mask) {
+    mask = document.createElement("div");
+    mask.id = "loading-mask";
+    mask.className = "loading-mask";
+    mask.innerHTML = `<div class="loading-box" role="status">
+      <h2 id="loading-title"></h2>
+      <p id="loading-step"></p>
+      <div class="loading-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="loading-bar">
+        <div id="loading-bar-fill" class="loading-bar-fill"></div>
+      </div>
+      <p id="loading-hint" class="loading-hint"></p>
+    </div>`;
+    document.body.appendChild(mask);
+  }
+  mask.hidden = false;
+  mask.classList.remove("hidden");
+  mask.setAttribute("aria-busy", "true");
+  const titleEl = $("#loading-title");
+  const stepEl = $("#loading-step");
+  const bar = $("#loading-bar");
+  const fill = $("#loading-bar-fill");
+  const hintEl = $("#loading-hint");
+  if (titleEl) titleEl.textContent = title;
+  if (stepEl) stepEl.textContent = label;
+  const pct = Math.max(0, Math.min(100, Number(progress) || 0));
+  if (bar) bar.setAttribute("aria-valuenow", String(pct));
+  if (fill) fill.style.width = `${pct}%`;
+  if (hintEl) {
+    hintEl.textContent = hint || "全校约七千名学生，手机上可能需要十几秒。生成时画面可能会短暂停住，请稍候，不是没有反应。";
+  }
+}
+
+function hideLoading() {
+  const mask = $("#loading-mask");
+  if (!mask) return;
+  mask.classList.add("hidden");
+  mask.hidden = true;
+  mask.setAttribute("aria-busy", "false");
+}
+
+function setBootBusy(busy) {
+  bootBusy = busy;
+  const newBtn = $("#btn-new");
+  const contBtn = $("#btn-cont");
+  if (newBtn) newBtn.disabled = busy;
+  if (contBtn) contBtn.disabled = busy;
 }
 
 function syncChrome() {
@@ -97,22 +159,66 @@ export function boot() {
     const narrow = window.matchMedia("(max-width: 600px)").matches;
     if (lastNarrowAgenda !== null && narrow !== lastNarrowAgenda) renderAgenda();
   });
-  $("#btn-new").onclick = () => {
+  $("#btn-new").onclick = async () => {
+    if (bootBusy) return;
+    setBootBusy(true);
     const name = $("#pname").value.trim() || "林知秋";
     const typed = parseGameSeed($("#pseed")?.value);
     const seed = typed ?? freshGameSeed();
-    state = createGame(seed, name);
-    selectedId = playerStudents(state)[0]?.id;
-    persist();
-    showMain();
-    toast(typed ? `已用世界编号 ${seed} 开局。` : `本局世界编号 ${seed}，下次开档会再换一套名单。`);
+    showLoading({ title: "正在开局", label: "正在生成全校名单", progress: 6 });
+    try {
+      const r = await startNewGameSession({
+        playerName: name,
+        seed,
+        typed: typed != null,
+        createGameAsync,
+        saveAuto: (st) => saveSlot(st, "auto"),
+        paint: (info) => showLoading({
+          title: info.phase === "save" ? "正在保存" : (info.phase === "enter" ? "即将开始" : "正在开局"),
+          label: info.label,
+          progress: info.progress,
+          hint: info.phase === "save"
+            ? "正在写入自动档。若本机空间不足，仍会进入游戏，只是这次可能没有写下存档。"
+            : "",
+        }),
+      });
+      state = r.state;
+      persistWarned = !r.saved;
+      selectedId = playerStudents(state)[0]?.id;
+      hideLoading();
+      showMain();
+      toast(r.toast);
+    } catch (err) {
+      hideLoading();
+      toast("开局没有完成，请再试一次。");
+    } finally {
+      setBootBusy(false);
+    }
   };
-  $("#btn-cont").onclick = () => {
-    const s = loadSlot("auto");
-    if (!s) { toast("还没有自动存档"); return; }
-    state = s;
-    selectedId = playerStudents(state)[0]?.id;
-    showMain();
+  $("#btn-cont").onclick = async () => {
+    if (bootBusy) return;
+    setBootBusy(true);
+    showLoading({ title: "正在读档", label: "正在读取存档", progress: 20, hint: "正在读取自动档，请稍候。" });
+    try {
+      const r = await continueGameSession({
+        loadAuto: () => loadSlotResult("auto"),
+        paint: (info) => showLoading({ title: "正在读档", label: info.label, progress: info.progress, hint: "正在读取自动档，请稍候。" }),
+      });
+      if (!r.ok) {
+        hideLoading();
+        toast(r.reason || "还没有自动存档");
+        return;
+      }
+      state = r.state;
+      selectedId = playerStudents(state)[0]?.id;
+      hideLoading();
+      showMain();
+    } catch (err) {
+      hideLoading();
+      toast("存档读取失败，请再试一次。");
+    } finally {
+      setBootBusy(false);
+    }
   };
   document.querySelectorAll("#sidenav [data-view]").forEach((btn) => {
     btn.onclick = () => { view = btn.dataset.view; render(); };
@@ -141,7 +247,8 @@ function handleAct(act) {
   }
   if (act === "nextday") {
     const r = advanceDay(state);
-    if (r.type && r.type !== "day") toast(`结算：${r.type}`);
+    if (r.type === "activity") toast(r.text || r.result?.text || `今日学校活动「${r.event?.name || r.name || ""}」`);
+    else if (r.type && r.type !== "day") toast(`结算：${r.type}`);
     else if (r.text) toast(r.text);
   }
   if (act === "skip") {
@@ -169,7 +276,7 @@ function render() {
   const slot = currentSlot(state);
   const periodEl = $("#periodline");
   if (periodEl) {
-    const tag = slot?.isTutoring ? " · 可答疑" : slot?.isMath ? " · 数学课" : slot?.isExamDay ? " · 停课" : slot?.id === "rest" ? " · 休息" : "";
+    const tag = slot?.isTutoring ? " · 可答疑" : slot?.isMath ? " · 数学课" : slot?.isExamDay ? " · 停课" : slot?.isActivityPeriod ? " · 活动" : slot?.id === "rest" ? " · 休息" : "";
     periodEl.textContent = (slot ? formatSlotLabel(slot) : "") + tag;
   }
   $("#roleline").textContent = `${state.player.role} ${state.player.name} · ${state.player.cohortYear}级卓行${state.player.classNo}班 ${playerSubjectName(state.player)}`;
@@ -311,6 +418,8 @@ function deskPanelHtml(student, slot, scene) {
     <p>谈话（本时段还可 ${leftTalk} 人，本日余 ${dayLeft} 人）</p>
     <div class="row-actions">${talks}</div>
     ${isParentsMeetingOpen(state) ? `<div class="row-actions"><button type="button" class="accent" data-parent="${student.id}" ${student.lastParentMeeting?.date === state.date ? "disabled" : ""}>${student.lastParentMeeting?.date === state.date ? "这场已与家长谈过" : "与家长面谈"}</button></div>` : ""}
+    ${isSchoolActivityOpen(state) && state.schoolActivity?.activityKind === "sports" ? `<div class="row-actions"><button type="button" class="accent" data-acty="lead" data-sid="${student.id}">带队</button></div>` : ""}
+    ${isSchoolActivityOpen(state) && state.schoolActivity?.activityKind === "newyear" ? `<div class="row-actions"><button type="button" class="accent" data-acty="log" data-sid="${student.id}">为这名学生写日志</button></div>` : ""}
     <div class="row-actions"><button type="button" id="to-profile">查看档案</button></div>`;
 }
 
@@ -365,6 +474,7 @@ function viewClassroom(host) {
   if (slot?.isTutoring) slotLine += "。可以巡视、到座位旁答疑、收订正，或请班主任点名";
   else if (slot?.isMath) slotLine += "（本节可上课，也可在座位边提醒）";
   else if (isParentsMeetingOpen(state) || (slot?.isExamDay && state.parentsMeeting?.date === state.date)) slotLine += "（今日家长会，由班主任主持，你可作为数学老师与本班家长面谈）";
+  else if (isSchoolActivityOpen(state) || slot?.isActivityPeriod) slotLine += `（今日学校活动「${state.schoolActivity?.name || slot?.eventName || ""}」，可带队、看班或写记录；日期为校内安排）`;
   else if (slot?.isExamDay) slotLine += "（今日停课）";
   else if (slot && !slot.isMath && slot.kind !== "break" && slot.id !== "rest") slotLine += "。这节不是数学课，谈话请到走廊门口简短说";
   if (nxtT && !slot?.isTutoring) slotLine += `。下一节可答疑：${nxtT.sameDay ? "" : nxtT.date + " "}${formatSlotLabel(nxtT.slot)}`;
@@ -381,6 +491,7 @@ function viewClassroom(host) {
   renderSeating(c, sts, selectedId, (id) => { selectedId = id; render(); }, { boardTitle: board, marks });
   bindDeskAndTutor(host);
   bindParentActions(host);
+  bindActivityActions(host);
 }
 
 function viewRoster(host) {
@@ -474,6 +585,7 @@ function viewProfile(host) {
         <p class="muted">${teachingStatus(s)}</p>
         ${(s.rollCalls || []).length ? `<p><b>晚自习点名记录</b></p>${(s.rollCalls||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : ""}
         ${(s.parentMeetings || []).length ? `<p><b>家长会面谈</b></p>${(s.parentMeetings||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : ""}
+        ${(s.activityNotes || []).length ? `<p><b>学校活动</b></p>${(s.activityNotes||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : ""}
         <p class="muted">学科能力（潜能为个人上限，不是当场分数）</p>
         <p>${ab || "—"}</p>
       </div>
@@ -700,6 +812,60 @@ function parentsMeetingHtml() {
   </div>`;
 }
 
+function schoolActivityHtml() {
+  const open = isSchoolActivityOpen(state);
+  const nxt = upcomingSchoolActivity(state, SCHOOL_CALENDAR);
+  const note = (open ? state.schoolActivity?.sourceNote : nxt?.sourceNote) || ACTIVITY_SOURCE_NOTE;
+  if (!open) {
+    const when = nxt ? `${nxt.date} ${nxt.name}` : "";
+    return `<div class="paper lesson-card parents-panel activity-panel">
+      <h3>学校活动</h3>
+      <p class="muted">校历里有秋季运动会和迎新年（元旦）活动。运动会在第一次月考后、期中前全日停课，你可带队、看纪律、记录本班参赛情况；迎新年在第二次月考后、期末前，当天后半段为活动时段，你可参加、看班、写日志。${when ? `下场：${when}。` : "校历上尚未排到下一场。"}日期是宁川中学校内安排，不是某所实校或教育局公告的逐年日期。</p>
+    </div>`;
+  }
+  const act = state.schoolActivity;
+  const sports = act.activityKind === "sports";
+  const roster = (act.roster || []).map((r) => {
+    if (sports) {
+      const extra = [r.place, r.incident].filter(Boolean).join("，");
+      return `<li><b>${r.name}</b>　${r.eventName}${extra ? "　" + extra : ""}</li>`;
+    }
+    const detail = r.role === "值勤" ? r.duty : r.program;
+    return `<li><b>${r.name}</b>　${r.role}　${detail || ""}</li>`;
+  }).join("");
+  const btns = sports
+    ? `<div class="row-actions">
+        <button type="button" class="accent" data-acty="lead">带队</button>
+        <button type="button" data-acty="discipline">看纪律</button>
+        <button type="button" data-acty="record">记录本班参赛情况</button>
+      </div>`
+    : `<div class="row-actions">
+        <button type="button" class="accent" data-acty="attend">参加</button>
+        <button type="button" data-acty="watch">看班</button>
+        <button type="button" data-acty="log">写日志</button>
+      </div>`;
+  return `<div class="paper lesson-card parents-panel activity-panel">
+    <h3>${act.name || "学校活动"}</h3>
+    <p class="notice">这是宁川中学的学校活动（${act.date}）。${sports ? "全日停课。你作为本班实习数学老师可以带队、看纪律、记录本班参赛情况。名次只是校内占位，不是全市或全省官方成绩。" : "当天后半段为活动时段。你可以参加、看班、写日志，不套用某台晚会的现成流程。"} ${note}</p>
+    ${roster ? `<ul class="activity-roster">${roster}</ul>` : ""}
+    ${btns}
+  </div>`;
+}
+
+function bindActivityActions(host) {
+  host.querySelectorAll("[data-acty]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const sid = b.dataset.sid || selectedId || null;
+      if (sid) selectedId = sid;
+      const r = doActivityAction(state, b.dataset.acty, sid);
+      toast(r.ok ? r.text : (r.reason || "无法完成这项活动"));
+      persist();
+      render();
+    };
+  });
+}
+
 function bindParentActions(host) {
   host.querySelectorAll("[data-parent]").forEach((b) => {
     b.onclick = (ev) => {
@@ -754,7 +920,7 @@ function tiaokePanelHtml() {
   const focus = tiaokeFocusDate();
   const days = weekSchedule(focus, state);
   const mathOpts = tiaokeSlotOptions(days, (p) => p.isMath);
-  const otherOpts = tiaokeSlotOptions(days, (p) => !p.isMath && !p.isTutoring && !p.isExamDay && p.id !== "morning-read");
+  const otherOpts = tiaokeSlotOptions(days, (p) => !p.isMath && !p.isTutoring && !p.isExamDay && !p.isActivityPeriod && p.id !== "morning-read");
   const borrowOpts = tiaokeSlotOptions(days, (p) => !p.isMath && (p.subject === "自习" || p.subject === "体育"));
   if (mathOpts.length && !mathOpts.some((o) => o.value === tiaokeMathPick)) tiaokeMathPick = mathOpts[0].value;
   if (otherOpts.length && !otherOpts.some((o) => o.value === tiaokeOtherPick)) tiaokeOtherPick = otherOpts[0].value;
@@ -770,7 +936,7 @@ function tiaokePanelHtml() {
       const p = d.periods.find((x) => x.id === pid);
       if (!p) return "<td class=\"empty\">—</td>";
       const ov = p.override ? (p.override.type === "borrow-in" ? "借" : p.override.type === "borrow-out" ? "出" : "调") : "";
-      const cls = `${p.isMath ? "math" : ""}${p.isExamDay ? " exam" : ""}`;
+      const cls = `${p.isMath ? "math" : ""}${p.isExamDay ? " exam" : ""}${p.isActivityPeriod && !p.isExamDay ? " activity" : ""}`;
       return `<td class="${cls}" data-tk-date="${d.date}" data-tk-pid="${p.id}" title="${p.subject}">${p.subject || ""}${ov ? ` <span class="ov-tag">${ov}</span>` : ""}</td>`;
     }).join("");
     const name = (days[0].periods.find((x) => x.id === pid) || days[1]?.periods.find((x) => x.id === pid) || { name: pid }).name;
@@ -791,7 +957,7 @@ function tiaokePanelHtml() {
   const opt = (list, cur) => list.map((o) => `<option value="${o.value}" ${o.value === cur ? "selected" : ""}>${o.label}</option>`).join("");
   return `<div class="paper lesson-card tiaoke-panel">
       <h3>调课 / 借课</h3>
-      <p class="muted">只改本班这张课表，按日期临时生效，不改星期模板。早读、午休和晚自习不能改成数学正课；考试、分班、录取、家长会等全日停课日不能调或借。一周最多额外借入 1 节，被借走也不超过 1 节。</p>
+      <p class="muted">只改本班这张课表，按日期临时生效，不改星期模板。早读、午休和晚自习不能改成数学正课；考试、分班、录取、家长会、运动会等全日停课日不能调或借，迎新年活动时段也不能调。一周最多额外借入 1 节，被借走也不超过 1 节。</p>
       <div class="row-actions">
         <button type="button" id="tk-week-prev">上一周</button>
         <button type="button" id="tk-week-now"${tiaokeWeekOffset === 0 ? " disabled" : ""}>回到本周</button>
@@ -858,7 +1024,7 @@ function bindTiaokeActions(host) {
       const periodId = td.dataset.tkPid;
       const val = tiaokeOptionValue(date, periodId);
       const slot = daySchedule(date, state).find((p) => p.id === periodId);
-      if (!slot || slot.isExamDay) return;
+      if (!slot || slot.isExamDay || slot.isActivityPeriod) return;
       if (slot.id === "morning-read" || slot.id === "noon" || slot.id === "rest" || slot.id === "evening-1" || slot.id === "evening-2") return;
       if (slot.isMath) {
         tiaokeMathPick = val;
@@ -1005,6 +1171,7 @@ function viewTeach(host) {
       </div>
     </div>
     ${parentsMeetingHtml()}
+    ${schoolActivityHtml()}
     ${eveningTutorHtml()}
     ${officeCollabHtml()}
     <div class="paper lesson-card">
@@ -1044,6 +1211,7 @@ function viewTeach(host) {
   });
   bindOfficeActions(host);
   bindParentActions(host);
+  bindActivityActions(host);
   bindDeskAndTutor(host);
   host.querySelectorAll("tr[data-id]").forEach((tr) => {
     tr.onclick = () => { selectedId = tr.dataset.id; view = "profile"; render(); };
@@ -1547,7 +1715,13 @@ function viewAuto(host) {
 }
 
 function viewLog(host) {
-  host.innerHTML = `<h3>日志</h3>${(state.log||[]).slice(0,40).map((l)=>`<div class="log-item"><b>${l.date}</b> ${l.text}</div>`).join("")}`;
+  const upcoming = SCHOOL_CALENDAR.filter((e) => e.date >= state.date).slice(0, 14);
+  const cal = upcoming.map((e) => {
+    const tag = e.kind === "activity" ? "（学校活动，校内安排）" : (e.kind === "parents" ? "（校内安排）" : "");
+    return `<div class="log-item"><b>${e.date}</b> ${e.name}${tag}</div>`;
+  }).join("");
+  host.innerHTML = `<h3>近期校历</h3>${cal || "<p class=\"muted\">暂无后续安排</p>"}
+    <h3>日志</h3>${(state.log||[]).slice(0,40).map((l)=>`<div class="log-item"><b>${l.date}</b> ${l.text}</div>`).join("")}`;
 }
 
 function viewSave(host) {
@@ -1565,7 +1739,12 @@ function viewSave(host) {
         <button type="button" data-sv="${i}">保存</button>
         <button type="button" data-ld="${i}">读取</button></p>`;
     }).join("")}</div>`;
-  host.querySelector("#auto-save").onclick = () => { persist(); toast("已自动保存"); };
+  host.querySelector("#auto-save").onclick = () => {
+    const r = persist({ notify: false });
+    toast(r.ok ? "已自动保存" : (r.reason || "自动档没有写上。"));
+    if (r.ok) persistWarned = false;
+    else persistWarned = true;
+  };
   host.querySelector("#dl").onclick = () => {
     const blob = new Blob([toJSON(state)], { type: "application/json" });
     const a = document.createElement("a");
@@ -1577,19 +1756,27 @@ function viewSave(host) {
     const f = e.target.files?.[0]; if (!f) return;
     state = fromJSON(await f.text()); render(); toast("已读入文件存档");
   };
-  host.querySelectorAll("[data-sv]").forEach((b)=>b.onclick=()=>{ saveSlot(state, Number(b.dataset.sv)); toast("已保存"); render(); });
+  host.querySelectorAll("[data-sv]").forEach((b)=>b.onclick=()=>{
+    const r = saveSlot(state, Number(b.dataset.sv));
+    toast(r.ok ? "已保存" : (r.reason || "这一槽没有写上。"));
+    render();
+  });
   host.querySelectorAll("[data-ld]").forEach((b)=>{
-    b.onclick=()=>{ const s=loadSlot(Number(b.dataset.ld)); if(!s){toast("空槽");return;} state=s; render(); toast("已读取"); };
+    b.onclick=()=>{
+      const r = loadSlotResult(Number(b.dataset.ld));
+      if (!r.ok || !r.state) { toast(r.empty ? "空槽" : (r.reason || "这一槽读取失败。")); return; }
+      state=r.state; render(); toast("已读取");
+    };
   });
 }
 
 function renderAgenda() {
   const box = $("#agenda");
-  const next = SCHOOL_CALENDAR.find((e) => e.date >= state.date && ["exam","placement1","placement2","admission","promote","parents"].includes(e.kind));
+  const next = SCHOOL_CALENDAR.find((e) => e.date >= state.date && ["exam","placement1","placement2","admission","promote","parents","activity"].includes(e.kind));
   const cls = clsStudents();
   const sched = daySchedule(state.date, state);
   const curId = state.periodId;
-  const tt = `<table class="tt-table"><tbody>${sched.map((p)=>`<tr class="${p.id===curId?"now":""}${p.isMath?" math":""}"><td>${p.clock||""}</td><td>${p.short||p.name}</td><td>${p.subject}${p.isMath?" <span class=\"math-tag\">数学</span>":""}</td></tr>`).join("")}</tbody></table>`;
+  const tt = `<table class="tt-table"><tbody>${sched.map((p)=>`<tr class="${p.id===curId?"now":""}${p.isMath?" math":""}${p.isExamDay?" exam":""}${p.isActivityPeriod&&!p.isExamDay?" activity":""}"><td>${p.clock||""}</td><td>${p.short||p.name}</td><td>${p.subject}${p.isMath?" <span class=\"math-tag\">数学</span>":""}</td></tr>`).join("")}</tbody></table>`;
   const slot = currentSlot(state);
   const nowLabel = slot ? formatSlotLabel(slot) : "";
   const schedBody = `<p>${formatDateCn(state.date)}</p>

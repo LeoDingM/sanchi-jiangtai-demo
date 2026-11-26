@@ -70,6 +70,7 @@ const SUBJECTS_WEN = {
 };
 
 const MAJOR_KINDS = new Set(["exam", "placement1", "placement2", "admission", "promote", "parents"]);
+const AFTERNOON_ACTIVITY_IDS = new Set(["p5", "p6", "p7", "p8", "evening-1", "evening-2"]);
 
 /** 可调、可借的正课节次。早读、午休、晚自习不在此列。 */
 export const CLASS_PERIOD_IDS = ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"];
@@ -148,8 +149,29 @@ export function playerTrackOf(state) {
   return "mixed";
 }
 
+export function activityEventOn(date) {
+  return (eventsOn(date, SCHOOL_CALENDAR) || []).find((e) => e.kind === "activity") || null;
+}
+
+/** 全日停课的大事：考试、分班、录取、升学、家长会，以及全日停课的学校活动（如运动会）。 */
 export function majorEventOn(date) {
-  return (eventsOn(date, SCHOOL_CALENDAR) || []).find((e) => MAJOR_KINDS.has(e.kind)) || null;
+  const evs = eventsOn(date, SCHOOL_CALENDAR) || [];
+  return evs.find((e) => {
+    if (e.kind === "activity") return e.off === "full";
+    return MAJOR_KINDS.has(e.kind);
+  }) || null;
+}
+
+export function isAfternoonActivityPeriodId(periodId) {
+  return AFTERNOON_ACTIVITY_IDS.has(periodId);
+}
+
+/** 该节是否被学校活动占用（运动会全日，迎新年为下午和晚自习）。 */
+export function periodIsActivity(ev, periodId, periodKind = "class") {
+  if (!ev || ev.kind !== "activity") return false;
+  if (ev.off === "full") return periodKind !== "break" && periodKind !== "rest";
+  if (ev.off === "afternoon") return isAfternoonActivityPeriodId(periodId);
+  return false;
 }
 
 export function pendingMajorEvent(state, date = state?.date) {
@@ -164,14 +186,23 @@ export function daySchedule(date, state = null) {
   const track = playerTrackOf(state);
   const table = subjectTable(track)[wd] || subjectTable(track)[1];
   const major = majorEventOn(date);
+  const activity = activityEventOn(date);
   const periods = periodsForWeekday(wd);
   return periods.map((p) => {
-    let subject = major
-      ? (p.kind === "break" || p.kind === "rest" ? (table[p.id] || p.name) : `停课 · ${major.name}`)
-      : (table[p.id] || p.name);
-    let isMath = !major && isMathPeriodId(wd, p.id);
-    const isTutoring = !major && isTutoringPeriodId(wd, p.id);
-    const ov = !major && overrideFor(state, date, p.id);
+    const activitySlot = !major && periodIsActivity(activity, p.id, p.kind);
+    const blocked = !!major || activitySlot;
+    const evName = major?.name || (activitySlot ? activity.name : null);
+    let subject;
+    if (major) {
+      subject = (p.kind === "break" || p.kind === "rest" ? (table[p.id] || p.name) : `停课 · ${major.name}`);
+    } else if (activitySlot) {
+      subject = (p.kind === "break" || p.kind === "rest" ? (table[p.id] || p.name) : `活动 · ${activity.name}`);
+    } else {
+      subject = table[p.id] || p.name;
+    }
+    let isMath = !blocked && isMathPeriodId(wd, p.id);
+    const isTutoring = !blocked && isTutoringPeriodId(wd, p.id);
+    const ov = !blocked && overrideFor(state, date, p.id);
     if (ov) {
       if (ov.subject) subject = ov.subject;
       isMath = ov.isMath != null ? !!ov.isMath : subject === "数学";
@@ -184,7 +215,8 @@ export function daySchedule(date, state = null) {
       isMath,
       isTutoring,
       isExamDay: !!major,
-      eventName: major?.name || null,
+      isActivityPeriod: !!blocked && !!(major?.kind === "activity" || activitySlot),
+      eventName: evName,
       override: ov || null,
     };
   });

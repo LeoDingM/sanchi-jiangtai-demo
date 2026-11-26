@@ -73,6 +73,16 @@
       <aside id="agenda" class="agenda"></aside>
     </div>
   </div>
+  <div id="loading-mask" class="loading-mask hidden" hidden aria-live="polite" aria-busy="false">
+    <div class="loading-box" role="status">
+      <h2 id="loading-title">正在开局</h2>
+      <p id="loading-step">正在生成全校名单</p>
+      <div class="loading-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="loading-bar">
+        <div id="loading-bar-fill" class="loading-bar-fill"></div>
+      </div>
+      <p id="loading-hint" class="loading-hint">全校约七千名学生，手机上可能需要十几秒。生成时画面可能会短暂停住，请稍候，不是没有反应。</p>
+    </div>
+  </div>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>

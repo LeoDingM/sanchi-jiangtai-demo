@@ -157,6 +157,11 @@ a { color: var(--gold); }
 .tt-table tr.now td { background: rgba(232, 213, 163, 0.22); font-weight: 600; }
 .tt-table tr.math td:last-child { color: var(--ok, #2c5e3f); }
 .tt-table .math-tag { color: var(--seal, #8b2b2b); font-size: 11px; }
+.tt-table tr.exam td:last-child, .tt-table tr.activity td:last-child { color: #7a4a1c; }
+.activity-panel { margin: 0 0 12px; }
+.activity-roster { margin: 8px 0 10px; padding-left: 1.2em; }
+.activity-roster li { margin: 2px 0; }
+
 .office-actions { margin-bottom: 14px; }
 
 .classroom-layout { display: grid; grid-template-columns: 1fr minmax(220px, 280px); gap: 12px; align-items: start; min-width: 0; }
@@ -450,6 +455,41 @@ a { color: var(--gold); }
 .tiaoke-panel .tt-week td { cursor: pointer; }
 .tiaoke-panel .tt-week td.math { color: var(--ok, #2c5e3f); font-weight: 600; }
 .tiaoke-panel .tt-week td.exam { color: #7a4a1c; }
+.tiaoke-panel .tt-week td.activity { color: #7a4a1c; }
 .tiaoke-panel .tt-week td.empty { color: #999; cursor: default; }
 .tiaoke-panel .ov-tag { color: var(--seal, #8b2b2b); font-size: 11px; }
 .tiaoke-request { margin: 10px 0; padding: 8px 10px; background: rgba(232, 213, 163, 0.28); border-radius: 6px; }
+
+.loading-mask {
+  position: fixed; inset: 0;
+  background: rgba(15, 22, 18, 0.78);
+  display: grid; place-items: center;
+  padding: 24px;
+  padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
+  z-index: 60;
+}
+.loading-box {
+  width: min(440px, 92vw);
+  background: rgba(26, 40, 31, 0.96);
+  border: 1px solid var(--line);
+  box-shadow: 0 20px 60px rgba(0,0,0,.4);
+  padding: 24px 22px 18px;
+  text-align: center;
+  color: var(--chalk);
+}
+.loading-box h2 { color: var(--gold); margin: 0 0 10px; font-size: 20px; }
+#loading-step { margin: 0 0 14px; line-height: 1.6; color: var(--chalk); }
+.loading-bar {
+  height: 10px;
+  background: rgba(0,0,0,.35);
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.loading-bar-fill {
+  height: 100%;
+  width: 6%;
+  background: var(--gold);
+  border-radius: 99px;
+}
+.loading-hint { margin: 12px 0 0; font-size: 12px; line-height: 1.65; color: var(--chalk-dim); }

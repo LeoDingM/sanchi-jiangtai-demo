@@ -7,7 +7,7 @@ import { addDays, weekday, weekdayName, formatDateCn, parseYmd, SCHOOL_CALENDAR 
 import { HOMEROOM_NAME } from "./config.js";
 import {
   daySchedule, weekStart, weekDates, isClassPeriodId, overridesOf, majorEventOn,
-  periodsForWeekday,
+  activityEventOn, periodIsActivity, periodsForWeekday,
 } from "./timetable.js";
 
 /** 虚构的本班任课老师，不是某所实校教师名册。 */
@@ -65,6 +65,10 @@ export function canAlterSlot(date, periodId) {
   if (!isClassPeriodId(periodId)) return { ok: false, reason: "只能调或借第1到第8节正课。" };
   const major = majorEventOn(date);
   if (major) return { ok: false, reason: `${formatDateCn(date)}是${major.name}，全日停课，不能调课或借课。` };
+  const activity = activityEventOn(date);
+  if (activity && periodIsActivity(activity, periodId, "class")) {
+    return { ok: false, reason: `${formatDateCn(date)}是${activity.name}活动时段，不能调课或借课。` };
+  }
   if (weekday(date) === 0) return { ok: false, reason: "周日休息，不能调课或借课。" };
   const periods = periodsForWeekday(weekday(date));
   if (!periods.some((p) => p.id === periodId)) return { ok: false, reason: "那天没有这一节正课。" };

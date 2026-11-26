@@ -40,7 +40,9 @@ export function firstWeekdayOnOrAfter(date, dow) {
 
 export const PARENTS_SOURCE_NOTE = "校内日期安排，按普通高中在学期开学后或期中后召开家长会的惯例排入校历，不是某所实校或教育行政部门公告的逐年日期。";
 
-export const STAGE_KINDS = ["exam", "placement1", "placement2", "admission", "promote", "parents"];
+export const ACTIVITY_SOURCE_NOTE = "校内日期安排，按普通高中在第一次月考后举行秋季运动会、在第二次月考后举行迎新年（元旦）活动的惯例排入宁川中学校历，不是某所实校或教育行政部门公告的逐年日期。";
+
+export const STAGE_KINDS = ["exam", "placement1", "placement2", "admission", "promote", "parents", "activity"];
 
 export function cmpDate(a, b) { return a < b ? -1 : a > b ? 1 : 0; }
 
@@ -149,6 +151,58 @@ function ev(partial) {
   return { grades: [1, 2, 3], ...partial };
 }
 
+
+const BLOCKING_KINDS = new Set(["exam", "placement1", "placement2", "admission", "promote", "parents", "opening", "school", "activity"]);
+
+/** 已有考试/分班/家长会等占用的日期（考试按 days 占用后续几天）。 */
+export function occupiedEventDates(events) {
+  const set = new Set();
+  for (const e of events) {
+    if (!BLOCKING_KINDS.has(e.kind)) continue;
+    const days = Number(e.days) > 0 ? Number(e.days) : 1;
+    for (let i = 0; i < days; i++) set.add(addDays(e.date, i));
+  }
+  return set;
+}
+
+/** 第一次月考之后、期中之前的连续两天。优先 10 月 26–27 日；撞日则后移，不改考试日期。 */
+export function pickSportsMeetDates(sy, occupied = new Set()) {
+  const windowStart = addDays(ymd(sy, 10, 16), 2);
+  const windowEnd = addDays(ymd(sy, 11, 15), -1);
+  const pref = [ymd(sy, 10, 26), ymd(sy, 10, 27)];
+  const free = (d) => d >= windowStart && d <= windowEnd && !occupied.has(d);
+  if (free(pref[0]) && free(pref[1])) return pref;
+  for (let d = windowStart; cmpDate(d, windowEnd) <= 0; d = addDays(d, 1)) {
+    const d2 = addDays(d, 1);
+    if (cmpDate(d2, windowEnd) > 0) break;
+    if (free(d) && free(d2)) return [d, d2];
+  }
+  return pref;
+}
+
+/** 第二次月考之后、期末之前的一天。优先元旦（若为工作日），否则新年前最近的工作日。 */
+export function pickNewYearDate(sy, occupied = new Set()) {
+  const windowStart = addDays(ymd(sy, 12, 14), 2);
+  const windowEnd = addDays(ymd(sy + 1, 1, 16), -1);
+  const tryDate = (d) => d >= windowStart && d <= windowEnd && !occupied.has(d);
+  const isWeekday = (d) => { const w = weekday(d); return w >= 1 && w <= 5; };
+  const jan1 = ymd(sy + 1, 1, 1);
+  const dec31 = ymd(sy, 12, 31);
+  if (tryDate(jan1) && isWeekday(jan1)) return jan1;
+  if (tryDate(dec31) && isWeekday(dec31)) return dec31;
+  if (tryDate(jan1)) return jan1;
+  if (tryDate(dec31)) return dec31;
+  for (let i = 0; i <= 20; i++) {
+    for (const d of [addDays(jan1, -i), addDays(jan1, i)]) {
+      if (tryDate(d) && isWeekday(d)) return d;
+    }
+  }
+  for (let d = windowStart; cmpDate(d, windowEnd) <= 0; d = addDays(d, 1)) {
+    if (tryDate(d)) return d;
+  }
+  return jan1;
+}
+
 /** 生成从 fromYear 年秋季到 toYear 年夏季（不含）的校历事件。 */
 export function buildCalendar(fromYear = 2017, toYear = 2030) {
   const events = [];
@@ -245,6 +299,46 @@ export function buildCalendar(fromYear = 2017, toYear = 2030) {
     events.push(ev({
       id: `promote-${y2}`, date: ymd(y2, 8, 20), name: "毕业离校、升年级、新高一入学", kind: "promote",
       newEntryYear: y2, graduatedCohort: gaokaoCohort,
+    }));
+
+    const occupied = occupiedEventDates(events);
+    const [sp1, sp2] = pickSportsMeetDates(sy, occupied);
+    events.push(ev({
+      id: `sports-${sy}-d1`,
+      date: sp1,
+      name: "秋季运动会",
+      kind: "activity",
+      activityKind: "sports",
+      off: "full",
+      dayIndex: 1,
+      meetId: `sports-${sy}`,
+      sourceNote: ACTIVITY_SOURCE_NOTE,
+      grades: [1, 2, 3],
+    }));
+    events.push(ev({
+      id: `sports-${sy}-d2`,
+      date: sp2,
+      name: "秋季运动会（第二天）",
+      kind: "activity",
+      activityKind: "sports",
+      off: "full",
+      dayIndex: 2,
+      meetId: `sports-${sy}`,
+      sourceNote: ACTIVITY_SOURCE_NOTE,
+      grades: [1, 2, 3],
+    }));
+    occupied.add(sp1);
+    occupied.add(sp2);
+    const newyearDate = pickNewYearDate(sy, occupied);
+    events.push(ev({
+      id: `newyear-${sy}`,
+      date: newyearDate,
+      name: "迎新年活动",
+      kind: "activity",
+      activityKind: "newyear",
+      off: "afternoon",
+      sourceNote: ACTIVITY_SOURCE_NOTE,
+      grades: [1, 2, 3],
     }));
   }
   events.sort((a, b) => cmpDate(a.date, b.date) || a.id.localeCompare(b.id));

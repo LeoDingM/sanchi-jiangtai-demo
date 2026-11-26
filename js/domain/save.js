@@ -20,26 +20,80 @@ export function hasLocalStorage() {
   try { return typeof localStorage !== "undefined" && localStorage != null; } catch { return false; }
 }
 
-export function saveSlot(state, slot = "auto") {
-  if (!hasLocalStorage()) return { ok: false, reason: "无 localStorage" };
-  const key = slot === "auto" ? AUTO_KEY : SLOT_KEYS[slot] || SLOT_KEYS[0];
-  localStorage.setItem(key, toJSON(state));
-  return { ok: true, key };
+export function defaultStorage() {
+  return hasLocalStorage() ? localStorage : null;
 }
 
-export function loadSlot(slot = "auto") {
-  if (!hasLocalStorage()) return null;
-  const key = slot === "auto" ? AUTO_KEY : SLOT_KEYS[slot] || SLOT_KEYS[0];
-  const raw = localStorage.getItem(key);
-  if (!raw) return null;
-  return fromJSON(raw);
+function slotKey(slot = "auto") {
+  return slot === "auto" ? AUTO_KEY : SLOT_KEYS[slot] || SLOT_KEYS[0];
 }
 
-export function listSlots() {
-  if (!hasLocalStorage()) return [];
+export function isQuotaError(err) {
+  if (!err) return false;
+  const name = err.name || "";
+  const code = err.code;
+  const msg = String(err.message || err);
+  return name === "QuotaExceededError"
+    || name === "NS_ERROR_DOM_QUOTA_REACHED"
+    || code === 22
+    || code === 1014
+    || /quota/i.test(msg);
+}
+
+/** 写入失败时的中文说明：空间不足或一般写入失败。 */
+export function writeFailureReason(err) {
+  if (isQuotaError(err)) {
+    return "本机存档空间不足，自动档没有写上。游戏仍可继续，请稍后清理后再保存，或下载存档文件。";
+  }
+  return "自动档没有写上（写入失败）。游戏仍可继续，可稍后再试或下载存档文件。";
+}
+
+export function saveSlot(state, slot = "auto", storage) {
+  const store = storage === undefined ? defaultStorage() : storage;
+  if (!store) return { ok: false, reason: "当前环境不能写入浏览器存档。" };
+  const key = slotKey(slot);
+  let json;
+  try {
+    json = toJSON(state);
+  } catch {
+    return { ok: false, reason: "存档无法生成，这次没有写入。", key };
+  }
+  try {
+    store.setItem(key, json);
+    return { ok: true, key };
+  } catch (err) {
+    return { ok: false, reason: writeFailureReason(err), key };
+  }
+}
+
+export function loadSlotResult(slot = "auto", storage) {
+  const store = storage === undefined ? defaultStorage() : storage;
+  const key = slotKey(slot);
+  if (!store) return { ok: false, empty: true, reason: "当前环境不能读取浏览器存档。", state: null, key };
+  try {
+    const raw = store.getItem(key);
+    if (!raw) return { ok: false, empty: true, reason: "还没有自动存档", state: null, key };
+    return { ok: true, state: fromJSON(raw), key };
+  } catch {
+    return { ok: false, empty: false, reason: "存档损坏或读取失败。", state: null, key };
+  }
+}
+
+export function loadSlot(slot = "auto", storage) {
+  return loadSlotResult(slot, storage).state;
+}
+
+export function listSlots(storage) {
+  const store = storage === undefined ? defaultStorage() : storage;
+  if (!store) return [];
   return ["auto", 0, 1, 2].map((slot) => {
-    const key = slot === "auto" ? AUTO_KEY : SLOT_KEYS[slot];
-    const raw = localStorage.getItem(key);
+    const key = slotKey(slot);
+    let raw;
+    try {
+      raw = store.getItem(key);
+    } catch {
+      return { slot, empty: false, broken: true };
+    }
     if (!raw) return { slot, empty: true };
     try {
       const data = JSON.parse(raw);

@@ -6,7 +6,7 @@ import { firstPlacement, rebuildClasses } from "../js/domain/placement.js";
 import { runExam } from "../js/domain/examService.js";
 import { provincialLines, gapOfficial } from "../js/domain/jiangxi.js";
 
-test("校历从 2017 年 9 月起，含月考/期中/期末/联考/模拟/高考、两次分班、升学与家长会", () => {
+test("校历从 2017 年 9 月起，含月考/期中/期末/联考/模拟/高考、两次分班、升学、家长会与学校活动", () => {
   const ev = buildCalendar(2017, 2021);
   assert.ok(ev[0].date >= "2017-09-01");
   const kinds = new Set(ev.map((e) => e.kind + ":" + (e.examKind || "")));
@@ -23,6 +23,8 @@ test("校历从 2017 年 9 月起，含月考/期中/期末/联考/模拟/高考
   const pm = ev.find((e) => e.kind === "parents" && e.date.startsWith("2017-11"));
   assert.ok(pm, "秋季期中后应有家长会");
   assert.ok(pm.sourceNote && pm.sourceNote.includes("校内日期安排"));
+  assert.ok(ev.some((e) => e.kind === "activity" && e.activityKind === "sports"));
+  assert.ok(ev.some((e) => e.kind === "activity" && e.activityKind === "newyear"));
 });
 
 test("不同场次难度不同，一本/二本线随难度明显波动，分差为数十分而非几分", () => {

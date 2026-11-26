@@ -220,6 +220,9 @@ export function studentRecentStatus(student, state, { placed = false } = {}) {
   if (student.lastParentMeeting) {
     bits.push(student.lastParentMeeting.statusLine || `${student.lastParentMeeting.date}家长会：数学老师与家长谈了近况`);
   }
+  if (student.lastActivity) {
+    bits.push(student.lastActivity.statusLine || `${student.lastActivity.date}学校活动：已记入本班近况`);
+  }
   if (student.lastClassLate?.date) {
     bits.push(`${student.lastClassLate.date}正课迟到，上课铃后才进教室`);
   }

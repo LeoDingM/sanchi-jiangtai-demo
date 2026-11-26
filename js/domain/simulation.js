@@ -13,6 +13,7 @@ import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as revi
 import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, upcomingTutoring, formatSlotLabel, isTutoringSlot, weekMathCount, weekSchedule, weekStart } from "./timetable.js";
 import { swapPeriods as swapPeriodsCore, borrowIn as borrowInCore, borrowOut as borrowOutCore, respondTimetableRequest as respondTimetableRequestCore, ensureIncomingRequest, pendingTimetableRequest, weekBorrowCounts, weekTiaokeSummary, canAlterSlot, shortSlotLabel, teacherOf, ensureTiaokeState } from "./tiaoke.js";
 import { openParentsMeeting as openParentsMeetingCore, meetParent as meetParentCore, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE } from "./parents.js";
+import { openSchoolActivity as openSchoolActivityCore, doActivityAction as doActivityActionCore, isSchoolActivityOpen, upcomingSchoolActivity, ACTIVITY_SOURCE_NOTE, playerStageLine } from "./activities.js";
 
 export const SAVE_VERSION = 1;
 
@@ -94,24 +95,23 @@ export function parseGameSeed(raw) {
   return n >>> 0;
 }
 
-export function createGame(seed = 20170901, playerName = PLAYER_DEFAULT_NAME) {
-  const opening = generateOpeningSchool(seed, GRADE_YEAR);
+/** 旧年级补做历史分班，使开学时高二高三已是文理分科编制。 */
+export function applyHistoricalPlacement(cohort, year, seed) {
+  const pre = runExam(cohort, { id: `hist-final-${year}`, name: "历史期末", examKind: "final", difficulty: 0.99, dispersion: 1.02, date: `${year + 1}-01-16` }, { grade: 1, split: false });
+  const p1 = firstPlacement(cohort.students, pre.scoreMap, { seed: seed + year });
+  cohort.students = p1.students;
+  cohort.classes = rebuildClasses(cohort.students);
+  cohort.trackSplit = true;
+  const pre2 = runExam(cohort, { id: `hist-final2-${year}`, name: "历史下学期期末", examKind: "final", difficulty: 1.0, dispersion: 1.0, date: `${year + 1}-06-25` }, { grade: 1, split: true });
+  const p2 = secondPlacement(cohort.students, pre2.scoreMap, { seed: seed + year + 1 });
+  cohort.students = p2.students;
+  cohort.classes = rebuildClasses(cohort.students);
+  cohort.placed2 = true;
+  return cohort;
+}
+
+function assembleNewGameState(seed, playerName, cohorts) {
   const date = START_DATE;
-  const cohorts = opening.cohorts;
-  // 旧年级补做历史分班，使开学时高二高三已是文理分科编制
-  for (const year of [GRADE_YEAR - 1, GRADE_YEAR - 2]) {
-    const c = cohorts[year];
-    const pre = runExam(c, { id: `hist-final-${year}`, name: "历史期末", examKind: "final", difficulty: 0.99, dispersion: 1.02, date: `${year + 1}-01-16` }, { grade: 1, split: false });
-    const p1 = firstPlacement(c.students, pre.scoreMap, { seed: seed + year });
-    c.students = p1.students;
-    c.classes = rebuildClasses(c.students);
-    c.trackSplit = true;
-    const pre2 = runExam(c, { id: `hist-final2-${year}`, name: "历史下学期期末", examKind: "final", difficulty: 1.0, dispersion: 1.0, date: `${year + 1}-06-25` }, { grade: 1, split: true });
-    const p2 = secondPlacement(c.students, pre2.scoreMap, { seed: seed + year + 1 });
-    c.students = p2.students;
-    c.classes = rebuildClasses(c.students);
-    c.placed2 = true;
-  }
   const state = {
     version: SAVE_VERSION,
     seed,
@@ -147,6 +147,59 @@ export function createGame(seed = 20170901, playerName = PLAYER_DEFAULT_NAME) {
   const prior = simulatePriorGaokaoStats(seed, GRADE_YEAR - 3, GRADE_YEAR);
   state.schoolLineHistory = [prior];
   addLog(state, `校内划线按上一届高考本校省控实际上线人数滚动。开局已结算${prior.entryYear}级${prior.gaokaoYear}年高考应届上线：理科一本${prior.li.firstN}人、二本累计${prior.li.secondN}人；文科一本${prior.wen.firstN}人、二本累计${prior.wen.secondN}人。该届只保留统计，不进入可玩年级。高三校内线按应届与补习班同一池划（理科二本取前1000名），应届省控上线人数不含复读。无上一届数据时才用约理科一本460、文科一本60/二本250的兜底，不是官方精确名额。`, date);
+  return state;
+}
+
+export function createGame(seed = 20170901, playerName = PLAYER_DEFAULT_NAME) {
+  const opening = generateOpeningSchool(seed, GRADE_YEAR);
+  const cohorts = opening.cohorts;
+  for (const year of [GRADE_YEAR - 1, GRADE_YEAR - 2]) {
+    applyHistoricalPlacement(cohorts[year], year, seed);
+  }
+  return assembleNewGameState(seed, playerName, cohorts);
+}
+
+function defaultCreateYield() {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    } else {
+      setTimeout(resolve, 0);
+    }
+  });
+}
+
+/** 分步开档：按年级生成、历史分班、上一届统计，步骤之间让出主线程并报告进度。 */
+export async function createGameAsync(seed = 20170901, playerName = PLAYER_DEFAULT_NAME, hooks = {}) {
+  const report = (label, progress) => hooks.onProgress?.({ label, progress });
+  const pause = () => (typeof hooks.yieldFn === "function" ? hooks.yieldFn() : defaultCreateYield());
+  const cohorts = {};
+
+  report("正在生成高一名单", 14);
+  await pause();
+  cohorts[GRADE_YEAR] = generateCohort(GRADE_YEAR, seed, { alreadySplit: false, withRepeat: false, quality: eraQuality(GRADE_YEAR) });
+
+  report("正在生成高二名单", 30);
+  await pause();
+  cohorts[GRADE_YEAR - 1] = generateCohort(GRADE_YEAR - 1, seed, { alreadySplit: true, withRepeat: false, quality: eraQuality(GRADE_YEAR - 1) });
+
+  report("正在生成高三名单（含补习班）", 46);
+  await pause();
+  cohorts[GRADE_YEAR - 2] = generateCohort(GRADE_YEAR - 2, seed, { alreadySplit: true, withRepeat: true, quality: eraQuality(GRADE_YEAR - 2) });
+
+  report("正在补做高二历史分班", 62);
+  await pause();
+  applyHistoricalPlacement(cohorts[GRADE_YEAR - 1], GRADE_YEAR - 1, seed);
+
+  report("正在补做高三历史分班", 74);
+  await pause();
+  applyHistoricalPlacement(cohorts[GRADE_YEAR - 2], GRADE_YEAR - 2, seed);
+
+  report("正在结算上一届高考统计", 88);
+  await pause();
+  const state = assembleNewGameState(seed, playerName, cohorts);
+  report("正在整理开局档案", 94);
+  await pause();
   return state;
 }
 
@@ -428,6 +481,18 @@ export function doParentsMeeting(state, ev) {
   return r;
 }
 
+export function doSchoolActivity(state, ev) {
+  const r = openSchoolActivityCore(state, ev);
+  if (r.ok && r.text && !r.already) addLog(state, r.text);
+  return r;
+}
+
+export function doActivityAction(state, action, studentId = null) {
+  const r = doActivityActionCore(state, action, studentId);
+  if (r.ok) addLog(state, r.text);
+  return r;
+}
+
 export function meetParent(state, studentId) {
   const cls = snapshotPlayerClass(state);
   const s = cls.find((x) => x.id === studentId) || null;
@@ -443,6 +508,7 @@ export function applyEvent(state, ev) {
   if (ev.kind === "admission") return { type: "admission", ...doAdmission(state, ev) };
   if (ev.kind === "promote") return { type: "promote", ...doPromote(state, ev) };
   if (ev.kind === "parents") return { type: "parents", ...doParentsMeeting(state, ev) };
+  if (ev.kind === "activity") return { type: "activity", ...doSchoolActivity(state, ev) };
   return { type: ev.kind, ok: true };
 }
 
@@ -469,6 +535,11 @@ export function describeEventAudience(ev) {
     const graduated = ev.graduatedCohort;
     const incoming = ev.newEntryYear;
     return `${ev.name}（${graduated}级离校，${incoming}级入学）`;
+  }
+  if (ev.kind === "activity") {
+    const grades = ev.grades || [1, 2, 3];
+    const labels = [...new Set(grades)].map((g) => `高${"一二三"[g - 1] || g}`).join("、");
+    return `学校活动「${ev.name}」（${ev.date}，${labels}）`;
   }
   const grades = ev.grades || [1, 2, 3];
   const labels = [...new Set(grades)].map((g) => `高${"一二三"[g - 1] || g}`).join("、");
@@ -543,10 +614,23 @@ export function skipToNextCohort(state) {
   return skipUntil(state, (s) => s.schoolYear > beforeSchoolYear && s.cohorts[s.schoolYear], 90);
 }
 
+function isAdvanceDayMajor(e) {
+  if (!e) return false;
+  if (["exam", "placement1", "placement2", "admission", "promote", "parents"].includes(e.kind)) return true;
+  return e.kind === "activity" && e.off === "full";
+}
+
+function openTodayPartialActivity(state) {
+  const evs = SCHOOL_CALENDAR.filter((e) => e.date === state.date && e.kind === "activity" && e.off !== "full" && !state.flags[`activity-${e.id}`]);
+  let last = null;
+  for (const ev of evs) last = applyEvent(state, ev);
+  return last;
+}
+
 export function advanceDay(state) {
   const evs = SCHOOL_CALENDAR.filter((e) => e.date === state.date && !state.flags[`done-${e.id}`]);
   // 若当天有未处理的关键事件，先处理再过天
-  const major = evs.find((e) => ["exam", "placement1", "placement2", "admission", "promote", "parents"].includes(e.kind));
+  const major = evs.find((e) => isAdvanceDayMajor(e));
   if (major) {
     state.flags[`done-${major.id}`] = true;
     return applyEvent(state, major);
@@ -557,8 +641,11 @@ export function advanceDay(state) {
   state.reviewsToday = 0;
   const updates = collectHomeworkFollowups(state, "day");
   const incoming = SCHOOL_CALENDAR.filter((e) => e.date === state.date);
+  const opened = openTodayPartialActivity(state);
   const slot = currentSlot(state);
-  return { type: "day", date: state.date, events: incoming, updates, slot, text: `到了${formatDateCn(state.date)}${slot ? " " + formatSlotLabel(slot) : ""}。` };
+  const arrive = `到了${formatDateCn(state.date)}${slot ? " " + formatSlotLabel(slot) : ""}。`;
+  const text = opened?.text ? `${arrive}${opened.text}` : arrive;
+  return { type: "day", date: state.date, events: incoming, updates, slot, text, openedActivity: opened || null };
 }
 
 function resetDailyCounters(state) {
@@ -588,13 +675,15 @@ export function advancePeriod(state) {
   state.periodId = n.slot.id;
   if (rolledDay) resetDailyCounters(state);
   else resetPeriodCounters(state);
+  const opened = rolledDay ? openTodayPartialActivity(state) : null;
   const updates = collectHomeworkFollowups(state, "period");
   const slot = currentSlot(state);
   const follow = updates.length
     ? `作业跟进：${updates.slice(0, 3).map((u) => u.name + u.change).join("、")}${updates.length > 3 ? "等" : ""}。`
     : "";
+  const openedBit = opened?.text ? opened.text : "";
   const text = rolledDay
-    ? `到了${formatDateCn(state.date)} ${formatSlotLabel(slot)}。${follow}`
+    ? `到了${formatDateCn(state.date)} ${formatSlotLabel(slot)}。${follow}${openedBit}`
     : `到了${formatSlotLabel(slot)}。${follow}`;
   return { type: "period", ok: true, rolledDay, slot, updates, text, events: SCHOOL_CALENDAR.filter((e) => e.date === state.date) };
 }
@@ -698,7 +787,7 @@ export function reviewHomework(state, studentId) {
   return r;
 }
 
-export { topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, daySchedule, currentSlot, formatSlotLabel, upcomingMath, upcomingTutoring, majorEventOn, pendingMajorEvent, isTutoringSlot, raisedHands, seatLabel, seatOf, compileEveningRoll, studentRecentStatus, rollCallStatusLine, classLatecomers, wrongClassroomThisPeriod, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE, weekMathCount, weekSchedule, weekStart, ensureIncomingRequest, pendingTimetableRequest, weekBorrowCounts, weekTiaokeSummary, canAlterSlot, shortSlotLabel, teacherOf };
+export { topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, daySchedule, currentSlot, formatSlotLabel, upcomingMath, upcomingTutoring, majorEventOn, pendingMajorEvent, isTutoringSlot, raisedHands, seatLabel, seatOf, compileEveningRoll, studentRecentStatus, rollCallStatusLine, classLatecomers, wrongClassroomThisPeriod, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE, isSchoolActivityOpen, upcomingSchoolActivity, ACTIVITY_SOURCE_NOTE, playerStageLine, weekMathCount, weekSchedule, weekStart, ensureIncomingRequest, pendingTimetableRequest, weekBorrowCounts, weekTiaokeSummary, canAlterSlot, shortSlotLabel, teacherOf };
 
 export function swapPeriods(state, a, b) {
   ensureTiaokeState(state);
@@ -779,6 +868,7 @@ export function periodTalkScene(state) {
   const slot = currentSlot(state);
   if (!slot) return { kind: "day", cap: 5, label: "" };
   if (slot.isExamDay) return { kind: "exam", cap: 2, label: `今日${slot.eventName || "停课"}` };
+  if (slot.isActivityPeriod) return { kind: "activity", cap: 2, label: `今日${slot.eventName || "学校活动"}` };
   if (slot.id === "rest" || slot.kind === "rest") return { kind: "rest", cap: 3, label: "周日休息" };
   if (slot.kind === "break" || slot.id === "noon") return { kind: "break", cap: 3, label: slot.name };
   if (isTutoringSlot(slot)) return { kind: "tutoring", cap: 4, label: slot.subject || "晚自习" };
@@ -794,6 +884,7 @@ function talkSceneStamp(state, student) {
   if (scene.kind === "tutoring") return `${scene.label}，${seat}。`;
   if (scene.kind === "math") return `数学课，${seat}。`;
   if (scene.kind === "exam") return `${scene.label}。`;
+  if (scene.kind === "activity") return `${scene.label}。`;
   if (scene.kind === "rest") return `周日休息。`;
   if (scene.kind === "break") return `${scene.label}，${seat}。`;
   if (scene.kind === "read") return `${scene.label}，${seat}。`;
@@ -837,6 +928,7 @@ export function tutorEvening(state, mode = "巡视", studentId = null) {
   const pending = pendingMajorEvent(state);
   if (pending) return { ok: false, reason: `今日${pending.name}，停课，晚自习和答疑也先不上。` };
   if (slot?.isExamDay) return { ok: false, reason: `今日${slot.eventName}，全天停课，没有晚自习答疑。` };
+  if (slot?.isActivityPeriod) return { ok: false, reason: `今日${slot.eventName}，正值学校活动，没有晚自习答疑。` };
   if (!isTutoringSlot(slot)) {
     const nxt = upcomingTutoring(state);
     const hint = nxt
@@ -855,6 +947,7 @@ export function homeroomEveningRoll(state) {
   const pending = pendingMajorEvent(state);
   if (pending) return { ok: false, reason: `今日${pending.name}，停课，晚自习点名也先不做。` };
   if (slot?.isExamDay) return { ok: false, reason: `今日${slot.eventName}，全天停课，没有晚自习点名。` };
+  if (slot?.isActivityPeriod) return { ok: false, reason: `今日${slot.eventName}，正值学校活动，没有晚自习点名。` };
   if (!isTutoringSlot(slot)) {
     const nxt = upcomingTutoring(state);
     const hint = nxt
