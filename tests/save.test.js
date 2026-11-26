@@ -14,7 +14,7 @@ test("存档读档往返后日期、学生和后续考试仍一致", () => {
   const b = fromJSON(json);
   assert.equal(b.date, a.date);
   assert.equal(playerStudents(b).length, PLAYER_CLASS_SIZE);
-  assert.equal(PLAYER_CLASS_SIZE, 73);
+  assert.equal(PLAYER_CLASS_SIZE, 74);
   assert.equal(playerStudents(b)[0].name, playerStudents(a)[0].name);
   assert.equal(Object.keys(b.exams).length, Object.keys(a.exams).length);
   const key = Object.keys(a.exams)[0];

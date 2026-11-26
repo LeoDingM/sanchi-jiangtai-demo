@@ -40,7 +40,12 @@ export function firstPlacement(students, scoreMap, { overrides = {}, seed = 1 } 
   const assign = [];
   const note = [];
 
-  // 0 班、1 班：仅文理互换，不从外梯队补入
+  // 0 班、1 班：仅在实验班内部按目标班额对齐文理，不从外梯队补入
+  const expRows = [...lockedExp.li, ...lockedExp.wen];
+  const expLiTarget = (FIRST_PLACEMENT_TARGETS.li.find((t) => t.locked === "exp") || { size: 36 }).size;
+  alignTracksToCount(expRows, expLiTarget);
+  lockedExp.li = expRows.filter((r) => r.track === "li");
+  lockedExp.wen = expRows.filter((r) => r.track === "wen");
   lockedExp.li.sort(compareScoreRows);
   lockedExp.wen.sort(compareScoreRows);
   for (const r of lockedExp.li) assign.push({ id: r.student.id, classNo: 0, track: "li", tier: "yunxiu_exp", name: "云岫0班" });
@@ -54,12 +59,15 @@ export function firstPlacement(students, scoreMap, { overrides = {}, seed = 1 } 
   // 原 2—4 选文的学生：插入文科可流动队列的最前（凌霄文科优先）
   const wenFromKey = movable.filter((r) => (r.student.originClassNo ?? r.student.classNo) >= 2 && (r.student.originClassNo ?? r.student.classNo) <= 4 && r.track === "wen");
   const rest = movable.filter((r) => !wenFromKey.includes(r));
+  const liTargets = FIRST_PLACEMENT_TARGETS.li.filter((t) => !t.locked);
+  const wenTargets = FIRST_PLACEMENT_TARGETS.wen.filter((t) => !t.locked);
+  // 按目标班额对齐科类人数：重点转文造成的理科空缺，从可流动队列补入理科，使应届理科合计仍为 1276。
+  const keyShort = Math.max(0, keyTargets.reduce((s, t) => s + t.size, 0) - lockedKeyLi.length);
+  alignTracksToCount(rest, liTargets.reduce((s, t) => s + t.size, 0) + keyShort);
   const byTrack = { li: rest.filter((r) => r.track === "li"), wen: [...wenFromKey, ...rest.filter((r) => r.track === "wen")] };
   byTrack.li.sort(compareScoreRows);
   byTrack.wen.sort(compareScoreRows);
 
-  const liTargets = FIRST_PLACEMENT_TARGETS.li.filter((t) => !t.locked);
-  const wenTargets = FIRST_PLACEMENT_TARGETS.wen.filter((t) => !t.locked);
   // 按期末实考分划入梯队，再在同一层次内蛇形分班，只保证分班当时同层各班均衡。
   // 不做交界抖动，也不把人预留到笃学去照顾三年后的高考。
   fillTiersByRankThenBalance(byTrack.li, liTargets, assign, "li", seed);
@@ -105,15 +113,71 @@ function fillTiersByRankThenBalance(ranked, targets, assign, track, seed) {
   }
 }
 
+function trackLean(row) {
+  const a = row.student?.ability || {};
+  const li = ((a.physics || 0) + (a.chemistry || 0) + (a.math || 0)) / 3;
+  const wen = ((a.politics || 0) + (a.history || 0) + (a.geography || 0)) / 3;
+  return li - wen;
+}
+
+/** 把最靠近文理交界的学生调到缺额一侧，使该队列人数对上目标班额。 */
+function alignTracksToCount(rows, needLi) {
+  const n = Math.max(0, Math.min(needLi, rows.length));
+  const liN = rows.filter((r) => r.track === "li").length;
+  if (liN === n) return;
+  const byId = (a, b) => String(a.studentId).localeCompare(String(b.studentId));
+  if (liN > n) {
+    // 多出来的理转文：先转更偏文、总分较低的，避免把高分理科生抽走。
+    const move = rows.filter((r) => r.track === "li").sort((a, b) => trackLean(a) - trackLean(b) || (a.total ?? 0) - (b.total ?? 0) || byId(a, b));
+    for (let i = 0; i < liN - n; i++) move[i].track = "wen";
+  } else {
+    // 补入理科时优先总分较低的学生，让他们落在笃学，以免把高分文科生送进凌霄/卓行抬高省控标定。
+    const move = rows.filter((r) => r.track === "wen").sort((a, b) => (a.total ?? 0) - (b.total ?? 0) || trackLean(b) - trackLean(a) || byId(b, a));
+    for (let i = 0; i < n - liN; i++) move[i].track = "li";
+  }
+}
+
+function snakeIndex(cycle, i) {
+  const row = Math.floor(i / cycle);
+  return row % 2 === 0 ? i % cycle : cycle - 1 - (i % cycle);
+}
+
+/** 按目标班额蛇形分班：各班按满员比例同步填充，保证人数精确且同层均分接近；满员的班不再接收。 */
+function snakeByCaps(ranked, caps) {
+  const n = caps.length;
+  const buckets = caps.map(() => []);
+  if (!n) return buckets;
+  let snakeAt = 0;
+  for (const r of ranked) {
+    let best = -1;
+    let bestRatio = Infinity;
+    const seen = new Set();
+    for (let t = 0; t < n * 2 && seen.size < n; t++) {
+      const k = snakeIndex(n, snakeAt + t);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      if (buckets[k].length >= caps[k]) continue;
+      const ratio = caps[k] ? buckets[k].length / caps[k] : Infinity;
+      if (ratio < bestRatio - 1e-12) {
+        bestRatio = ratio;
+        best = k;
+      }
+    }
+    if (best < 0) {
+      const k = buckets.findIndex((b, i) => b.length < caps[i]);
+      if (k >= 0) buckets[k].push(r);
+      else buckets[n - 1].push(r);
+    } else {
+      buckets[best].push(r);
+    }
+    snakeAt++;
+  }
+  return buckets;
+}
+
 function snakeIntoClasses(ranked, classTargets, assign, track, seed) {
   if (!classTargets.length) return;
-  const buckets = classTargets.map(() => []);
-  ranked.forEach((r, i) => {
-    const cycle = classTargets.length;
-    const row = Math.floor(i / cycle);
-    const k = row % 2 === 0 ? i % cycle : cycle - 1 - (i % cycle);
-    buckets[k].push(r);
-  });
+  const buckets = snakeByCaps(ranked, classTargets.map((t) => t.size));
   buckets.forEach((seats, idx) => {
     const t = classTargets[idx];
     const ordered = shuffle(rngFrom(seed, "place-seats", track, t.no), seats);
@@ -122,6 +186,7 @@ function snakeIntoClasses(ranked, classTargets, assign, track, seed) {
     }
   });
 }
+
 
 /** 第二次分班：同科类同梯队内按成绩蛇形均衡，0/1 不动，2—4 只在重点班内部均衡。 */
 export function secondPlacement(students, scoreMap, { seed = 1 } = {}) {
@@ -143,14 +208,10 @@ export function secondPlacement(students, scoreMap, { seed = 1 } = {}) {
       { total: scoreMap[a.id]?.total ?? 0, math: scoreMap[a.id]?.math ?? 0, chinese: scoreMap[a.id]?.chinese ?? 0, studentId: a.id },
       { total: scoreMap[b.id]?.total ?? 0, math: scoreMap[b.id]?.math ?? 0, chinese: scoreMap[b.id]?.chinese ?? 0, studentId: b.id },
     ));
-    // 蛇形分到原有班级编号，不跨梯队
-    const buckets = Object.fromEntries(classNos.map((n) => [n, []]));
-    ranked.forEach((s, i) => {
-      const cycle = classNos.length;
-      const r = Math.floor(i / cycle);
-      const k = r % 2 === 0 ? i % cycle : cycle - 1 - (i % cycle);
-      buckets[classNos[k]].push(s);
-    });
+    // 蛇形分到原有班级编号，不跨梯队，并保持第一次分班后的各班班额。
+    const caps = classNos.map((no) => list.filter((s) => s.classNo === no).length);
+    const rawBuckets = snakeByCaps(ranked, caps);
+    const buckets = Object.fromEntries(classNos.map((no, i) => [no, rawBuckets[i]]));
     for (const no of classNos) {
       const rng = rngFrom(seed, "place2", key, no);
       const seats = shuffle(rng, buckets[no]);

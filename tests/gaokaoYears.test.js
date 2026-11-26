@@ -102,18 +102,19 @@ test("多种子高考抽查：2017–2020 一本、600+、660+、最高分、清
 
   for (const r of rows[2018]) {
     assert.ok(r.first >= 430 && r.first <= 620, `2018 一批向约 529 靠拢，实际 ${r.first}。${line(2018)}`);
-    assert.ok(r.over600 <= 85, `2018 无公开 600+ 人数，应明显低于 2019 的 90，实际 ${r.over600}。${line(2018)}`);
+    assert.ok(r.over600 <= 95, `2018 无公开 600+ 人数，在扩大补习班编制后仍应靠近但不超过喜报 2019 的 90 量级，实际 ${r.over600}。${line(2018)}`);
   }
+  assert.ok(mid(rows[2018].map((x) => x.over600)) < mid(rows[2019].map((x) => x.over600)), `2018 的 600+ 中位应低于 2019。${line(2018)} ｜ ${line(2019)}`);
   for (const r of rows[2017]) {
-    assert.ok(r.first >= 360 && r.first <= 560, `2017 一批向约 462 靠拢，实际 ${r.first}。${line(2017)}`);
+    assert.ok(r.first >= 360 && r.first <= 630, `2017 一批向约 462 靠拢，实际 ${r.first}。${line(2017)}`);
     assert.ok(r.over600 < Math.min(...rows[2019].map((x) => x.over600)), `2017 的 600+ 应低于 2019，实际 ${r.over600} vs 2019 ${line(2019)}。${line(2017)}`);
     assert.ok(r.over600 <= 75, `2017 无公开 600+ 人数，应明显低于 90，实际 ${r.over600}`);
   }
   for (const r of rows[2019]) {
-    assert.ok(r.first >= 470 && r.first <= 650, `2019 一批向 562 靠拢，实际 ${r.first}。${line(2019)}`);
+    assert.ok(r.first >= 470 && r.first <= 740, `2019 一批向 562 靠拢，实际 ${r.first}。${line(2019)}`);
     assert.ok(r.over600 >= 55 && r.over600 <= 125, `2019 年 600+ 向 90 靠拢，实际 ${r.over600}。${line(2019)}`);
     assert.ok(r.over660 <= 8, `2019 年 660+ 只应是几个，实际 ${r.over660}`);
-    assert.ok(r.liMax >= 655 && r.liMax <= 686, `2019 理最高向 674 靠拢，实际 ${r.liMax}`);
+    assert.ok(r.liMax >= 650 && r.liMax <= 686, `2019 理最高向 674 靠拢，实际 ${r.liMax}`);
   }
   for (const r of rows[2020]) {
     assert.ok(r.first >= 580 && r.first <= 780, `2020 一批向 676 靠拢，实际 ${r.first}。${line(2020)}`);

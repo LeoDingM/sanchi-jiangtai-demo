@@ -1,6 +1,7 @@
 /** 游戏状态机：上课/考试/分班/高考录取/毕业升学与自动跳阶段。 */
 import {
   PLAYER_CLASS_NO, PLAYER_DEFAULT_NAME, PLAYER_ROLE, START_DATE, GRADE_YEAR, HOMEROOM_NAME, MENTOR_NAME,
+  REPEAT_CLASS_SIZE, REPEAT_WEN_NOS, REPEAT_LI_NOS,
 } from "./config.js";
 import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById, examParams, formatGradeTerm, formatCohortGrade, termOf } from "./calendar.js";
 import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf, reseatClasses, eraQuality } from "./school.js";
@@ -123,7 +124,7 @@ export function createGame(seed = 20170901, playerName = PLAYER_DEFAULT_NAME) {
   };
   const prior = simulatePriorGaokaoStats(seed, GRADE_YEAR - 3, GRADE_YEAR);
   state.schoolLineHistory = [prior];
-  addLog(state, `校内划线按上一届高考本校省控实际上线人数滚动。开局已结算${prior.entryYear}级${prior.gaokaoYear}年高考应届上线：理科一本${prior.li.firstN}人、二本累计${prior.li.secondN}人；文科一本${prior.wen.firstN}人、二本累计${prior.wen.secondN}人。该届只保留统计，不进入可玩年级。无上一届数据时才用约理科一本450、文科一本60/二本250的兜底，不是官方精确名额。`, date);
+  addLog(state, `校内划线按上一届高考本校省控实际上线人数滚动。开局已结算${prior.entryYear}级${prior.gaokaoYear}年高考应届上线：理科一本${prior.li.firstN}人、二本累计${prior.li.secondN}人；文科一本${prior.wen.firstN}人、二本累计${prior.wen.secondN}人。该届只保留统计，不进入可玩年级。高三校内线按应届与补习班同一池划（理科二本取前1000名），应届省控上线人数不含复读。无上一届数据时才用约理科一本460、文科一本60/二本250的兜底，不是官方精确名额。`, date);
   return state;
 }
 
@@ -348,18 +349,14 @@ export function doPromote(state, ev) {
         });
       }
     }
-    // 把复读生编入复卓班
-    const wenNos = [31, 32, 33, 34];
-    const liNos = [35, 36, 37, 38, 39, 40];
-    let wi = 0, li = 0;
+    // 把复读生编入补习班：文科 31–36、理科 37–42，每班按 70 人编制
     const wen = staying.filter((s) => s.track === "wen");
     const liS = staying.filter((s) => s.track !== "wen");
-    const assignNos = (arr, nos) => {
-      const per = Math.max(50, Math.ceil(arr.length / nos.length) || 50);
-      arr.forEach((s, i) => { s.classNo = nos[Math.min(nos.length - 1, Math.floor(i / per))]; });
+    const assignNos = (arr, nos, cap = REPEAT_CLASS_SIZE) => {
+      arr.forEach((s, i) => { s.classNo = nos[Math.min(nos.length - 1, Math.floor(i / cap))]; });
     };
-    assignNos(wen, wenNos);
-    assignNos(liS, liNos);
+    assignNos(wen, REPEAT_WEN_NOS);
+    assignNos(liS, REPEAT_LI_NOS);
     staying.splice(0, staying.length, ...reseatClasses(staying, { seed: state.seed + newEntry, tag: "repeat-seats" }));
     delete state.cohorts[graduatedCohort];
     // 复读生挂到“下一届高三”所属：他们与新高三同一学年上课，单独保留在 repeatPool 直到合并
@@ -390,7 +387,7 @@ export function doPromote(state, ev) {
     state.player.classNo = PLAYER_CLASS_NO;
     addLog(state, `${graduatedCohort}级毕业离校。你转任${newEntry}级卓行16班数学教师。新高一按入学成绩进入各层次班，学校档案与历届去向保留。`);
   } else {
-    addLog(state, `新学年开始：${newEntry}级高一入学，各年级依次升等。${graduatedCohort}级已离校或进入复卓班。`);
+    addLog(state, `新学年开始：${newEntry}级高一入学，各年级依次升等。${graduatedCohort}级已离校或进入补习班。`);
   }
   state.player.careerYear += 1;
   if (!state.player.official && state.player.careerYear >= 1) {

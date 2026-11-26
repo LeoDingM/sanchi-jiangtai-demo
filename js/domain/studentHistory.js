@@ -6,7 +6,7 @@ import { subjectsFor } from "./scores.js";
 export const TIER_ORDER = ["yunxiu_exp", "yunxiu_key", "lingxiao", "zhuoxing", "duxue", "yiti", "fuzhuo"];
 
 export function tierName(id) {
-  return TIER[id]?.name || (id === "fuzhuo" ? "复卓" : id || "—");
+  return TIER[id]?.name || (id === "fuzhuo" ? "补习班" : id || "—");
 }
 
 export const tierLabel = tierName;

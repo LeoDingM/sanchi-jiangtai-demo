@@ -9,7 +9,7 @@ test("可从 2017 年 9 月自动推进到 2017 级高考录取，再升入下�
   const g = createGame(20170901);
   assert.equal(g.date, "2017-09-01");
   assert.equal(playerStudents(g).length, PLAYER_CLASS_SIZE);
-  assert.equal(PLAYER_CLASS_SIZE, 73);
+  assert.equal(PLAYER_CLASS_SIZE, 74);
   assert.equal(g.player.classNo, 16);
   skipToGaokaoOf(g, 2017);
   assert.ok(g.admissions["2017|2020"], "应有 2020 年对 2017 级的录取");

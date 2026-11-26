@@ -278,7 +278,7 @@ function deskPanelHtml(student, slot, scene) {
     : "";
   if (!student) {
     return `<h3>座位</h3>
-      <p class="muted">点一名学生的座位，按当前课时在教室里处理：数学课上可以提醒，晚自习可以答疑，别的课只能在走廊门口简短谈话。任教班约 73 人。</p>
+      <p class="muted">点一名学生的座位，按当前课时在教室里处理：数学课上可以提醒，晚自习可以答疑，别的课只能在走廊门口简短谈话。任教班 74 人。</p>
       ${tutorBtns}`;
   }
   const ctx = studentTeachingContext(student, state);
@@ -363,7 +363,7 @@ function viewClassroom(host) {
   const seatNote = placementSeatNotice(state);
   host.innerHTML = `<h3>教室座位表</h3>
     ${seatNote ? `<p class="notice">${seatNote}</p>` : ""}
-    <p class="notice">现在是${slotLine}。金圈是举手，红点是作业还要盯，颜色偏暗的是走神或精力不足，橙点是这节正课迟到。点击座位按当前课时处理，不必先跳到档案。任教班为卓行16班，约 73 人。</p>
+    <p class="notice">现在是${slotLine}。金圈是举手，红点是作业还要盯，颜色偏暗的是走神或精力不足，橙点是这节正课迟到。点击座位按当前课时处理，不必先跳到档案。任教班为卓行16班，74 人。</p>
     <div class="classroom-layout">
       <canvas id="classroom"></canvas>
       <div class="desk-panel paper">${deskPanelHtml(sel, slot, scene)}</div>
@@ -478,7 +478,7 @@ function viewProfile(host) {
       </div>
     </div>
     <h3>成绩与排名走势</h3>
-    <p class="notice">下列曲线和表格均由该生各次实考总分、单科分在当次学生池中重算，不另造统计。高一为 950 分制，图中另给出折合 750 分，便于和高二、高三对照。名次越小越靠前；跨层次是把该生成绩放入其他层次（云岫实验、云岫重点、凌霄、卓行、笃学、艺体、复卓等）学生池后的名次。</p>
+    <p class="notice">下列曲线和表格均由该生各次实考总分、单科分在当次学生池中重算，不另造统计。高一为 950 分制，图中另给出折合 750 分，便于和高二、高三对照。名次越小越靠前；跨层次是把该生成绩放入其他层次（云岫实验、云岫重点、凌霄、卓行、笃学、艺体、补习班等）学生池后的名次。</p>
     ${hist.length ? `
     <div class="charts">
       <div class="chart-card">
@@ -1117,7 +1117,7 @@ function lineCompareNotice(report, classNo = state.player.classNo) {
     const year = provincialCompareYear(report.date);
     parts.push(describeOfficialProvincialLines(year) + " ");
   }
-  parts.push(describeSchoolCutoff(report.quota, report.split) + "。");
+  parts.push(describeSchoolCutoff(report.quota, report.split, { includeRepeat: report.grade >= 3 || report.cutoffs?.includeRepeat }) + "。");
   parts.push(describeSchoolProvincial(report) + "。");
   if (classNo != null) {
     parts.push(`任教班${describeClassProvincial(report, classNo)}。`);
@@ -1154,9 +1154,14 @@ function schoolLinesNote(report, track = "li") {
   const cutW = report.split && track !== "wen" ? schoolCutoffView(report, "wen") : null;
   if (!cut) return "";
   const ordinary = report.examKind !== "gaokao" && report.examKind !== "city" && report.examKind !== "province";
+  const withRepeat = report.grade >= 3 || report.cutoffs?.includeRepeat;
   const why = ordinary
-    ? "平时考试没有国家线，以上是校内对照，不是省控。"
-    : "以上校内线按上一届本校该科类省控一本人数、理科二本取前 1000 名从当次排序得出，只作对照，不是国家线。";
+    ? (withRepeat
+        ? "平时考试没有国家线。校内线按应届与补习班同一池的校内名次划，只作对照，不是省控。应届省控上线人数不含复读。"
+        : "平时考试没有国家线，以上是校内对照（本年级尚无补习班，只在应届池划线），不是省控。")
+    : (withRepeat
+        ? "以上校内线按应届与补习班同一池的校内名次划出：理科一本取上一届应届省控一本实际人数（约 460，不是写死），二本取该池前 1000 名，只作对照，不是国家线。应届省控上线人数不含复读。"
+        : "以上校内线按上一届本校该科类省控一本人数、理科二本取前 1000 名从本年级应届池排序得出（本年级尚无补习班），只作对照，不是国家线。应届省控上线人数不含复读。");
   const extra = cutW ? `文科${cutW.firstTitle} ${cutW.firstLine}，${cutW.secondTitle} ${cutW.secondLine}，分差 ${cutW.gap}。` : "";
   return `${cut.firstTitle} ${cut.firstLine}，${cut.secondTitle} ${cut.secondLine}，分差 ${cut.gap}。${extra}${why}`;
 }
@@ -1379,7 +1384,7 @@ function viewOffice(host) {
   }
   const live = hydrateReport(pickExamReport(all, examPick, { preferEntryYear: state.player.cohortYear }) || all[0]);
   examPick = examReportKey(live);
-  const tiers = [["all","全部层次"],["yunxiu_exp","云岫实验 0/1"],["yunxiu_key","云岫重点 2—4"],["lingxiao","凌霄"],["zhuoxing","卓行"],["duxue","笃学"],["yiti","艺体"],["fuzhuo","复卓"]];
+  const tiers = [["all","全部层次"],["yunxiu_exp","云岫实验 0/1"],["yunxiu_key","云岫重点 2—4"],["lingxiao","凌霄"],["zhuoxing","卓行"],["duxue","笃学"],["yiti","艺体"],["fuzhuo","补习班"]];
   const tracks = live.split ? [["all","文理全部"],["li","理科"],["wen","文科"]] : [["all","未分科"]];
   host.innerHTML = `<h3>教务处 · 全校成绩</h3>
     ${officeCollabHtml()}
@@ -1397,7 +1402,8 @@ function viewOffice(host) {
     const tier = host.querySelector("#tier").value;
     const track = host.querySelector("#track").value;
     const cutTrack = live.split ? (track === "wen" ? "wen" : "li") : "mixed";
-    let rows = rankRows(filterRows(live.rows||[], { tier: tier==="all"?null:tier, track: track==="all"?null:track, repeat: false }));
+    const includeRep = live.grade >= 3 || tier === "fuzhuo";
+    let rows = rankRows(filterRows(live.rows||[], { tier: tier==="all"?null:tier, track: track==="all"?null:track, repeat: includeRep ? undefined : false }));
     const body = host.querySelector("#office-body");
     const subjects = live.subjectIds || [];
     const toppers = live.toppers || {};
@@ -1500,7 +1506,7 @@ function viewAdmission(host) {
 
 function viewAuto(host) {
   host.innerHTML = `<h3>自动模式</h3>
-    <p class="notice">不必亲自备课上课，也可按考试阶段推进。跳过时仍会走完校历、生成该次真实成绩与排名，并写入存档。第一届高考、录取、毕业后游戏继续：学生离校或进入复卓，低年级升级，新高一入学。</p>
+    <p class="notice">不必亲自备课上课，也可按考试阶段推进。跳过时仍会走完校历、生成该次真实成绩与排名，并写入存档。第一届高考、录取、毕业后游戏继续：学生离校或进入补习班，低年级升级，新高一入学。</p>
     <div class="row-actions">
       <button type="button" class="accent" id="n1">下一阶段</button>
       <button type="button" id="n2">跳到本届高考录取</button>

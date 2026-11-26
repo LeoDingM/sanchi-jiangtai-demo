@@ -23,22 +23,25 @@ export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0
   }
   const regular = rows.filter((r) => !r.repeat);
   const repeaters = rows.filter((r) => r.repeat);
-  // 校内线按上一届高考本校省控实际人数（或兜底名额）划线，不再按 400/1000 分摊。
+  // 高三（含高考校内对照）把补习班算进同一个校内名次池；高一高二本年级没有补习班，只在应届池里划线。
+  // 名额仍按上一届高考本校省控实际人数（或兜底），理科二本取该池前 1000 名。
   const reallySplit = !!split;
+  const includeRepeat = Number(grade) >= 3;
+  const pool = includeRepeat ? rows : regular;
   const quota = schoolQuota?.li ? schoolQuota : fallbackSchoolQuota();
 
-  const byTrack = { mixed: regular, li: regular.filter((r) => r.track === "li"), wen: regular.filter((r) => r.track === "wen") };
-  const cut = { split: reallySplit, quota };
+  const byTrack = { mixed: pool, li: pool.filter((r) => r.track === "li"), wen: pool.filter((r) => r.track === "wen") };
+  const cut = { split: reallySplit, quota, includeRepeat };
   if (!reallySplit) {
-    const ranked = rankRows(regular);
-    const n = regular.length;
+    const ranked = rankRows(pool);
+    const n = pool.length;
     const { firstN, secondN } = cutoffRanks(n, false, n, { track: "mixed", quotas: quota });
     cut.mixed = { ...cutoffsFromRanked(ranked, firstN, secondN), track: "mixed", firstN, secondN, count: n };
     applyLineFlags(ranked, cut.mixed);
     cut.ranked = { mixed: ranked };
   } else {
     cut.ranked = {};
-    const totalN = regular.length;
+    const totalN = pool.length;
     for (const track of ["li", "wen"]) {
       const list = byTrack[track];
       const ranked = rankRows(list);
@@ -163,13 +166,16 @@ export function summarizeAllClasses(cohort, scoreMap, cut, split) {
 }
 
 export function subjectToppers(rows, subjectIds, split) {
-  const scopes = { all: rows.filter((r) => !r.repeat) };
+  const regular = rows.filter((r) => !r.repeat);
+  const scopes = { all: regular };
   if (split) {
-    scopes.li = scopes.all.filter((r) => r.track === "li");
-    scopes.wen = scopes.all.filter((r) => r.track === "wen");
+    scopes.li = regular.filter((r) => r.track === "li");
+    scopes.wen = regular.filter((r) => r.track === "wen");
   }
   const tiers = ["yunxiu_exp", "yunxiu_key", "lingxiao", "zhuoxing", "duxue", "yiti", "fuzhuo"];
-  for (const t of tiers) scopes[t] = scopes.all.filter((r) => r.tier === t);
+  for (const t of tiers) {
+    scopes[t] = t === "fuzhuo" ? rows.filter((r) => r.tier === t) : regular.filter((r) => r.tier === t);
+  }
   const out = {};
   for (const [scope, list] of Object.entries(scopes)) {
     out[scope] = {};
@@ -193,8 +199,9 @@ export function filterRows(rows, { track, tier, classNo, repeat } = {}) {
 }
 
 export function sameTierCompare(report, tier) {
-  const classes = filterClasses(report.classes || [], { tier, repeat: false });
-  const rows = report.rows.filter((r) => r.tier === tier && !r.repeat);
+  const allowRepeat = tier === "fuzhuo" || report?.grade >= 3;
+  const classes = filterClasses(report.classes || [], { tier, repeat: allowRepeat ? undefined : false });
+  const rows = report.rows.filter((r) => r.tier === tier && (allowRepeat || !r.repeat));
   return { classes, rows: rankRows(rows) };
 }
 
@@ -219,9 +226,10 @@ export function filterClasses(classes, { track, tier, repeat } = {}) {
   });
 }
 
-export function classCompareRows(report, { tier, track } = {}) {
+export function classCompareRows(report, { tier, track, includeRepeat } = {}) {
   const year = provincialCompareYear(report?.date);
-  return filterClasses(report?.classes || [], { tier, track, repeat: false }).map((c) => {
+  const allowRepeat = includeRepeat || tier === "fuzhuo" || report?.grade >= 3;
+  return filterClasses(report?.classes || [], { tier, track, repeat: allowRepeat ? undefined : false }).map((c) => {
     const prov = classProvincialCounts(report, c.classNo);
     return { ...c, provYear: year, provFirst: prov.firstN, provSecond: prov.secondN };
   });

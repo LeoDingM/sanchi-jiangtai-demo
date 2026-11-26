@@ -1,7 +1,8 @@
-/** 学校、班级与学生生成。玩家任教 2017 级卓行 16 班（约 73 人）。 */
+/** 学校、班级与学生生成。玩家任教 2017 级卓行 16 班（74 人）。 */
 import {
   CLASS_BLUEPRINT, TIER, SUBJECT_IDS, PERSONALITIES, FAMILY_TYPES,
   PLAYER_CLASS_NO, GRADE_YEAR, LI_SUBJECTS, WEN_SUBJECTS,
+  REPEAT_CLASS_SIZE, REPEAT_WEN_NOS, REPEAT_LI_NOS,
 } from "./config.js";
 import { clamp, gauss, hash01, pick, rngFrom, shuffle } from "./prng.js";
 import { generateName } from "./names.js";
@@ -146,7 +147,7 @@ export function generateCohort(entryYear, seed, { quality = 0, alreadySplit = fa
   const students = [];
   const classes = [];
   for (const bp of CLASS_BLUEPRINT) {
-    if (bp.no >= 31) continue; // 复卓另外生成
+    if (bp.no >= 31) continue; // 补习班只在 withRepeat 的高三届另外生成
     const list = [];
     for (let seq = 1; seq <= bp.size; seq++) {
       const st = makeStudent({
@@ -165,7 +166,8 @@ export function generateCohort(entryYear, seed, { quality = 0, alreadySplit = fa
     for (const st of repeatStudents) {
       let cls = classes.find((c) => c.no === st.classNo);
       if (!cls) {
-        cls = { no: st.classNo, name: `复卓${st.classNo}班`, short: "复卓班", tier: "fuzhuo", size: 0, studentIds: [], repeat: true };
+        const bp = CLASS_BLUEPRINT.find((c) => c.no === st.classNo);
+        cls = { no: st.classNo, name: bp?.name || `补习${st.classNo}班`, short: bp?.short || "补习班", tier: "fuzhuo", size: 0, studentIds: [], repeat: true };
         classes.push(cls);
       }
       cls.studentIds.push(st.id);
@@ -177,27 +179,21 @@ export function generateCohort(entryYear, seed, { quality = 0, alreadySplit = fa
 
 /** 高三复读生：能力略高于原梯队均值，但仍是重点中学复读画像，不是人人清北。 */
 export function generateRepeaters(forSeniorEntryYear, seed, usedNames, quality = 0) {
-  // 2015 级在 2017-2018 学年读高三时，复读生主要来自上一届
+  // 高三补习班：文科 31–36、理科 37–42，每班 70 人。序号按班从 1 计。
   const rng = rngFrom(seed, "repeaters", forSeniorEntryYear);
   const students = [];
-  const wenClasses = [31, 32, 33, 34];
-  const liClasses = [35, 36, 37, 38, 39, 40];
-  const wenSize = 58, liSize = 58;
-  let seqW = 1, seqL = 1;
   const plan = [
-    ...wenClasses.map((no) => ({ no, track: "wen", size: wenSize, hint: "wen" })),
-    ...liClasses.map((no) => ({ no, track: "li", size: liSize, hint: "li" })),
+    ...REPEAT_WEN_NOS.map((no) => ({ no, track: "wen", size: REPEAT_CLASS_SIZE, hint: "wen" })),
+    ...REPEAT_LI_NOS.map((no) => ({ no, track: "li", size: REPEAT_CLASS_SIZE, hint: "li" })),
   ];
   for (const p of plan) {
-    for (let i = 0; i < p.size; i++) {
-      // 复读生多数来自原卓行/凌霄/笃学，少数原云岫
+    for (let seq = 1; seq <= p.size; seq++) {
+      // 补习生来源多数为原卓行/凌霄/笃学，少数原重点；能力略高于原梯队，但不是人人清北。
       const roll = rng();
       const tierSrc = roll < 0.08 ? "yunxiu_key" : roll < 0.38 ? "lingxiao" : roll < 0.82 ? "zhuoxing" : "duxue";
-      const classNo = p.no;
-      const seq = p.track === "wen" ? seqW++ : seqL++;
       const st = makeStudent({
         rng, usedNames, entryYear: forSeniorEntryYear - 1,
-        classNo, seq, tier: tierSrc, hint: p.hint, repeat: true,
+        classNo: p.no, seq, tier: tierSrc, hint: p.hint, repeat: true,
         quality: quality + 0.8,
       });
       st.track = p.track;
@@ -210,7 +206,7 @@ export function generateRepeaters(forSeniorEntryYear, seed, usedNames, quality =
 }
 
 export function generateOpeningSchool(seed, playerEntryYear = GRADE_YEAR) {
-  // 开学时：高一=playerEntryYear，高二=year-1（已分科+二次分班），高三=year-2（含复卓）
+  // 开学时：高一=playerEntryYear，高二=year-1（已分科+二次分班），高三=year-2（含补习班）
   const cohorts = {};
   cohorts[playerEntryYear] = generateCohort(playerEntryYear, seed, { alreadySplit: false, withRepeat: false, quality: eraQuality(playerEntryYear) });
   cohorts[playerEntryYear - 1] = generateCohort(playerEntryYear - 1, seed, { alreadySplit: true, withRepeat: false, quality: eraQuality(playerEntryYear - 1) });

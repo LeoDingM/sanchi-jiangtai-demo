@@ -98,7 +98,7 @@ test("第一次和第二次分班后都按新座号重排座位，且可复现",
     assert.deepEqual(o.seat, s.seat);
   }
   const c16 = p.students.filter((s) => s.classNo === 16);
-  assert.equal(c16.length, 73);
+  assert.equal(c16.length, 74);
   const movers = p.students.filter((s) => s.placement1 && s.placement1.from !== s.placement1.to);
   assert.ok(movers.length > 0);
   assert.ok(movers.some((s) => {
@@ -125,7 +125,7 @@ test("第一次和第二次分班后都按新座号重排座位，且可复现",
     assert.deepEqual(s.seat, o.seat);
   }
   const c16b = sec.students.filter((s) => s.classNo === 16);
-  assert.equal(c16b.length, 73);
+  assert.equal(c16b.length, 74);
 });
 
 test("分班后座位表提示是分班后的新座次，未分班时不提示", () => {

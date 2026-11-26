@@ -37,13 +37,19 @@ export const CUTOFF_SECOND_RANK = 1000;
 
 /**
  * 无上一届高考数据时的校内名额近似兜底，不是官方精确名额。
- * 理科一本约 450、二本取前 1000；文科一本约 40–90 取 60，二本累计约 200–300 取 250。
+ * 理科一本约 460、二本取前 1000；文科一本约 40–90 取 60，二本累计约 200–300 取 250。
  */
 export const FALLBACK_SCHOOL_QUOTA = {
-  li: { firstN: 450, secondN: 1000 },
+  li: { firstN: 460, secondN: 1000 },
   wen: { firstN: 60, secondN: 250 },
-  mixed: { firstN: 510, secondN: 1000 },
+  mixed: { firstN: 520, secondN: 1000 },
 };
+
+/** 高三补习班：文科 31–36、理科 37–42，每班 70 人。只在 withRepeat 的高三届生成，不要在高一高二出现。 */
+export const REPEAT_CLASS_SIZE = 70;
+export const REPEAT_WEN_NOS = [31, 32, 33, 34, 35, 36];
+export const REPEAT_LI_NOS = [37, 38, 39, 40, 41, 42];
+
 
 export const LI_SUBJECTS = ["physics", "chemistry", "math"];
 export const WEN_SUBJECTS = ["politics", "history", "geography"];
@@ -61,28 +67,28 @@ export const TIER = {
 
 /**
  * 2017 级高一上预分班。尚未正式文理分科，但入学成绩已分梯队。
- * 玩家任教卓行 16 班（约 73 人普通班，总控普通班编制 65–75），不选云岫 0/1（30—35 人清北标准班）。
+ * 玩家任教卓行 16 班（74 人普通班，总控普通班编制 65–75），不选云岫 0/1（0 班 36 人、1 班 32 人）。
  */
 export const CLASS_BLUEPRINT = [
-  { no: 0, name: "云岫0班", short: "云岫理科实验班", tier: "yunxiu_exp", trackHint: "li", size: 32 },
+  { no: 0, name: "云岫0班", short: "云岫理科实验班", tier: "yunxiu_exp", trackHint: "li", size: 36 },
   { no: 1, name: "云岫1班", short: "云岫文科实验班", tier: "yunxiu_exp", trackHint: "wen", size: 32 },
-  { no: 2, name: "云岫2班", short: "云岫理科重点班", tier: "yunxiu_key", trackHint: "li", size: 52 },
-  { no: 3, name: "云岫3班", short: "云岫理科重点班", tier: "yunxiu_key", trackHint: "li", size: 52 },
-  { no: 4, name: "云岫4班", short: "云岫理科重点班", tier: "yunxiu_key", trackHint: "li", size: 52 },
-  { no: 5, name: "凌霄5班", short: "凌霄班", tier: "lingxiao", trackHint: "li", size: 60 },
-  { no: 6, name: "凌霄6班", short: "凌霄班", tier: "lingxiao", trackHint: "li", size: 60 },
-  { no: 7, name: "凌霄7班", short: "凌霄班", tier: "lingxiao", trackHint: "li", size: 60 },
-  { no: 8, name: "凌霄8班", short: "凌霄班", tier: "lingxiao", trackHint: "li", size: 60 },
-  { no: 9, name: "凌霄9班", short: "凌霄班", tier: "lingxiao", trackHint: "li", size: 60 },
+  { no: 2, name: "云岫2班", short: "云岫理科重点班", tier: "yunxiu_key", trackHint: "li", size: 54 },
+  { no: 3, name: "云岫3班", short: "云岫理科重点班", tier: "yunxiu_key", trackHint: "li", size: 51 },
+  { no: 4, name: "云岫4班", short: "云岫理科重点班", tier: "yunxiu_key", trackHint: "li", size: 50 },
+  { no: 5, name: "凌霄5班", short: "凌霄班", tier: "lingxiao", trackHint: "li", size: 73 },
+  { no: 6, name: "凌霄6班", short: "凌霄班", tier: "lingxiao", trackHint: "li", size: 72 },
+  { no: 7, name: "凌霄7班", short: "凌霄班", tier: "lingxiao", trackHint: "li", size: 72 },
+  { no: 8, name: "凌霄8班", short: "凌霄班", tier: "lingxiao", trackHint: "li", size: 74 },
+  { no: 9, name: "凌霄9班", short: "凌霄班", tier: "lingxiao", trackHint: "li", size: 70 },
   { no: 10, name: "凌霄10班", short: "凌霄班", tier: "lingxiao", trackHint: "wen", size: 60 },
   { no: 11, name: "凌霄11班", short: "凌霄班", tier: "lingxiao", trackHint: "wen", size: 60 },
-  { no: 12, name: "卓行12班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 73 },
-  { no: 13, name: "卓行13班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 73 },
-  { no: 14, name: "卓行14班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 73 },
-  { no: 15, name: "卓行15班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 73 },
-  { no: 16, name: "卓行16班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 73, player: true },
-  { no: 17, name: "卓行17班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 73 },
-  { no: 18, name: "卓行18班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 73 },
+  { no: 12, name: "卓行12班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 70 },
+  { no: 13, name: "卓行13班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 71 },
+  { no: 14, name: "卓行14班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 72 },
+  { no: 15, name: "卓行15班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 72 },
+  { no: 16, name: "卓行16班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 74, player: true },
+  { no: 17, name: "卓行17班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 75 },
+  { no: 18, name: "卓行18班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 72 },
   { no: 19, name: "卓行19班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 73 },
   { no: 20, name: "卓行20班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 73 },
   { no: 21, name: "卓行21班", short: "卓行班", tier: "zhuoxing", trackHint: "mixed", size: 73 },
@@ -91,34 +97,46 @@ export const CLASS_BLUEPRINT = [
   { no: 24, name: "笃学24班", short: "笃学班", tier: "duxue", trackHint: "mixed", size: 73 },
   { no: 25, name: "笃学25班", short: "笃学班", tier: "duxue", trackHint: "mixed", size: 73 },
   { no: 26, name: "笃学26班", short: "笃学班", tier: "duxue", trackHint: "mixed", size: 73 },
-  { no: 27, name: "笃学27班", short: "笃学班", tier: "duxue", trackHint: "mixed", size: 73 },
+  { no: 27, name: "笃学27班", short: "笃学班", tier: "duxue", trackHint: "mixed", size: 69 },
   { no: 28, name: "笃学28班", short: "笃学班", tier: "duxue", trackHint: "mixed", size: 73 },
-  { no: 29, name: "笃学29班", short: "笃学班", tier: "duxue", trackHint: "mixed", size: 73 },
+  { no: 29, name: "笃学29班", short: "笃学班", tier: "duxue", trackHint: "mixed", size: 76 },
   { no: 30, name: "艺体30班", short: "艺体班", tier: "yiti", trackHint: "mixed", size: 50 },
+  { no: 31, name: "补习31班", short: "文科补习班", tier: "fuzhuo", trackHint: "wen", size: 70, repeat: true },
+  { no: 32, name: "补习32班", short: "文科补习班", tier: "fuzhuo", trackHint: "wen", size: 70, repeat: true },
+  { no: 33, name: "补习33班", short: "文科补习班", tier: "fuzhuo", trackHint: "wen", size: 70, repeat: true },
+  { no: 34, name: "补习34班", short: "文科补习班", tier: "fuzhuo", trackHint: "wen", size: 70, repeat: true },
+  { no: 35, name: "补习35班", short: "文科补习班", tier: "fuzhuo", trackHint: "wen", size: 70, repeat: true },
+  { no: 36, name: "补习36班", short: "文科补习班", tier: "fuzhuo", trackHint: "wen", size: 70, repeat: true },
+  { no: 37, name: "补习37班", short: "理科补习班", tier: "fuzhuo", trackHint: "li", size: 70, repeat: true },
+  { no: 38, name: "补习38班", short: "理科补习班", tier: "fuzhuo", trackHint: "li", size: 70, repeat: true },
+  { no: 39, name: "补习39班", short: "理科补习班", tier: "fuzhuo", trackHint: "li", size: 70, repeat: true },
+  { no: 40, name: "补习40班", short: "理科补习班", tier: "fuzhuo", trackHint: "li", size: 70, repeat: true },
+  { no: 41, name: "补习41班", short: "理科补习班", tier: "fuzhuo", trackHint: "li", size: 70, repeat: true },
+  { no: 42, name: "补习42班", short: "理科补习班", tier: "fuzhuo", trackHint: "li", size: 70, repeat: true },
 ];
 
 /** 第一次分班后的目标班额（文理分科 + 梯队）。第二次分班不得使用此表。 */
 export const FIRST_PLACEMENT_TARGETS = {
   li: [
-    { no: 0, name: "云岫0班", short: "云岫理科实验班", tier: "yunxiu_exp", size: 32, locked: "exp" },
-    { no: 2, name: "云岫2班", short: "云岫理科重点班", tier: "yunxiu_key", size: 52, locked: "key" },
-    { no: 3, name: "云岫3班", short: "云岫理科重点班", tier: "yunxiu_key", size: 52, locked: "key" },
-    { no: 4, name: "云岫4班", short: "云岫理科重点班", tier: "yunxiu_key", size: 52, locked: "key" },
-    { no: 5, name: "凌霄5班", short: "凌霄班", tier: "lingxiao", size: 60 },
-    { no: 6, name: "凌霄6班", short: "凌霄班", tier: "lingxiao", size: 60 },
-    { no: 7, name: "凌霄7班", short: "凌霄班", tier: "lingxiao", size: 60 },
-    { no: 8, name: "凌霄8班", short: "凌霄班", tier: "lingxiao", size: 60 },
-    { no: 9, name: "凌霄9班", short: "凌霄班", tier: "lingxiao", size: 60 },
-    { no: 12, name: "卓行12班", short: "卓行班", tier: "zhuoxing", size: 73 },
-    { no: 13, name: "卓行13班", short: "卓行班", tier: "zhuoxing", size: 73 },
-    { no: 14, name: "卓行14班", short: "卓行班", tier: "zhuoxing", size: 73 },
-    { no: 15, name: "卓行15班", short: "卓行班", tier: "zhuoxing", size: 73 },
-    { no: 16, name: "卓行16班", short: "卓行班", tier: "zhuoxing", size: 73 },
-    { no: 17, name: "卓行17班", short: "卓行班", tier: "zhuoxing", size: 73 },
-    { no: 18, name: "卓行18班", short: "卓行班", tier: "zhuoxing", size: 73 },
-    { no: 27, name: "笃学27班", short: "笃学班", tier: "duxue", size: 73 },
+    { no: 0, name: "云岫0班", short: "云岫理科实验班", tier: "yunxiu_exp", size: 36, locked: "exp" },
+    { no: 2, name: "云岫2班", short: "云岫理科重点班", tier: "yunxiu_key", size: 54, locked: "key" },
+    { no: 3, name: "云岫3班", short: "云岫理科重点班", tier: "yunxiu_key", size: 51, locked: "key" },
+    { no: 4, name: "云岫4班", short: "云岫理科重点班", tier: "yunxiu_key", size: 50, locked: "key" },
+    { no: 5, name: "凌霄5班", short: "凌霄班", tier: "lingxiao", size: 73 },
+    { no: 6, name: "凌霄6班", short: "凌霄班", tier: "lingxiao", size: 72 },
+    { no: 7, name: "凌霄7班", short: "凌霄班", tier: "lingxiao", size: 72 },
+    { no: 8, name: "凌霄8班", short: "凌霄班", tier: "lingxiao", size: 74 },
+    { no: 9, name: "凌霄9班", short: "凌霄班", tier: "lingxiao", size: 70 },
+    { no: 12, name: "卓行12班", short: "卓行班", tier: "zhuoxing", size: 70 },
+    { no: 13, name: "卓行13班", short: "卓行班", tier: "zhuoxing", size: 71 },
+    { no: 14, name: "卓行14班", short: "卓行班", tier: "zhuoxing", size: 72 },
+    { no: 15, name: "卓行15班", short: "卓行班", tier: "zhuoxing", size: 72 },
+    { no: 16, name: "卓行16班", short: "卓行班", tier: "zhuoxing", size: 74 },
+    { no: 17, name: "卓行17班", short: "卓行班", tier: "zhuoxing", size: 75 },
+    { no: 18, name: "卓行18班", short: "卓行班", tier: "zhuoxing", size: 72 },
+    { no: 27, name: "笃学27班", short: "笃学班", tier: "duxue", size: 69 },
     { no: 28, name: "笃学28班", short: "笃学班", tier: "duxue", size: 73 },
-    { no: 29, name: "笃学29班", short: "笃学班", tier: "duxue", size: 73 },
+    { no: 29, name: "笃学29班", short: "笃学班", tier: "duxue", size: 76 },
   ],
   wen: [
     { no: 1, name: "云岫1班", short: "云岫文科实验班", tier: "yunxiu_exp", size: 32, locked: "exp" },

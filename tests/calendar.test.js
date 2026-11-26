@@ -44,8 +44,8 @@ test("不同场次难度不同，一本/二本线随难度明显波动，分差�
   const uniqDiff = new Set(exams.map((e) => e.difficulty.toFixed(3)));
   assert.ok(uniqDiff.size >= 4, "难度应随场次变化");
   assert.ok(Math.max(...firsts) - Math.min(...firsts) >= 15, `一本线应随难度明显波动，实际 ${Math.min(...firsts)}–${Math.max(...firsts)}`);
-  // 校内线按上一届名额（测试无数据时用兜底：理科一本 450、二本前 1000）从当次排序得出。
-  // 名额从原分摊后的约第 253/632 名改为第 450/1000 名后，理科校内分差覆盖的能力段更宽，常见一百二十来分，仍须是数十分而非几分，并随难度波动。
+  // 校内线按上一届名额（测试无数据时用兜底：理科一本 460、二本前 1000）从当次排序得出。
+  // 名额从原分摊后的约第 253/632 名改为第 460/1000 名后，理科校内分差覆盖的能力段更宽，常见一百二十来分，仍须是数十分而非几分，并随难度波动。
   // 公开省控分差（理 72–84，文 56–75）仍由下一项测试锁定，不在这里改计分曲线。
   assert.ok(liGaps.every((g) => g >= 90 && g <= 150), `理科校内分差应为数十分，实际 ${Math.min(...liGaps)}–${Math.max(...liGaps)}（${liGaps.join(",")}）`);
   assert.ok(Math.max(...liGaps) - Math.min(...liGaps) >= 10, `理科分差应随难度波动，实际 ${Math.min(...liGaps)}–${Math.max(...liGaps)}`);

@@ -16,12 +16,12 @@ test("分科后可按科类传入不同 firstN/secondN，不再按 400 分摊", 
   const li = resolveSchoolQuota({ split: true, track: "li", regularN: 2000, trackN: 1267, quotas: fb });
   const wen = resolveSchoolQuota({ split: true, track: "wen", regularN: 2000, trackN: 733, quotas: fb });
   const mixed = resolveSchoolQuota({ split: false, track: "mixed", regularN: 2000, trackN: 2000, quotas: fb });
-  assert.equal(li.firstN, 450);
+  assert.equal(li.firstN, 460);
   assert.equal(li.secondN, 1000);
   assert.equal(wen.firstN, 60);
   assert.equal(wen.secondN, 250);
   assert.ok(wen.secondN < 1000, "文科二本绝不能写成 1000");
-  assert.equal(mixed.firstN, 510);
+  assert.equal(mixed.firstN, 520);
   assert.equal(mixed.secondN, 1000);
   // 旧的分摊算法会得到约 253/632
   const oldShare = Math.round(400 * 1267 / 2000);
@@ -43,10 +43,10 @@ test("分科后可按科类传入不同 firstN/secondN，不再按 400 分摊", 
   assert.equal(mix2.firstN, 543);
   assert.equal(mix2.secondN, 1000);
   const smallLi = resolveSchoolQuota({ split: true, track: "li", regularN: 900, trackN: 800, quotas: prior });
-  assert.equal(smallLi.secondN, 800, "理科二本不超过应届人数");
+  assert.equal(smallLi.secondN, 800, "理科二本不超过该划线池人数");
 });
 
-test("复读不计入上一届省控上线人数，也不占应届校内名额", () => {
+test("复读不计入应届省控上线人数", () => {
   const students = [
     { id: "a", track: "li", repeat: false },
     { id: "b", track: "li", repeat: false },
@@ -130,7 +130,7 @@ test("2015 级 2018 年高考之后，校内线改用刚结束那届实际人数
 });
 
 test("兜底名额是近似值而不是精确官方名额", () => {
-  assert.equal(FALLBACK_SCHOOL_QUOTA.li.firstN, 450);
+  assert.equal(FALLBACK_SCHOOL_QUOTA.li.firstN, 460);
   assert.equal(FALLBACK_SCHOOL_QUOTA.li.secondN, 1000);
   assert.ok(FALLBACK_SCHOOL_QUOTA.wen.firstN >= 40 && FALLBACK_SCHOOL_QUOTA.wen.firstN <= 90);
   assert.ok(FALLBACK_SCHOOL_QUOTA.wen.secondN >= 200 && FALLBACK_SCHOOL_QUOTA.wen.secondN <= 300);

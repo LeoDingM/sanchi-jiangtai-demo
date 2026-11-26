@@ -1,5 +1,5 @@
 /** 教室座位表（Canvas）：7 列 × 若干排，点击查看档案或当堂处理。 */
-import { seatOf } from "../domain/school.js";
+import { seatOf, columnsForClass } from "../domain/school.js";
 
 function fitText(ctx, text, maxWidth, maxSize, family) {
   let size = maxSize;
@@ -14,7 +14,8 @@ function fitText(ctx, text, maxWidth, maxSize, family) {
 
 export function renderSeating(canvas, students, selectedId, onPick, opts = {}) {
   const ctx = canvas.getContext("2d");
-  const cols = students.length <= 35 ? 6 : 7;
+  const classNo = opts.classNo ?? students[0]?.classNo;
+  const cols = columnsForClass(classNo, students.length);
   const rows = Math.max(6, Math.ceil(students.length / cols));
   const dpr = window.devicePixelRatio || 1;
   const cssW = Math.max(0, canvas.clientWidth || canvas.parentElement?.clientWidth || 0) || 800;

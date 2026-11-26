@@ -80,9 +80,9 @@ test("多种子高考抽查：平行班按省控标定，笃学允许 0 一本�
     assert.ok(midS < 45, `种子${seed} 理科卓行二本累计中位应明显低于 45，实际 ${midS}（${liSeconds.sort((a, b) => a - b).join(",")}）`);
     assert.ok(maxS <= 52, `种子${seed} 理科卓行二本累计 45 已是佼佼者，最大不应失控，实际 ${maxS}`);
     for (const cl of liClasses) {
-      assert.ok(cl.n >= 70 && cl.n <= 76, `种子${seed} 理科卓行班额应约 73，实际 ${cl.n}`);
+      assert.ok(cl.n >= 70 && cl.n <= 76, `种子${seed} 理科卓行班额应约 70–75，实际 ${cl.n}`);
     }
-    assert.equal(class16.n, 73, `种子${seed} 16 班应为 73 人`);
+    assert.equal(class16.n, 74, `种子${seed} 16 班应为 74 人`);
     assert.ok(class16.first <= 9, `种子${seed} 16 班省控一本 ${class16.first}`);
     assert.ok(class16.second <= 52, `种子${seed} 16 班省控二本累计 ${class16.second}`);
     // 笃学允许 0 一本，不做留苗兜底；也不再要求整层二本过半。
