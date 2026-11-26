@@ -19,6 +19,11 @@ import { provincialLines } from "../domain/jiangxi.js";
 import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial } from "../domain/schoolLines.js";
 import { studentExamHistory, tierName, findStudentInState } from "../domain/studentHistory.js";
 import { drawScoreChart, drawRankChart } from "./charts.js";
+import {
+  loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
+  playerSubjectName, analysisScope, isPlayerHomeroom,
+  buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
+} from "../domain/examAi.js";
 
 let state = null;
 let view = "classroom";
@@ -26,6 +31,8 @@ let selectedId = null;
 let examPick = "";
 let subjectPick = "math";
 let toastTimer = 0;
+const examAiCache = new Map();
+let examAiBusy = false;
 
 const $ = (s) => document.querySelector(s);
 
@@ -145,10 +152,10 @@ function render() {
     const tag = slot?.isTutoring ? " · 可答疑" : slot?.isMath ? " · 数学课" : slot?.isExamDay ? " · 停课" : slot?.id === "rest" ? " · 休息" : "";
     periodEl.textContent = (slot ? formatSlotLabel(slot) : "") + tag;
   }
-  $("#roleline").textContent = `${state.player.role} ${state.player.name} · ${state.player.cohortYear}级卓行${state.player.classNo}班 数学`;
+  $("#roleline").textContent = `${state.player.role} ${state.player.name} · ${state.player.cohortYear}级卓行${state.player.classNo}班 ${playerSubjectName(state.player)}`;
   document.querySelectorAll("#sidenav [data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
   const host = $("#view");
-  const map = { classroom: viewClassroom, roster: viewRoster, profile: viewProfile, teach: viewTeach, placement: viewPlacement, grades: viewGrades, office: viewOffice, admission: viewAdmission, auto: viewAuto, log: viewLog, save: viewSave };
+  const map = { classroom: viewClassroom, roster: viewRoster, profile: viewProfile, teach: viewTeach, placement: viewPlacement, grades: viewGrades, office: viewOffice, admission: viewAdmission, auto: viewAuto, log: viewLog, save: viewSave, settings: viewSettings };
   host.innerHTML = "";
   (map[view] || viewClassroom)(host);
   renderAgenda();
@@ -920,6 +927,86 @@ function lineCompareNotice(report, classNo = state.player.classNo) {
   return parts.join("");
 }
 
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function examAiCacheKey(report, player) {
+  return `${report?.date || ""}|${report?.examId || ""}|${player?.classNo}|${analysisScope(player)}`;
+}
+
+function viewSettings(host) {
+  const conf = loadAiSettings();
+  const keyHint = conf.hasKey ? `已保存密钥 ${maskApiKey(conf.apiKey)}。输入框留空再保存，会保留原密钥。` : "尚未保存密钥。";
+  host.innerHTML = `<h3>设置</h3>
+    <p class="notice">考后分析使用 OpenAI 兼容接口（默认 DeepSeek，地址 ${escapeHtml("https://api.deepseek.com")}，路径 /chat/completions）。密钥只存在本机浏览器，与游戏存档分开，也不会写入导出的 JSON。分析只写评语，不会改分数、排名或上线人数。</p>
+    <form class="settings-form" id="ai-form">
+      <label>接口地址 <input id="ai-base" type="url" value="${escapeHtml(conf.baseUrl)}" autocomplete="off" spellcheck="false" /></label>
+      <label>模型 <input id="ai-model" type="text" value="${escapeHtml(conf.model)}" autocomplete="off" spellcheck="false" /></label>
+      <label>API 密钥 <input id="ai-key" type="password" value="" placeholder="${conf.hasKey ? "已保存，输入新密钥可更换" : "尚未填写"}" autocomplete="off" /></label>
+      <p class="muted" id="ai-key-hint">${escapeHtml(keyHint)}</p>
+      <div class="row-actions">
+        <button type="submit" class="accent">保存设置</button>
+        <button type="button" id="ai-clear">清除密钥</button>
+      </div>
+    </form>`;
+  host.querySelector("#ai-form").onsubmit = (e) => {
+    e.preventDefault();
+    const model = host.querySelector("#ai-model").value.trim();
+    const baseUrl = host.querySelector("#ai-base").value.trim();
+    const typed = host.querySelector("#ai-key").value;
+    const patch = { model, baseUrl };
+    if (typed.trim()) patch.apiKey = typed.trim();
+    const r = saveAiSettings(patch);
+    toast(r.ok ? "设置已保存。密钥不会写入存档。" : (r.reason || "无法保存"));
+    viewSettings(host);
+  };
+  host.querySelector("#ai-clear").onclick = () => {
+    const r = clearAiKey();
+    host.querySelector("#ai-key").value = "";
+    toast(r.ok ? "已清除本机密钥。" : (r.reason || "无法清除"));
+    viewSettings(host);
+  };
+}
+
+function bindExamAi(host, report) {
+  const btn = host.querySelector("#ai-run");
+  const status = host.querySelector("#ai-status");
+  const body = host.querySelector("#ai-body");
+  if (!btn) return;
+  const setStatus = (text, kind) => {
+    if (!text) { status.hidden = true; status.textContent = ""; status.className = "notice"; return; }
+    status.hidden = false;
+    status.className = kind === "err" ? "notice exam-ai-err" : "notice";
+    status.textContent = text;
+  };
+  btn.onclick = async () => {
+    if (examAiBusy) return;
+    const conf = loadAiSettings();
+    if (!conf.hasKey) {
+      setStatus("还没有填写 API 密钥。请到「设置」里填写后，再生成考后分析。", "err");
+      return;
+    }
+    const check = canAnalyzeReport(report, state.player.classNo);
+    if (!check.ok) { setStatus(check.reason, "err"); return; }
+    const payload = buildExamAnalysisPayload(report, { player: state.player, classNo: state.player.classNo });
+    if (!payload.ok) { setStatus(payload.reason, "err"); return; }
+    examAiBusy = true;
+    btn.disabled = true;
+    setStatus("正在生成分析…", "ok");
+    try {
+      const r = await requestExamAnalysis(payload, { settings: conf });
+      if (!r.ok) { setStatus(r.reason, "err"); return; }
+      examAiCache.set(examAiCacheKey(report, state.player), r.text);
+      body.innerHTML = escapeHtml(r.text).replace(/\n/g, "<br/>");
+      setStatus("分析只是评语，分数、排名和上线人数以本页表格为准。", "ok");
+    } finally {
+      examAiBusy = false;
+      btn.disabled = false;
+    }
+  };
+}
+
 function viewGrades(host) {
   const report = currentReport();
   if (!report) {
@@ -959,9 +1046,29 @@ function viewGrades(host) {
     ${!isHk?`<p class="notice">${lineCompareNotice(report)}</p>`:""}`}
     ${isJoint?`<p class="muted">校内模拟线（第 ${cut?.firstN} / ${cut?.secondN} 名）理科 ${cut?.firstLine??"—"} / ${cut?.secondLine??"—"}，只作校内对照，不是市线或省线。${cutW?`文科校内 ${cutW.firstLine} / ${cutW.secondLine}。`:""}</p>`:""}
     <div class="paper"><table><thead><tr>${head.map((h)=>`<th>${h}</th>`).join("")}</tr></thead>
-    <tbody>${mine.map((r,i)=>`<tr data-id="${r.studentId}">${rowCells(r,i)}</tr>`).join("")}</tbody></table></div>`;
+    <tbody>${mine.map((r,i)=>`<tr data-id="${r.studentId}">${rowCells(r,i)}</tr>`).join("")}</tbody></table></div>
+    ${examAiPanel(report)}`;
   host.querySelector("#exsel").onchange = (e) => { examPick = e.target.value; render(); };
   host.querySelectorAll("tr[data-id]").forEach((tr)=>tr.onclick=()=>{selectedId=tr.dataset.id; view="profile"; render();});
+  bindExamAi(host, report);
+}
+
+function examAiPanel(report) {
+  const p = state.player;
+  const home = isPlayerHomeroom(p, p.classNo);
+  const sub = playerSubjectName(p);
+  const scopeText = home
+    ? "你现在是本班班主任，可以分析全班总分、均分、校内线与对照省控、排名分布，以及各门单科。"
+    : `你现在是本班${sub}任课老师，不是班主任，只能分析本班${sub}。若以后接任班主任，这里会改为可看全班整体。`;
+  const cached = examAiCache.get(examAiCacheKey(report, p));
+  const body = cached ? escapeHtml(cached).replace(/\n/g, "<br/>") : "";
+  return `<div class="paper exam-ai">
+    <h4>考后分析</h4>
+    <p class="muted">${scopeText} 评语根据本页已算好的成绩生成，不会改分数或排名。</p>
+    <div class="row-actions"><button type="button" class="accent" id="ai-run">生成分析</button></div>
+    <p class="notice" id="ai-status" hidden></p>
+    <div class="exam-ai-body" id="ai-body">${body}</div>
+  </div>`;
 }
 
 function viewOffice(host) {
