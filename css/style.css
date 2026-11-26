@@ -400,7 +400,9 @@ a { color: var(--gold); }
 }
 .exam-ai { margin-top: 14px; }
 .exam-ai h4 { margin: 0 0 8px; }
-.exam-ai-body {
+.exam-ai h5 { margin: 0 0 8px; font-size: 16px; color: var(--gold); }
+.exam-ai h6 { margin: 10px 0 4px; font-size: 13px; color: var(--gold); }
+.exam-ai-body, .exam-ai-charts {
   margin-top: 10px;
   line-height: 1.65;
   white-space: normal;
@@ -410,6 +412,38 @@ a { color: var(--gold); }
 .settings-form .row-actions button,
 .exam-ai .row-actions button {
   min-height: 40px;
+}
+.exam-ai-block { margin-top: 16px; }
+.exam-ai-note {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  background: rgba(232, 213, 163, 0.12);
+  border-left: 3px solid var(--gold);
+  color: var(--chalk);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.exam-ai-note:empty, .exam-ai-note[hidden] { display: none; }
+.exam-ai-filters { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.exam-ai-filters button { min-height: 36px; }
+.exam-ai-table { max-height: 360px; }
+.exam-ai-table table { min-width: 520px; width: 100%; font-size: 13px; }
+.exam-ai-table th, .exam-ai-table td { padding: 6px 6px; white-space: nowrap; }
+.exam-ai-table tr.up td:last-child { color: #9ad0b8; }
+.exam-ai-table tr.down td:last-child { color: #e8b4a0; }
+.exam-ai-table tr[data-ai-stu] { cursor: pointer; }
+.exam-ai-weak, .exam-ai-talk { margin: 0 0 10px; padding-left: 1.2em; }
+.exam-ai-weak li, .exam-ai-talk li { margin: 0 0 4px; }
+.exam-ai-stu-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.exam-ai-stu-head h5 { margin: 0; }
+button.linkish {
+  display: inline; padding: 0; border: 0; background: none;
+  color: var(--gold); text-decoration: underline;
+  min-height: 0; font: inherit; cursor: pointer;
+}
+@media (max-width: 600px) {
+  .exam-ai-table table { min-width: 480px; font-size: 12px; }
+  .exam-ai-filters button { min-height: 40px; }
 }
 
 .settings-section {

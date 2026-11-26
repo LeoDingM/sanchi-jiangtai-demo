@@ -1,20 +1,20 @@
 /** 游戏状态机：上课/考试/分班/高考录取/毕业升学与自动跳阶段。 */
 import {
   PLAYER_CLASS_NO, PLAYER_DEFAULT_NAME, PLAYER_ROLE, START_DATE, GRADE_YEAR, HOMEROOM_NAME, MENTOR_NAME,
-} from "./config.js?v=t44u1";
-import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById, examParams, formatGradeTerm, formatCohortGrade, termOf } from "./calendar.js?v=t44u1";
-import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf, eraQuality, placeGraduatingRepeaters, applyRepeaterSeating } from "./school.js?v=t44u1";
-import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js?v=t44u1";
-import { runExam } from "./examService.js?v=t44u1";
-import { provincialPassCounts, schoolQuotaFromPrior, fallbackSchoolQuota, examResultLogText } from "./schoolLines.js?v=t44u1";
-import { admitCohort } from "./admission.js?v=t44u1";
-import { rngFrom, clamp } from "./prng.js?v=t44u1";
-import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands, homeroomEveningRoll as homeroomEveningRollCore, compileEveningRoll, studentRecentStatus, rollCallStatusLine, classLatecomers, wrongClassroomThisPeriod } from "./teaching.js?v=t44u1";
-import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, upcomingTutoring, formatSlotLabel, isTutoringSlot, weekMathCount, weekSchedule, weekStart } from "./timetable.js?v=t44u1";
-import { swapPeriods as swapPeriodsCore, borrowIn as borrowInCore, borrowOut as borrowOutCore, respondTimetableRequest as respondTimetableRequestCore, ensureIncomingRequest, pendingTimetableRequest, weekBorrowCounts, weekTiaokeSummary, canAlterSlot, shortSlotLabel, teacherOf, ensureTiaokeState } from "./tiaoke.js?v=t44u1";
-import { openParentsMeeting as openParentsMeetingCore, meetParent as meetParentCore, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE } from "./parents.js?v=t44u1";
-import { openSchoolActivity as openSchoolActivityCore, doActivityAction as doActivityActionCore, isSchoolActivityOpen, upcomingSchoolActivity, ACTIVITY_SOURCE_NOTE, playerStageLine } from "./activities.js?v=t44u1";
-import { classCommittee, dutyStudents, weekDuty, classBrief, isHomeroomMeetingSlot, attendClassMeeting as attendClassMeetingCore, hostClassMeeting as hostClassMeetingCore, committeeTitleOf, upcomingClassMeeting, formatStudentShort, DUTY_PER_DAY, COMMITTEE_ROLES } from "./classManage.js?v=t44u1";
+} from "./config.js?v=t46u1";
+import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById, examParams, formatGradeTerm, formatCohortGrade, termOf } from "./calendar.js?v=t46u1";
+import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf, eraQuality, placeGraduatingRepeaters, applyRepeaterSeating } from "./school.js?v=t46u1";
+import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js?v=t46u1";
+import { runExam } from "./examService.js?v=t46u1";
+import { provincialPassCounts, schoolQuotaFromPrior, fallbackSchoolQuota, examResultLogText } from "./schoolLines.js?v=t46u1";
+import { admitCohort } from "./admission.js?v=t46u1";
+import { rngFrom, clamp } from "./prng.js?v=t46u1";
+import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands, homeroomEveningRoll as homeroomEveningRollCore, compileEveningRoll, studentRecentStatus, rollCallStatusLine, classLatecomers, wrongClassroomThisPeriod } from "./teaching.js?v=t46u1";
+import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, upcomingTutoring, formatSlotLabel, isTutoringSlot, weekMathCount, weekSchedule, weekStart } from "./timetable.js?v=t46u1";
+import { swapPeriods as swapPeriodsCore, borrowIn as borrowInCore, borrowOut as borrowOutCore, respondTimetableRequest as respondTimetableRequestCore, ensureIncomingRequest, pendingTimetableRequest, weekBorrowCounts, weekTiaokeSummary, canAlterSlot, shortSlotLabel, teacherOf, ensureTiaokeState } from "./tiaoke.js?v=t46u1";
+import { openParentsMeeting as openParentsMeetingCore, meetParent as meetParentCore, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE } from "./parents.js?v=t46u1";
+import { openSchoolActivity as openSchoolActivityCore, doActivityAction as doActivityActionCore, isSchoolActivityOpen, upcomingSchoolActivity, ACTIVITY_SOURCE_NOTE, playerStageLine } from "./activities.js?v=t46u1";
+import { classCommittee, dutyStudents, weekDuty, classBrief, isHomeroomMeetingSlot, attendClassMeeting as attendClassMeetingCore, hostClassMeeting as hostClassMeetingCore, committeeTitleOf, upcomingClassMeeting, formatStudentShort, DUTY_PER_DAY, COMMITTEE_ROLES } from "./classManage.js?v=t46u1";
 
 export const SAVE_VERSION = 1;
 
@@ -615,6 +615,141 @@ export function skipToNextCohort(state) {
   // 否则高考录取日 schoolYear 仍是上一学年、promoted 标记早已为真，会立刻停住。
   const beforeSchoolYear = state.schoolYear;
   return skipUntil(state, (s) => s.schoolYear > beforeSchoolYear && s.cohorts[s.schoolYear], 90);
+}
+
+/** 一学年校历事件较多，连续结算时步数上限要留足。 */
+export const SKIP_YEAR_MAX_STEPS = 160;
+
+function isFallOpening(ev) {
+  return ev && ev.kind === "opening" && /学年开学$/.test(ev.name || "") && !/下学期/.test(ev.name || "");
+}
+
+/** 当前日期之后、该届下一次秋季「学年开学」。 */
+export function nextSchoolYearOpening(state, calendar = SCHOOL_CALENDAR) {
+  if (!state?.date) return null;
+  return calendar.find((e) => isFallOpening(e) && e.date > state.date) || null;
+}
+
+function resetSkipCounters(state, date) {
+  state.date = date;
+  state.periodId = startPeriodId(date, state);
+  state.talksToday = 0;
+  state.reviewsToday = 0;
+  state.talksThisPeriod = 0;
+  state.tutorAnswers = 0;
+}
+
+function arriveAtOpening(state, ev) {
+  if (!ev) return null;
+  if (state.date !== ev.date) resetSkipCounters(state, ev.date);
+  const result = applyEvent(state, ev);
+  addLog(state, `已到${ev.name}。${describePlayerStage(state)}。`);
+  return result;
+}
+
+export function gradeThreeSkipYearReason() {
+  return "已经是高三，不能再跳到高四。若要看本届高考结果，可用「跳到本届高考录取」。";
+}
+
+/**
+ * 预判「下一学年」：高一到高二开学，高二到高三开学。
+ * 已在高三开学日及之后则拒绝，不会升到高四或跳到下一届。
+ */
+export function planSkipToNextSchoolYear(state, calendar = SCHOOL_CALENDAR) {
+  if (!state) return { ok: false, reason: "没有可推进的进度。" };
+  const entry = state.player?.cohortYear;
+  const opening = nextSchoolYearOpening(state, calendar);
+  if (!opening) {
+    const grade = gradeOf(entry, state.date);
+    if (grade >= 3) return { ok: false, reason: gradeThreeSkipYearReason(), event: null };
+    return { ok: false, reason: "校历已无后续学年开学。", event: null };
+  }
+  const gradeAtTarget = gradeOf(entry, opening.date);
+  if (gradeAtTarget > 3) {
+    return { ok: false, reason: gradeThreeSkipYearReason(), event: opening };
+  }
+  return { ok: true, event: opening, targetDate: opening.date, targetGrade: gradeAtTarget };
+}
+
+function shouldStopBeforeNextStage(state, opening) {
+  if (state.date >= opening.date) return true;
+  const next = nextExamEvent(state.date, SCHOOL_CALENDAR);
+  if (!next || next.date > opening.date) return true;
+  return false;
+}
+
+function finishSkipYear(state, opening, steps) {
+  if (state.date < opening.date) arriveAtOpening(state, opening);
+  else if (state.date === opening.date) {
+    // 若刚好停在开学日，补记一条日志（避免重复结算关键事件）。
+    const already = (state.log || []).some((l) => l.date === opening.date && String(l.text || "").includes(opening.name));
+    if (!already) addLog(state, `已到${opening.name}。${describePlayerStage(state)}。`);
+  }
+  return {
+    ok: true,
+    event: opening,
+    steps,
+    message: `已推进到${opening.name}（${opening.date}）。${describePlayerStage(state)}。`,
+  };
+}
+
+/**
+ * 连续 skipToNextStage 并结算中途考试/分班/家长会/学校活动，停在该届下一学年开学日，
+ * 不继续飞到该学年第一次月考。
+ */
+export function skipToNextSchoolYear(state, maxSteps = SKIP_YEAR_MAX_STEPS) {
+  const plan = planSkipToNextSchoolYear(state);
+  if (!plan.ok) return { ...plan, steps: [] };
+  const opening = plan.event;
+  const steps = [];
+  for (let i = 0; i < maxSteps; i++) {
+    if (shouldStopBeforeNextStage(state, opening)) break;
+    const r = skipToNextStage(state);
+    if (!r.ok) break;
+    steps.push(r);
+  }
+  return finishSkipYear(state, opening, steps);
+}
+
+export function defaultSkipYield() {
+  return new Promise((resolve) => {
+    const raf = typeof requestAnimationFrame === "function"
+      ? requestAnimationFrame
+      : (fn) => setTimeout(fn, 0);
+    raf(() => setTimeout(resolve, 0));
+  });
+}
+
+/**
+ * 异步版：各次 skipToNextStage 之间让出主线程，便于先露出加载掩罩再刷新进度。
+ */
+export async function skipToNextSchoolYearAsync(state, {
+  maxSteps = SKIP_YEAR_MAX_STEPS,
+  onProgress,
+  yieldFn,
+} = {}) {
+  const plan = planSkipToNextSchoolYear(state);
+  if (!plan.ok) return { ...plan, steps: [] };
+  const opening = plan.event;
+  const yieldStep = yieldFn || defaultSkipYield;
+  const steps = [];
+  for (let i = 0; i < maxSteps; i++) {
+    if (shouldStopBeforeNextStage(state, opening)) break;
+    const r = skipToNextStage(state);
+    if (!r.ok) break;
+    steps.push(r);
+    if (onProgress) {
+      onProgress({
+        step: steps.length,
+        event: r.event,
+        date: state.date,
+        targetDate: opening.date,
+        targetName: opening.name,
+      });
+    }
+    await yieldStep();
+  }
+  return finishSkipYear(state, opening, steps);
 }
 
 function isAdvanceDayMajor(e) {

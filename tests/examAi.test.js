@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { generateCohort } from "../js/domain/school.js";
 import { firstPlacement, rebuildClasses } from "../js/domain/placement.js";
 import { runExam } from "../js/domain/examService.js";
@@ -11,6 +12,7 @@ import {
   playerSubjectId, playerSubjectName, isPlayerHomeroom, isActingHomeroom, analysisScope,
   chatCompletionsUrl, buildExamAnalysisPayload, buildAnalysisMessages,
   requestExamAnalysis, formatAiError, pickPreviousComparableReport,
+  buildExamChartModel, parseAiCommentary, looksLikeMarkdownWall, extractJsonObject,
 } from "../js/domain/examAi.js";
 import { buildStudentExamSnapshot } from "../js/domain/studentHistory.js";
 
@@ -163,7 +165,10 @@ test("请求走 OpenAI 兼容 chat/completions，缺密钥或失败时给出中�
   assert.equal(body.messages.length, 2);
   assert.ok(body.messages[1].content.includes("不得生成") || body.messages[0].content.includes("不得生成"));
   assert.ok(body.messages[0].content.includes("进退步") || body.messages[1].content.includes("进退步"));
-  assert.ok(body.max_tokens >= 2000 && body.max_tokens <= 2500);
+  assert.ok(body.messages[0].content.includes("JSON") || body.messages[1].content.includes("JSON"));
+  assert.ok(!body.messages[0].content.includes("不要输出 JSON，"));
+  assert.ok(!body.messages[1].content.includes("不要输出 JSON，"));
+  assert.ok(body.max_tokens >= 800 && body.max_tokens <= 2500);
 
   const unauthorized = await requestExamAnalysis(payload, {
     settings: { apiKey: "sk-demo-fake", model: "deepseek-flash", baseUrl: DEFAULT_AI_BASE_URL },
@@ -349,4 +354,118 @@ test("上帝模式只叠加分析范围，不改写正式任职，也不进入�
   assert.ok(!official.fact.教师身份.学校正式班主任);
 
   bindAiStorage(null);
+});
+
+
+test("payload 足以驱动进退步与薄弱科；第一场不虚构进退步", () => {
+  const { mid, later, pre } = placed(20170901);
+  const first = buildExamAnalysisPayload(mid, { player, classNo: 16 });
+  assert.equal(first.ok, true);
+  assert.equal(first.fact.进退步对照.有上一场, false);
+  assert.ok(first.chart);
+  assert.equal(first.chart.hasPrevious, false);
+  assert.ok(first.chart.students.length >= 1);
+  assert.ok(first.chart.students.every((s) => s.分组 === "无对照" && s.分数差 == null && s.校排变化 == null));
+  assert.ok(first.chart.students[0].学生);
+  assert.equal(first.chart.counts.进步, 0);
+  assert.equal(first.chart.counts.退步, 0);
+  assert.ok(first.chart.weakSubjects.length >= 1);
+  assert.equal(first.chart.weakSubjects[0].科目, "数学");
+  assert.ok(first.chart.weakSubjects[0].说明.includes("数学"));
+
+  const home = { ...player, isHomeroom: true };
+  const whole = buildExamAnalysisPayload(later, { player: home, classNo: 16, previousReports: [pre, mid, later], reports: [pre, mid, later] });
+  assert.equal(whole.chart.hasPrevious, true);
+  assert.ok(whole.chart.students.some((s) => s.分组 === "进步" || s.分组 === "退步" || s.分组 === "持平"));
+  assert.ok(!whole.chart.students.some((s) => s.分组 === "无对照") || whole.chart.counts.无对照 >= 0);
+  const withDelta = whole.chart.students.filter((s) => s.分组 !== "无对照");
+  assert.ok(withDelta.length >= 1);
+  for (const s of withDelta) {
+    const row = whole.fact.本班学生总分.find((x) => x.姓名 === s.姓名);
+    assert.ok(row);
+    assert.equal(s.本场分数, row.总分);
+    assert.equal(s.本场校排, row.校排);
+    assert.equal(s.校排变化, row.较上场.校排.变化);
+  }
+  assert.ok(whole.chart.weakSubjects.length >= 4);
+  assert.ok(whole.chart.weakSubjects.every((w) => typeof w.本班均分 === "number" && w.说明.includes(w.科目)));
+  const math = whole.chart.weakSubjects.find((w) => w.科目 === "数学");
+  assert.equal(math.本班均分, whole.fact.各科均分.数学.本班均分);
+  assert.ok(whole.chart.trend.length >= 2);
+  assert.equal(whole.chart.trend[whole.chart.trend.length - 1].date, later.date);
+  assert.ok(whole.chart.trend.every((p) => typeof p.折合750均分 === "number"));
+  // 跨学段走势用折合 750，不靠原始分相减
+  const midPt = whole.chart.trend.find((p) => p.date === mid.date);
+  const prePt = whole.chart.trend.find((p) => p.date === pre.date);
+  assert.ok(midPt && prePt);
+  assert.equal(prePt.满分, 950);
+  assert.equal(midPt.满分, 750);
+});
+
+test("旧版整篇 markdown 不当正文；JSON 短评不改分数", async () => {
+  const wall = "## 总评\n\n本班**均分**被改成 999，一本变成 70 人。\n\n## 建议\n\n- 全班谈话\n- 再编几个进步名单";
+  assert.equal(looksLikeMarkdownWall(wall), true);
+  const ignored = parseAiCommentary(wall);
+  assert.equal(ignored.ignoredMarkdown, true);
+  assert.ok(!String(ignored.comments.总评).includes("##"));
+  assert.ok(!String(ignored.comments.总评).includes("**均分**"));
+  assert.ok(Object.values(ignored.comments).every((v) => !String(v).includes("## 建议")));
+
+  const json = '```json\n{"总评":"数学订正要盯牢。","进退步":"材料里的进退步已在表中。","走势":"折合750均分可对照。","薄弱点":"先补薄弱科作业。","建议谈话":"按材料名单谈话。"}\n```';
+  const parsed = parseAiCommentary(json);
+  assert.equal(parsed.fromJson, true);
+  assert.equal(parsed.ignoredMarkdown, false);
+  assert.equal(parsed.comments.总评, "数学订正要盯牢。");
+  assert.ok(extractJsonObject(json).薄弱点);
+
+  const { later, mid } = placed(7);
+  const payload = buildExamAnalysisPayload(later, { player, classNo: 16, previousReports: [mid, later] });
+  const before = JSON.stringify({
+    fact: payload.fact,
+    chartStudents: payload.chart.students.map((s) => ({ 姓名: s.姓名, 本场分数: s.本场分数, 本场校排: s.本场校排, 分数差: s.分数差 })),
+  });
+  const ok = await requestExamAnalysis(payload, {
+    settings: { apiKey: "sk-demo-fake", model: "deepseek-flash", baseUrl: DEFAULT_AI_BASE_URL },
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({
+          总评: "请按表中数字抓作业。",
+          进退步: "进退步以本页为准。",
+          走势: "走势见图。",
+          薄弱点: "先补薄弱点。",
+          建议谈话: "只谈材料里的人。",
+          本班均分: 999,
+          一本人数: 70,
+        }) } }],
+      }),
+    }),
+  });
+  assert.equal(ok.ok, true);
+  assert.equal(ok.commentary.总评, "请按表中数字抓作业。");
+  assert.equal(ok.commentary.本班均分, undefined);
+  const after = JSON.stringify({
+    fact: payload.fact,
+    chartStudents: payload.chart.students.map((s) => ({ 姓名: s.姓名, 本场分数: s.本场分数, 本场校排: s.本场校排, 分数差: s.分数差 })),
+  });
+  assert.equal(after, before, "AI 返回不得改写 payload 里的分数和排名");
+  const rebuilt = buildExamChartModel(payload, { reports: [mid, later], report: later });
+  assert.equal(rebuilt.students[0].本场分数, payload.chart.students[0].本场分数);
+});
+
+test("成绩页考后分析用图表和短评，不再把整篇 markdown 当正文", () => {
+  const app = readFileSync(new URL("../js/ui/app.js", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../css/style.css", import.meta.url), "utf8");
+  assert.match(app, /parseAiCommentary/);
+  assert.match(app, /id="ai-charts"/);
+  assert.match(app, /paintExamAiCharts/);
+  assert.match(app, /drawLineChart\(/);
+  assert.match(app, /drawBarChart\(/);
+  assert.match(app, /不填密钥也能先看/);
+  assert.doesNotMatch(app, /id="ai-body"/);
+  assert.doesNotMatch(app, /escapeHtml\(\s*(cached|r\.text|body)\s*\)\.replace/);
+  assert.doesNotMatch(app, /innerHTML\s*=\s*escapeHtml\(\s*r\.text\s*\)/);
+  assert.match(css, /\.exam-ai-note/);
+  assert.match(css, /\.exam-ai-table/);
 });

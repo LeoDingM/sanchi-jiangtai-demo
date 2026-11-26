@@ -1,5 +1,5 @@
 /** 存档 / 读档。浏览器走 localStorage，Node 测试走纯 JSON。 */
-import { SAVE_VERSION } from "./simulation.js?v=t44u1";
+import { SAVE_VERSION } from "./simulation.js?v=t46u1";
 
 export const STORAGE_KEY = "sanchi-jiangtai-v1";
 export const SLOT_KEYS = [0, 1, 2].map((i) => `${STORAGE_KEY}-slot-${i}`);

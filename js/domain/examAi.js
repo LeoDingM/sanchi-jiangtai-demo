@@ -2,14 +2,14 @@
  * 考后 AI 分析：只根据已算好的成绩和排名写评语，不改分、不改排名、不上线人数。
  * API 密钥只放在独立的 localStorage 项里，与游戏存档 JSON 分开。
  */
-import { subjectById, TIER } from "./config.js?v=t44u1";
-import { subjectRanks } from "./scores.js?v=t44u1";
+import { subjectById, TIER } from "./config.js?v=t46u1";
+import { subjectRanks } from "./scores.js?v=t46u1";
 import {
   describeSchoolCutoff, describeClassProvincial, describeSchoolProvincial,
   describeZhuoxingPeers, classProvincialCounts, scaledTotal750, provincialCompareYear,
-} from "./schoolLines.js?v=t44u1";
-import { provincialLines } from "./jiangxi.js?v=t44u1";
-import { buildStudentExamSnapshot, strongerTiers, tierName } from "./studentHistory.js?v=t44u1";
+} from "./schoolLines.js?v=t46u1";
+import { provincialLines } from "./jiangxi.js?v=t46u1";
+import { buildStudentExamSnapshot, strongerTiers, tierName } from "./studentHistory.js?v=t46u1";
 
 export const AI_SETTINGS_KEY = "sanchi-jiangtai-ai-settings-v1";
 export const AI_KEY_KEY = "sanchi-jiangtai-ai-key-v1";
@@ -646,6 +646,7 @@ export function buildExamAnalysisPayload(report, { player, classNo, previousRepo
       .map((r) => {
         const snap = snaps.get(r.studentId);
         const row = {
+          学生: r.studentId,
           班排: snap?.classRank ?? null,
           姓名: r.name,
           总分: r.total,
@@ -685,6 +686,7 @@ export function buildExamAnalysisPayload(report, { player, classNo, previousRepo
         const snap = snaps.get(r.studentId);
         const sub = snap?.subjects?.[subjectId];
         const row = {
+          学生: r.studentId,
           班排: sub?.classRank ?? i + 1,
           姓名: r.name,
           分数: r[subjectId],
@@ -724,24 +726,250 @@ export function buildExamAnalysisPayload(report, { player, classNo, previousRepo
     };
   }
 
-  return { ok: true, scope, subjectId, subjectName, classNo: clsNo, fact, previousExam: prev ? { examId: prev.examId, date: prev.date } : null };
+  const payload = { ok: true, scope, subjectId, subjectName, classNo: clsNo, fact, previousExam: prev ? { examId: prev.examId, date: prev.date } : null };
+  payload.chart = buildExamChartModel(payload, { reports: priorList, report });
+  return payload;
+}
+
+export const AI_COMMENTARY_KEYS = ["总评", "进退步", "走势", "薄弱点", "建议谈话"];
+
+export function emptyAiCommentary() {
+  return { 总评: "", 进退步: "", 走势: "", 薄弱点: "", 建议谈话: "" };
+}
+
+function clipComment(text, max = 120) {
+  const s = String(text || "").replace(/\s+/g, " ").trim();
+  if (!s) return "";
+  if (s.length <= max) return s;
+  return s.slice(0, max) + "…";
+}
+
+export function extractJsonObject(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return null;
+  const fence = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const body = (fence ? fence[1] : raw).trim();
+  const start = body.indexOf("{");
+  const end = body.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  try {
+    const obj = JSON.parse(body.slice(start, end + 1));
+    return obj && typeof obj === "object" && !Array.isArray(obj) ? obj : null;
+  } catch {
+    return null;
+  }
+}
+
+export function looksLikeMarkdownWall(text) {
+  const s = String(text || "");
+  if (!s.trim()) return false;
+  if (extractJsonObject(s)) return false;
+  if (/^#{1,6}\s/m.test(s)) return true;
+  if ((s.match(/\*\*[^*]+\*\*/g) || []).length >= 3) return true;
+  if (s.length > 280 && /^\s*[-*]\s/m.test(s)) return true;
+  if (s.length > 400) return true;
+  return false;
+}
+
+function firstShortPlain(text) {
+  const plain = String(text || "")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/#{1,6}\s+/g, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/^\s*[-*]\s+/gm, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!plain) return "";
+  const m = plain.match(/(.+?[。！？!?]|[^。！？!?]{1,80})/);
+  return clipComment(m ? m[1] : plain, 120);
+}
+
+function pickComments(obj) {
+  const out = emptyAiCommentary();
+  if (!obj || typeof obj !== "object") return out;
+  for (const key of AI_COMMENTARY_KEYS) {
+    if (obj[key] != null) out[key] = clipComment(obj[key], 120);
+  }
+  return out;
+}
+
+/**
+ * 把模型返回收成各块短评。旧缓存里的整篇 markdown/长文不当正文贴出，只尝试抽出一句短评或忽略。
+ * 评语不能改写已算好的分数、排名、上线人数。
+ */
+export function parseAiCommentary(raw) {
+  if (raw && typeof raw === "object" && !Array.isArray(raw) && (raw.总评 != null || raw.comments || raw.进退步 != null || raw.薄弱点 != null)) {
+    const src = raw.comments && typeof raw.comments === "object" ? raw.comments : raw;
+    return { ok: true, comments: pickComments(src), fromJson: true, ignoredMarkdown: false };
+  }
+  const text = String(raw || "").trim();
+  if (!text) return { ok: false, comments: emptyAiCommentary(), fromJson: false, ignoredMarkdown: false };
+  const obj = extractJsonObject(text);
+  if (obj) return { ok: true, comments: pickComments(obj), fromJson: true, ignoredMarkdown: false };
+  const wall = looksLikeMarkdownWall(text);
+  return {
+    ok: true,
+    comments: { ...emptyAiCommentary(), 总评: firstShortPlain(text) },
+    fromJson: false,
+    ignoredMarkdown: wall,
+  };
+}
+
+function classTrendPoints(payload, reports, report) {
+  const clsNo = payload.classNo;
+  const subjectId = payload.scope === "subject" ? payload.subjectId : null;
+  const list = [...previousReportsFrom(reports || [], report)];
+  if (report) list.push(report);
+  list.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : String(a.examId || "").localeCompare(String(b.examId || ""))));
+  const points = [];
+  for (const rep of list) {
+    if (!rep || (rep.pruned && !(rep.rows || []).length)) continue;
+    if (!Array.isArray(rep.rows) || !rep.rows.length) continue;
+    const mine = rep.rows.filter((r) => r.classNo === clsNo && !r.repeat);
+    if (!mine.length) continue;
+    const totals = mine.map((r) => r.total).filter((n) => typeof n === "number");
+    const scaled = mine.map((r) => scaledTotal750(r)).filter((n) => typeof n === "number");
+    const ranks = mine.map((r) => r.rank).filter((n) => typeof n === "number");
+    const pt = {
+      date: rep.date,
+      examId: rep.examId,
+      name: rep.examName,
+      满分: reportMaxTotal(rep),
+      均分: totals.length ? avg(totals) : null,
+      折合750均分: scaled.length ? avg(scaled) : null,
+      均校排: ranks.length ? avg(ranks) : null,
+    };
+    if (subjectId) {
+      const ss = mine.map((r) => r[subjectId]).filter((n) => typeof n === "number");
+      pt.单科均分 = ss.length ? avg(ss) : null;
+    }
+    points.push(pt);
+  }
+  return points;
+}
+
+function studentDeltaGroup(d, subjectFirst) {
+  if (!d) return "无对照";
+  const schoolCh = subjectFirst ? d.该科校排 : (d.校排 || d.总分校排);
+  const classCh = subjectFirst ? d.该科班排 : (d.班排 || d.总分班排);
+  const metric = schoolCh?.变化 ?? classCh?.变化;
+  if (metric == null) return "持平";
+  if (metric > 0) return "进步";
+  if (metric < 0) return "退步";
+  return "持平";
+}
+
+/**
+ * 用已算好的 payload 和考试报告生成图表解析数据。数字全部来自成绩，不经 AI。
+ */
+export function buildExamChartModel(payload, { reports, report } = {}) {
+  if (!payload?.ok) return { ok: false, reason: payload?.reason || "没有可分析的成绩。" };
+  const fact = payload.fact || {};
+  const hasPrevious = !!fact.进退步对照?.有上一场;
+  const subjectFirst = payload.scope === "subject";
+  const rows = subjectFirst ? (fact.本班该科成绩 || []) : (fact.本班学生总分 || []);
+  const students = rows.map((row) => {
+    const d = row.较上场 || null;
+    const schoolCh = subjectFirst ? d?.该科校排 : (d?.校排 || d?.总分校排);
+    const classCh = subjectFirst ? d?.该科班排 : (d?.班排 || d?.总分班排);
+    const direct = d?.分数?.可直接比分;
+    const scoreCh = subjectFirst
+      ? (d?.该科分数差 ?? null)
+      : (direct ? d?.分数?.分数差 : (d?.分数?.折合750分差 ?? null));
+    const scoreKind = !hasPrevious || !d
+      ? null
+      : (subjectFirst
+        ? (d.该科分数差 != null ? "科目分" : "不可直接比分")
+        : (direct ? "总分" : "折合750"));
+    return {
+      学生: row.学生 || null,
+      姓名: row.姓名,
+      分组: hasPrevious ? studentDeltaGroup(d, subjectFirst) : "无对照",
+      本场分数: subjectFirst ? row.分数 : row.总分,
+      本场校排: subjectFirst ? row.该科校排 : row.校排,
+      本场班排: subjectFirst ? (row.该科班排 ?? row.班排) : row.班排,
+      分数差: hasPrevious ? scoreCh : null,
+      分数差说明: scoreKind,
+      校排变化: hasPrevious ? (schoolCh?.变化 ?? null) : null,
+      班排变化: hasPrevious ? (classCh?.变化 ?? null) : null,
+      校排对照: hasPrevious ? (schoolCh || null) : null,
+      班排对照: hasPrevious ? (classCh || null) : null,
+    };
+  });
+  const counts = { 进步: 0, 退步: 0, 持平: 0, 无对照: 0 };
+  for (const stu of students) counts[stu.分组] = (counts[stu.分组] || 0) + 1;
+
+  const weakSubjects = [];
+  if (payload.scope === "class" && fact.各科均分) {
+    for (const [name, v] of Object.entries(fact.各科均分)) {
+      const gapTier = Math.round(((v.本班均分 ?? 0) - (v.同层次均分 ?? 0)) * 10) / 10;
+      const gapSchool = Math.round(((v.本班均分 ?? 0) - (v.年级均分 ?? 0)) * 10) / 10;
+      let 说明;
+      if (v.同层次均分 == null) 说明 = `${name}本班均分 ${v.本班均分}。`;
+      else if (gapTier < -0.3) 说明 = `${name}本班均分 ${v.本班均分}，低于同层次 ${Math.abs(gapTier)} 分`;
+      else if (gapTier > 0.3) 说明 = `${name}本班均分 ${v.本班均分}，高于同层次 ${gapTier} 分`;
+      else 说明 = `${name}本班均分 ${v.本班均分}，与同层次大致持平`;
+      weakSubjects.push({
+        科目: name,
+        本班均分: v.本班均分,
+        同层次均分: v.同层次均分,
+        年级均分: v.年级均分,
+        相对同层次: gapTier,
+        相对年级: gapSchool,
+        说明,
+      });
+    }
+    weakSubjects.sort((a, b) => a.相对同层次 - b.相对同层次);
+  } else if (fact.单科) {
+    const v = fact.单科;
+    const gapTier = v.同层次均分 != null ? Math.round((v.本班均分 - v.同层次均分) * 10) / 10 : null;
+    let 说明 = `${v.科目}本班均分 ${v.本班均分}`;
+    if (gapTier == null) 说明 += "。";
+    else if (gapTier < -0.3) 说明 += `，低于同层次 ${Math.abs(gapTier)} 分`;
+    else if (gapTier > 0.3) 说明 += `，高于同层次 ${gapTier} 分`;
+    else 说明 += "，与同层次大致持平";
+    weakSubjects.push({
+      科目: v.科目,
+      本班均分: v.本班均分,
+      同层次均分: v.同层次均分,
+      年级均分: v.年级均分,
+      相对同层次: gapTier,
+      说明,
+    });
+  }
+
+  return {
+    ok: true,
+    scope: payload.scope,
+    subjectName: payload.subjectName,
+    subjectId: payload.subjectId,
+    classNo: payload.classNo,
+    hasPrevious,
+    进退步说明: fact.进退步对照?.说明 || "",
+    students,
+    counts,
+    weakSubjects,
+    bands: fact.排名分布 || [],
+    trend: classTrendPoints(payload, reports, report),
+    建议谈话: fact.建议谈话 || { 进步较大: [], 退步较大: [], 临近校内或省控线: [], 排名波动较大: [] },
+  };
 }
 
 export function buildAnalysisMessages(payload) {
   const fact = payload.fact;
   const scopeHint = payload.scope === "class"
-    ? "读者是该班班主任，请写全班整体考后总结：总分与均分、校内线与对照省控、班/层/校排和跨层次对比、排名分布、各科概要，并用材料里已经列好的建议谈话名单指出该谈的人。"
-    : `读者是该班${payload.subjectName}任课老师（不是班主任），分析仍以本班${payload.subjectName}为主；整体总分排名只作背景，不要展开其他科目成绩表。用已算好的该科与总分进退步、建议谈话名单帮老师找谈话对象并写小结。`;
+    ? "读者是该班班主任，短评覆盖全班总分与均分、校内线与对照省控、进退步、薄弱科目和建议谈话对象。"
+    : `读者是该班${payload.subjectName}任课老师（不是班主任），短评仍以本班${payload.subjectName}为主；整体总分排名只作背景，不要展开其他科目成绩表。`;
   const system = [
     "你是高中教师的考后分析助手，写给老师看，不是写给学生或家长的通知。",
     "必须严格使用用户消息里已经算好的数字，包括排名、进退步和建议谈话原因，不得生成、改写、估算或纠正任何分数、排名、上线人数、均分、划线或进退步。",
     "不得编造材料里没有的进步、退步或人名。若材料写明没有先前对比，不要虚构进退步。若某项数字材料里没有，就写「材料未给出」，不要自行补数。",
     "分析要结合班级层次（如卓行普通班、凌霄、云岫重点等）和当次考试的难度、校内划线、对照省控。",
-    "请根据已算好的排名和进退步帮老师确定谈话对象并写考后总结：指出问题、点出该盯的人（用材料中的姓名和原因数字），给出下一阶段课、作业或辅导的具体抓手。不要空话套话，不要客套开场。",
-    "用简体中文，分段宜短，可用条目。不要输出 JSON，不要重复粘贴整张成绩表。",
+    "页面已用图表展示进退步、走势和薄弱点。你只需要为各块写一两句短评，并点出材料里已列好的建议谈话对象（用材料中的姓名和原因数字），给出下一阶段课、作业或辅导的具体抓手。不要空话套话，不要客套开场。",
+    "只输出一个 JSON 对象，不要写 markdown 标题、不要用 ## 或 **，不要重复粘贴整张成绩表，不要在这个 JSON 之外再写其它文字。字段必须是：总评、进退步、走势、薄弱点、建议谈话，每个字段一两句话。",
     scopeHint,
   ].join("");
-  const user = `请根据下面这份已结算的考试材料写评语。\n\n${JSON.stringify(fact, null, 2)}`;
+  const user = `请根据下面这份已结算的考试材料写各块短评，只输出 JSON。\n\n${JSON.stringify(fact, null, 2)}`;
   return [
     { role: "system", content: system },
     { role: "user", content: user },
@@ -805,7 +1033,7 @@ export async function requestExamAnalysis(payload, { fetchImpl, settings, signal
           model,
           messages,
           temperature: 0.3,
-          max_tokens: 2200,
+          max_tokens: 1200,
           thinking: { type: "disabled" },
         }),
         signal: ctrl.signal,
@@ -826,5 +1054,6 @@ export async function requestExamAnalysis(payload, { fetchImpl, settings, signal
   }
   const content = String(data?.choices?.[0]?.message?.content || "").trim();
   if (!content) return { ok: false, reason: formatAiError(new Error("EMPTY")) };
-  return { ok: true, text: content, model };
+  const parsed = parseAiCommentary(content);
+  return { ok: true, text: content, commentary: parsed.comments, fromJson: parsed.fromJson, ignoredMarkdown: parsed.ignoredMarkdown, model };
 }

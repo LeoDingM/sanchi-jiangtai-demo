@@ -1,5 +1,5 @@
 import {
-  createGame, createGameAsync, freshGameSeed, parseGameSeed, playerStudents, skipToNextStage, skipToGaokaoOf, skipToNextCohort,
+  createGame, createGameAsync, freshGameSeed, parseGameSeed, playerStudents, skipToNextStage, skipToGaokaoOf, skipToNextCohort, skipToNextSchoolYearAsync, planSkipToNextSchoolYear,
   advanceDay, advancePeriod, prepareLesson, teach, talkTo, reviewHomework, listExamReports, formatDateCn,
   applyEvent, SCHOOL_CALENDAR, gradeOf, topicsForGrade, LESSON_STYLES,
   formatGradeTerm, describePlayerStage, describeStageAdvance, describeAdmissionContext,
@@ -15,27 +15,28 @@ import {
   attendClassMeeting, hostClassMeeting, playerClassCommittee, playerClassBrief,
   playerDutyToday, playerWeekDuty, isHomeroomMeetingSlot, upcomingClassMeeting,
   committeeTitleOf, formatStudentShort,
-} from "../domain/simulation.js?v=t44u1";
-import { addDays } from "../domain/calendar.js?v=t44u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t44u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t44u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t44u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t44u1";
-import { rankRows } from "../domain/scores.js?v=t44u1";
-import { filterRows, sameTierCompare, classStandings, classCompareRows, examReportKey, pickExamReport } from "../domain/examService.js?v=t44u1";
-import { hydrateReport } from "../domain/simulation.js?v=t44u1";
-import { renderSeating } from "./classroom.js?v=t44u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t44u1";
-import { formatAdmissionBatch, formatAdmissionDest } from "../domain/admission.js?v=t44u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t44u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t44u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t44u1";
+} from "../domain/simulation.js?v=t46u1";
+import { addDays } from "../domain/calendar.js?v=t46u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t46u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t46u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t46u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t46u1";
+import { rankRows } from "../domain/scores.js?v=t46u1";
+import { filterRows, sameTierCompare, classStandings, classCompareRows, examReportKey, pickExamReport } from "../domain/examService.js?v=t46u1";
+import { hydrateReport } from "../domain/simulation.js?v=t46u1";
+import { renderSeating } from "./classroom.js?v=t46u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t46u1";
+import { formatAdmissionBatch, formatAdmissionDest } from "../domain/admission.js?v=t46u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t46u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t46u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t46u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
-} from "../domain/examAi.js?v=t44u1";
+  parseAiCommentary, emptyAiCommentary,
+} from "../domain/examAi.js?v=t46u1";
 
 let state = null;
 let view = "classroom";
@@ -45,6 +46,9 @@ let subjectPick = "math";
 let toastTimer = 0;
 const examAiCache = new Map();
 let examAiBusy = false;
+let skipYearBusy = false;
+let examAiDeltaFilter = "全部";
+let examAiFocusId = "";
 
 const $ = (s) => document.querySelector(s);
 
@@ -265,8 +269,61 @@ function showMain() {
   render();
 }
 
+async function handleSkipYear() {
+  if (!state || skipYearBusy) return;
+  const plan = planSkipToNextSchoolYear(state);
+  if (!plan.ok) {
+    toast(plan.reason);
+    return;
+  }
+  skipYearBusy = true;
+  const startDate = state.date;
+  const targetDate = plan.targetDate;
+  showLoading({
+    title: "正在进入下一学年",
+    label: `将推进到${plan.event.name}`,
+    progress: 6,
+    hint: "一整学年会连续结算多场考试，请稍候，请勿关掉页面。",
+  });
+  await new Promise((resolve) => {
+    const raf = typeof requestAnimationFrame === "function" ? requestAnimationFrame : (fn) => setTimeout(fn, 0);
+    raf(() => setTimeout(resolve, 0));
+  });
+  try {
+    const r = await skipToNextSchoolYearAsync(state, {
+      onProgress: ({ event, date }) => {
+        const t0 = Date.parse(startDate);
+        const t1 = Date.parse(targetDate);
+        const t = Date.parse(date || state.date);
+        const pct = Number.isFinite(t0) && Number.isFinite(t1) && t1 > t0
+          ? Math.min(96, Math.max(8, 8 + 88 * ((t - t0) / (t1 - t0))))
+          : 50;
+        showLoading({
+          title: "正在进入下一学年",
+          label: event ? `正在结算：${event.date} ${event.name}` : "正在推进校历",
+          progress: pct,
+          hint: "一整学年会连续结算多场考试，请稍候，请勿关掉页面。",
+        });
+      },
+    });
+    persist();
+    hideLoading();
+    render();
+    toast(r.ok ? (r.message || `已推进到${plan.event.name}`) : (r.reason || "无法推进"));
+  } catch (err) {
+    hideLoading();
+    toast("推进下一学年没有完成，请再试一次。");
+  } finally {
+    skipYearBusy = false;
+  }
+}
+
 function handleAct(act) {
   if (!state) return;
+  if (act === "skip-year") {
+    handleSkipYear();
+    return;
+  }
   if (act === "prep") { const r = prepareLesson(state); toast(r.text || "备课完成"); }
   if (act === "teach") {
     const r = teach(state, "精讲例题", selectedId);
@@ -1563,115 +1620,248 @@ function viewSettings(host) {
   };
 }
 
-function bindExamAi(host, report) {
+function examAnalysisPayload(report) {
+  const prior = listExamReports(state, { entryYear: state.player.cohortYear });
+  return buildExamAnalysisPayload(report, {
+    player: state.player,
+    classNo: state.player.classNo,
+    reports: prior,
+    previousReports: prior,
+  });
+}
+
+function cachedAiComments(report) {
+  const raw = examAiCache.get(examAiCacheKey(report, state.player));
+  if (raw == null || raw === "") return emptyAiCommentary();
+  return parseAiCommentary(raw).comments;
+}
+
+function fillAiNotes(root, comments) {
+  const c = comments || emptyAiCommentary();
+  root.querySelectorAll("[data-ai-note]").forEach((el) => {
+    const text = String(c[el.dataset.aiNote] || "").trim();
+    el.textContent = text;
+    el.hidden = !text;
+  });
+}
+
+function signedDelta(n) {
+  if (n == null || Number.isNaN(n)) return "—";
+  if (n === 0) return "持平";
+  return `${n > 0 ? "+" : ""}${n}`;
+}
+
+function examShortLabel(date, name) {
+  const d = String(date || "").slice(5);
+  const n = String(name || "").replace(/普通/, "").replace(/考试/, "").slice(0, 8);
+  return d ? `${d} ${n}` : n;
+}
+
+function talkListHtml(lists) {
+  const blocks = [
+    ["进步较大", lists?.进步较大],
+    ["退步较大", lists?.退步较大],
+    ["临近校内或省控线", lists?.临近校内或省控线],
+    ["排名波动较大", lists?.排名波动较大],
+  ];
+  const parts = blocks.map(([title, arr]) => {
+    if (!arr || !arr.length) return "";
+    const items = arr.map((x) => `<li><button type="button" class="linkish" data-ai-stu-name="${escapeHtml(x.姓名)}">${escapeHtml(x.姓名)}</button>：${escapeHtml(x.原因 || "")}</li>`).join("");
+    return `<h6>${title}</h6><ul class="exam-ai-talk">${items}</ul>`;
+  }).filter(Boolean);
+  return parts.join("") || `<p class="muted">这一场没有单独列出谈话对象。</p>`;
+}
+
+function examAiDeltaRows(model, filter) {
+  const rows = model.students || [];
+  if (filter && filter !== "全部") return rows.filter((s) => s.分组 === filter);
+  return rows;
+}
+
+function paintExamAiCharts(host, report, payload) {
+  const model = payload?.chart;
+  if (!model?.ok) return;
+  const trend = model.trend || [];
+  const labels = trend.map((p) => examShortLabel(p.date, p.name));
+  const q = (id) => host.querySelector(id);
+  if (q("#ai-ch-avg") && trend.length) {
+    const series = [{ name: "班级折合750均分", values: trend.map((p) => p.折合750均分), color: "#c45c4a" }];
+    if (model.scope === "subject" && trend.some((p) => p.单科均分 != null)) {
+      series.push({ name: `${model.subjectName}均分`, values: trend.map((p) => p.单科均分), color: "#3d6b5a" });
+    }
+    drawLineChart(q("#ai-ch-avg"), { labels, yLabel: "折合分", series });
+  }
+  if (q("#ai-ch-rank") && trend.length) {
+    drawLineChart(q("#ai-ch-rank"), {
+      labels,
+      yInvert: true,
+      yMin: 1,
+      yLabel: "名次",
+      series: [{ name: "班级均校排", values: trend.map((p) => p.均校排), color: "#3d5c6b" }],
+    });
+  }
+  if (q("#ai-ch-subj") && model.weakSubjects.length) {
+    drawBarChart(q("#ai-ch-subj"), {
+      labels: model.weakSubjects.map((w) => w.科目),
+      values: model.weakSubjects.map((w) => w.本班均分),
+      yLabel: "均分",
+    });
+  }
+  if (q("#ai-ch-delta")) {
+    if (model.hasPrevious) {
+      drawBarChart(q("#ai-ch-delta"), {
+        labels: ["进步", "退步", "持平"],
+        values: [model.counts.进步 || 0, model.counts.退步 || 0, model.counts.持平 || 0],
+        colors: ["#3d6b5a", "#c45c4a", "#8b5e3c"],
+        yLabel: "人数",
+      });
+    } else if (model.bands.length) {
+      drawBarChart(q("#ai-ch-delta"), {
+        labels: model.bands.map((b) => String(b.分段).replace("校排 ", "")),
+        values: model.bands.map((b) => b.人数),
+        yLabel: "人数",
+      });
+    }
+  }
+  if (q("#ai-ch-bands") && model.bands.length && model.hasPrevious) {
+    drawBarChart(q("#ai-ch-bands"), {
+      labels: model.bands.map((b) => String(b.分段).replace("校排 ", "")),
+      values: model.bands.map((b) => b.人数),
+      yLabel: "人数",
+    });
+  }
+}
+
+function paintExamAiStudent(host, studentId, name) {
+  const block = host.querySelector("#ai-stu-block");
+  if (!block) return;
+  if (!studentId && !name) { block.hidden = true; return; }
+  const stu = studentId
+    ? findStudentInState(state, studentId)
+    : (playerStudents(state).find((s) => s.name === name) || null);
+  const id = stu?.id || studentId;
+  if (!id) { block.hidden = true; return; }
+  examAiFocusId = id;
+  const hist = studentExamHistory(state, id);
+  const title = host.querySelector("#ai-stu-title");
+  if (title) title.textContent = `${stu?.name || name || "该生"}的成绩曲线`;
+  block.hidden = false;
+  if (!hist.length) return;
+  const labels = hist.map((h) => examShortLabel(h.date, h.examName));
+  requestAnimationFrame(() => {
+    const score = host.querySelector("#ai-ch-stu");
+    const ranks = host.querySelector("#ai-ch-stu-rank");
+    if (score) {
+      drawLineChart(score, {
+        labels,
+        yLabel: "折合分",
+        series: [
+          { name: "折合 750", values: hist.map((h) => h.scaled750), color: "#c45c4a" },
+          { name: "原始总分", values: hist.map((h) => h.total), color: "#8b5e3c" },
+        ],
+      });
+    }
+    if (ranks) {
+      drawLineChart(ranks, {
+        labels,
+        yInvert: true,
+        yMin: 1,
+        yLabel: "名次",
+        series: [
+          { name: "班排", values: hist.map((h) => h.classRank), color: "#c45c4a" },
+          { name: "同层次排", values: hist.map((h) => h.tierRank), color: "#3d6b5a" },
+          { name: "校排", values: hist.map((h) => h.schoolRank), color: "#3d5c6b" },
+        ],
+      });
+    }
+  });
+}
+
+function applyExamAiFilter(host, model, filter) {
+  examAiDeltaFilter = filter || "全部";
+  host.querySelectorAll("[data-ai-filter]").forEach((b) => b.classList.toggle("on", b.dataset.aiFilter === examAiDeltaFilter));
+  const tbody = host.querySelector("#ai-delta-body");
+  if (!tbody) return;
+  tbody.innerHTML = examAiDeltaRows(model, examAiDeltaFilter).map((s) => {
+    const cls = s.分组 === "进步" ? "up" : s.分组 === "退步" ? "down" : "";
+    return `<tr data-ai-stu="${escapeHtml(s.学生 || "")}" data-ai-name="${escapeHtml(s.姓名)}" class="${cls}">
+      <td>${escapeHtml(s.姓名)}</td>
+      <td>${s.本场分数 ?? "—"}</td>
+      <td>${signedDelta(s.分数差)}${s.分数差说明 === "折合750" ? "<span class=\"muted\">折</span>" : ""}</td>
+      <td>${s.本场校排 ?? "—"}</td>
+      <td>${signedDelta(s.校排变化)}</td>
+      <td>${s.本场班排 ?? "—"}</td>
+      <td>${signedDelta(s.班排变化)}</td>
+      <td>${s.分组}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="8">${model.hasPrevious ? "这一组没有同学。" : "这一场没有先前对照，不虚构进退步。"}</td></tr>`;
+}
+
+function bindExamAi(host, report, payload) {
   const btn = host.querySelector("#ai-run");
   const status = host.querySelector("#ai-status");
-  const body = host.querySelector("#ai-body");
-  if (!btn) return;
+  if (!host.querySelector("#ai-charts")) return;
   const setStatus = (text, kind) => {
+    if (!status) return;
     if (!text) { status.hidden = true; status.textContent = ""; status.className = "notice"; return; }
     status.hidden = false;
     status.className = kind === "err" ? "notice exam-ai-err" : "notice";
     status.textContent = text;
   };
+  const model = payload?.chart;
+  fillAiNotes(host, cachedAiComments(report));
+  requestAnimationFrame(() => paintExamAiCharts(host, report, payload));
+  if (model?.ok) {
+    const allowed = examAiDeltaFilter === "全部" || (model.counts[examAiDeltaFilter] || 0) > 0;
+    applyExamAiFilter(host, model, allowed ? examAiDeltaFilter : "全部");
+  }
+  host.querySelectorAll("[data-ai-filter]").forEach((b) => {
+    b.onclick = () => { if (model?.ok) applyExamAiFilter(host, model, b.dataset.aiFilter); };
+  });
+  const onPick = (id, name) => paintExamAiStudent(host, id, name);
+  host.addEventListener("click", (e) => {
+    const tr = e.target.closest("tr[data-ai-stu]");
+    if (tr && host.contains(tr)) {
+      onPick(tr.dataset.aiStu, tr.dataset.aiName);
+      return;
+    }
+    const named = e.target.closest("[data-ai-stu-name]");
+    if (named && host.contains(named)) onPick("", named.dataset.aiStuName);
+  });
+  const profileBtn = host.querySelector("#ai-stu-profile");
+  if (profileBtn) {
+    profileBtn.onclick = () => {
+      if (!examAiFocusId) return;
+      selectedId = examAiFocusId;
+      view = "profile";
+      render();
+    };
+  }
+  if (examAiFocusId) paintExamAiStudent(host, examAiFocusId, "");
+  if (!btn) return;
   btn.onclick = async () => {
     if (examAiBusy) return;
     const conf = loadAiSettings();
     if (!conf.hasKey) {
-      setStatus("还没有填写 API 密钥。请到「设置」里填写后，再生成考后分析。", "err");
+      setStatus("还没有填写 API 密钥。请到「设置」里填写后，再生成短评。图表和进退步列表已经按本页成绩算好，不必先填密钥。", "err");
       return;
     }
-    const check = canAnalyzeReport(report, state.player.classNo);
-    if (!check.ok) { setStatus(check.reason, "err"); return; }
-    const prior = listExamReports(state, { entryYear: state.player.cohortYear });
-    const payload = buildExamAnalysisPayload(report, { player: state.player, classNo: state.player.classNo, reports: prior, previousReports: prior });
-    if (!payload.ok) { setStatus(payload.reason, "err"); return; }
+    const pack = payload?.ok ? payload : examAnalysisPayload(report);
+    if (!pack.ok) { setStatus(pack.reason, "err"); return; }
     examAiBusy = true;
     btn.disabled = true;
-    setStatus("正在生成分析…", "ok");
+    setStatus("正在生成短评…", "ok");
     try {
-      const r = await requestExamAnalysis(payload, { settings: conf });
+      const r = await requestExamAnalysis(pack, { settings: conf });
       if (!r.ok) { setStatus(r.reason, "err"); return; }
       examAiCache.set(examAiCacheKey(report, state.player), r.text);
-      body.innerHTML = escapeHtml(r.text).replace(/\n/g, "<br/>");
-      setStatus("分析只是评语，分数、排名和上线人数以本页表格为准。", "ok");
+      fillAiNotes(host, r.commentary || parseAiCommentary(r.text).comments);
+      setStatus("短评只写在各图旁边。分数、排名和上线人数以本页表格和图表为准，不会被改写。", "ok");
     } finally {
       examAiBusy = false;
       btn.disabled = false;
     }
   };
-}
-
-function provincialLineLabel(row, report) {
-  const year = provincialCompareYear(report.date);
-  const track = row.track === "wen" ? "wen" : "li";
-  const lines = provincialLines(year, track) || provincialLines(2020, track);
-  const max = row.maxTotal || 750;
-  const total = max === 750 ? row.total : Math.round((row.total / max) * 750);
-  if (total >= lines.first) return "省控一本";
-  if (total >= lines.second) return "省控二本";
-  return "未达省控二本";
-}
-
-function classPassSummary(report, classNo) {
-  const cls = (report.classes || []).find((c) => c.classNo === classNo);
-  const prov = classProvincialCounts(report, classNo);
-  if (report.examKind === "gaokao") {
-    return `任教班省控一本 ${prov.firstN} 人、省控二本累计 ${prov.secondN} 人；校内一本 ${cls?.firstCount ?? "—"} 人、校内二本累计 ${cls?.secondCount ?? "—"} 人。高考上线以公开省控为主，校内线只作对照。`;
-  }
-  return `任教班校内一本 ${cls?.firstCount ?? "—"} 人、校内二本累计 ${cls?.secondCount ?? "—"} 人；${describeClassProvincial(report, classNo)}。平时考试上线以校内对照为主，不是省控。`;
-}
-
-function viewGrades(host) {
-  const report = currentReport();
-  if (!report) {
-    host.innerHTML = `<h3>考试成绩</h3><p>还没有考试。可用「下一阶段」跳到第一次月考。</p>`;
-    return;
-  }
-  const mine = classStandings(report.rows || [], state.player.classNo);
-  const track = report.split ? (mine[0]?.track === "wen" ? "wen" : "li") : "mixed";
-  const note = examSourceNotice(report);
-  const isHk = report.examKind === "huikao";
-  const isGk = report.examKind === "gaokao";
-  const isJoint = report.examKind === "city" || report.examKind === "province";
-  const passN = isHk ? mine.filter((r)=>r.huikaoPass).length : null;
-  const jointKpi = isJoint ? jointLinesBlock(report) : "";
-  const head = isHk ? ["班名次","姓名","总分","年级名次","校内合格"]
-    : isJoint ? (report.examKind==="province" ? ["班名次","姓名","总分","校排","县位次","市位次","省位次","市上线","省上线"] : ["班名次","姓名","总分","校排","县位次","市位次","市上线","县上线"])
-    : isGk ? ["班名次","姓名","总分","年级名次","省控上线","校内上线"]
-    : ["班名次","姓名","总分","年级名次","校内上线"];
-  const classRankCell = (r) => r.classRank ?? r.rank ?? "";
-  const gradeRankCell = (r) => r.gradeRank ?? r.rank ?? "—";
-  const rowCells = (r) => {
-    if (isHk) return `<td>${classRankCell(r)}</td><td>${r.name}</td><td>${r.total}</td><td>${gradeRankCell(r)}</td><td>${r.huikaoPass?"合格":"不合格"}</td>`;
-    if (isJoint && report.examKind==="province") return `<td>${classRankCell(r)}</td><td>${r.name}</td><td>${r.total}</td><td>${gradeRankCell(r)}</td><td>${r.countyRank??"—"}</td><td>${r.cityRank??"—"}</td><td>${r.provinceRank??"—"}</td><td>${r.jointLine?.city||"—"}</td><td>${r.jointLine?.province||"—"}</td>`;
-    if (isJoint) return `<td>${classRankCell(r)}</td><td>${r.name}</td><td>${r.total}</td><td>${gradeRankCell(r)}</td><td>${r.countyRank??"—"}</td><td>${r.cityRank??"—"}</td><td>${r.jointLine?.city||"—"}</td><td>${r.jointLine?.county||"—"}</td>`;
-    if (isGk) return `<td>${classRankCell(r)}</td><td>${r.name}</td><td>${r.total}</td><td>${gradeRankCell(r)}</td><td>${provincialLineLabel(r, report)}</td><td>校内${r.line||""}</td>`;
-    return `<td>${classRankCell(r)}</td><td>${r.name}</td><td>${r.total}</td><td>${gradeRankCell(r)}</td><td>${r.line||""}</td>`;
-  };
-  const actingHome = isActingHomeroom(state.player, state.player.classNo);
-  const officialHome = isPlayerHomeroom(state.player, state.player.classNo);
-  const godNote = actingHome && !officialHome
-    ? `<p class="notice">上帝模式：当前按班主任身份查看本班考后分析。学校正式班主任仍是${escapeHtml(officialHomeroomName(state.player))}，任职与存档不会被改写。</p>`
-    : "";
-  const mainKpi = isJoint ? jointKpi
-    : isHk ? `<div class="kpi"><div><span>试卷难度</span><b>${(report.difficulty||1).toFixed(3)}</b></div><div><span>班内校内合格</span><b>${passN} / ${mine.length}</b></div><div><span>合格标准</span><b>卷面 60%</b></div></div>`
-    : isGk ? officialLinesBlock(report, track) + schoolLinesKpi(report, track) + `<p class="muted">${schoolLinesNote(report, track)}</p>`
-    : `<div class="kpi"><div><span>试卷难度</span><b>${(report.difficulty||1).toFixed(3)}</b></div></div>` + schoolLinesKpi(report, track) + `<p class="notice">${schoolLinesNote(report, track)}</p>`;
-  host.innerHTML = `<h3>考试成绩 · 任教班</h3>
-    <div class="filters"><label>场次 <select id="exsel">${examOptions()}</select></label></div>
-    ${godNote}
-    ${clickStudentHint()}
-    ${note?`<p class="notice">${note}</p>`:""}
-    ${mainKpi}
-    ${!isHk?`<p class="notice">${lineCompareNotice(report)}</p><p class="notice">${classPassSummary(report, state.player.classNo)}</p>`:""}
-    ${isJoint?`<p class="muted">${schoolLinesNote(report, track)}</p>`:""}
-    <div class="paper"><table><thead><tr>${head.map((h)=>`<th>${h}</th>`).join("")}</tr></thead>
-    <tbody>${mine.map((r)=>`<tr data-id="${r.studentId}">${rowCells(r)}</tr>`).join("")}</tbody></table></div>
-    ${examAiPanel(report)}`;
-  host.querySelector("#exsel").onchange = (e) => { examPick = e.target.value; render(); };
-  host.querySelectorAll("tr[data-id]").forEach((tr)=>tr.onclick=()=>{selectedId=tr.dataset.id; view="profile"; render();});
-  bindExamAi(host, report);
 }
 
 function examAiPanel(report) {
@@ -1681,18 +1871,87 @@ function examAiPanel(report) {
   const sub = playerSubjectName(p);
   const officialName = officialHomeroomName(p);
   const scopeText = official
-    ? "你现在是本班班主任，可以分析全班总分、均分、校内线与对照省控、班/层/校排和跨层次排、排名分布，以及各门单科。"
+    ? "你现在是本班班主任，可以看全班总分、均分、校内线与对照省控、班/层/校排和跨层次排、排名分布，以及各门单科。"
     : acting
-      ? `当前为上帝模式查看：按本班班主任身份分析全班总分、均分、校内线与对照省控、班/层/校排和跨层次排、排名分布，以及各门单科。学校正式班主任仍是${officialName}，任职与存档不会被改写。`
-      : `你现在是本班${sub}任课老师，不是班主任，只能分析本班${sub}（整体排名只作背景）。可在「设置」的上帝模式里临时按班主任范围查看全班；若以后正式接任班主任，这里会自动改为可看全班整体。`;
-  const cached = examAiCache.get(examAiCacheKey(report, p));
-  const body = cached ? escapeHtml(cached).replace(/\n/g, "<br/>") : "";
-  return `<div class="paper exam-ai">
+      ? `当前为上帝模式查看：按本班班主任身份看全班总分、均分、校内线与对照省控、班/层/校排和跨层次排、排名分布，以及各门单科。学校正式班主任仍是${officialName}，任职与存档不会被改写。`
+      : `你现在是本班${sub}任课老师，不是班主任，图表以本班${sub}为主（整体排名只作背景）。可在「设置」的上帝模式里临时按班主任范围查看全班；若以后正式接任班主任，这里会自动改为可看全班整体。`;
+  const payload = examAnalysisPayload(report);
+  if (!payload.ok) {
+    return `<div class="paper exam-ai">
+      <h4>考后分析</h4>
+      <p class="muted">${scopeText}</p>
+      <p class="notice">${escapeHtml(payload.reason || "这场考试暂时不能做图表解析。")}</p>
+    </div>`;
+  }
+  const model = payload.chart;
+  const comments = cachedAiComments(report);
+  const filters = ["全部", "进步", "退步", "持平", "无对照"]
+    .filter((k) => k === "全部" || (model.counts[k] || 0) > 0)
+    .map((k) => `<button type="button" data-ai-filter="${k}">${k}${k === "全部" ? "" : ` ${model.counts[k] || 0}`}</button>`)
+    .join("");
+  const weak = (model.weakSubjects || []).map((w) => `<li>${escapeHtml(w.说明)}</li>`).join("");
+  const deltaTitle = model.hasPrevious ? "进退步人数" : (model.bands.length ? "校排分段人数" : "进退步人数");
+  const showBands = model.hasPrevious && model.bands.length;
+  return `<div class="paper exam-ai" data-payload-ok="1">
     <h4>考后分析</h4>
-    <p class="muted">${scopeText} 分析会带上已算好的排名、与上一场的进退步，以及建议谈话对象；数字以本页表格为准，不会改分数、排名或上线人数。第一场或没有先前成绩时不会虚构进退步。</p>
+    <p class="muted">${scopeText} 进退步、走势和薄弱点都按已算好的成绩画图，不填密钥也能先看。点「生成分析」只补各块短评，不会改分数、排名或上线人数。第一场或没有先前成绩时不会虚构进退步。可点同学看个人曲线。</p>
     <div class="row-actions"><button type="button" class="accent" id="ai-run">生成分析</button></div>
     <p class="notice" id="ai-status" hidden></p>
-    <div class="exam-ai-body" id="ai-body">${body}</div>
+    <div class="exam-ai-charts" id="ai-charts">
+      <p class="exam-ai-note" data-ai-note="总评">${comments.总评 ? escapeHtml(comments.总评) : ""}</p>
+      <section class="exam-ai-block">
+        <h5>各同学进退步</h5>
+        <p class="exam-ai-note" data-ai-note="进退步">${comments.进退步 ? escapeHtml(comments.进退步) : ""}</p>
+        <p class="muted">${escapeHtml(model.进退步说明 || "")}</p>
+        <div class="exam-ai-filters">${filters}</div>
+        <div class="scroll-table exam-ai-table"><table>
+          <thead><tr><th>姓名</th><th>本场</th><th>分差</th><th>校排</th><th>校排变</th><th>班排</th><th>班排变</th><th>分组</th></tr></thead>
+          <tbody id="ai-delta-body"></tbody>
+        </table></div>
+      </section>
+      <section class="exam-ai-block">
+        <h5>多次考试走势</h5>
+        <p class="exam-ai-note" data-ai-note="走势">${comments.走势 ? escapeHtml(comments.走势) : ""}</p>
+        ${trendChartsHtml(model)}
+      </section>
+      <section class="exam-ai-block">
+        <h5>薄弱点与分布</h5>
+        <p class="exam-ai-note" data-ai-note="薄弱点">${comments.薄弱点 ? escapeHtml(comments.薄弱点) : ""}</p>
+        ${weak ? `<ul class="exam-ai-weak">${weak}</ul>` : `<p class="muted">没有可对比的单科均分。</p>`}
+        <div class="charts">
+          ${model.weakSubjects.length ? `<div class="chart-card"><h4>单科均分</h4><canvas id="ai-ch-subj" width="640" height="200"></canvas></div>` : ""}
+          ${(model.hasPrevious || model.bands.length) ? `<div class="chart-card"><h4>${deltaTitle}</h4><canvas id="ai-ch-delta" width="640" height="200"></canvas></div>` : ""}
+          ${showBands ? `<div class="chart-card"><h4>校排分段人数</h4><canvas id="ai-ch-bands" width="640" height="200"></canvas></div>` : ""}
+        </div>
+      </section>
+      <section class="exam-ai-block">
+        <h5>建议谈话</h5>
+        <p class="exam-ai-note" data-ai-note="建议谈话">${comments.建议谈话 ? escapeHtml(comments.建议谈话) : ""}</p>
+        ${talkListHtml(model.建议谈话)}
+      </section>
+      <section class="exam-ai-block" id="ai-stu-block" hidden>
+        <div class="exam-ai-stu-head">
+          <h5 id="ai-stu-title">学生曲线</h5>
+          <button type="button" id="ai-stu-profile">查看档案</button>
+        </div>
+        <div class="charts">
+          <div class="chart-card"><h4>折合 750 分走势</h4><canvas id="ai-ch-stu" width="640" height="230"></canvas></div>
+          <div class="chart-card"><h4>班排 / 同层次排 / 校排</h4><canvas id="ai-ch-stu-rank" width="640" height="230"></canvas></div>
+        </div>
+      </section>
+    </div>
+  </div>`;
+}
+
+function trendChartsHtml(model) {
+  const trend = model.trend || [];
+  if (!trend.length) return `<p class="muted">还没有可画走势的已结算考试。</p>`;
+  const note = trend.some((p) => p.满分 === 950) && trend.some((p) => p.满分 === 750)
+    ? `<p class="muted">高一 950 与后续 750 用折合 750 分对照，不把原始分直接相减。</p>`
+    : "";
+  return `${note}<div class="charts">
+    <div class="chart-card"><h4>班级均分走势（折合 750 分）</h4><canvas id="ai-ch-avg" width="640" height="230"></canvas></div>
+    <div class="chart-card"><h4>班级均校排走势（名次在上为靠前）</h4><canvas id="ai-ch-rank" width="640" height="230"></canvas></div>
   </div>`;
 }
 
@@ -1834,11 +2093,13 @@ function viewAuto(host) {
     <p class="notice">不必亲自备课上课，也可按考试阶段推进。跳过时仍会走完校历、生成该次真实成绩与排名，并写入存档。第一届高考、录取、毕业后游戏继续：学生离校或进入补习班，低年级升级，新高一入学。</p>
     <div class="row-actions">
       <button type="button" class="accent" id="n1">下一阶段</button>
+      <button type="button" id="n1y">下一学年</button>
       <button type="button" id="n2">跳到本届高考录取</button>
       <button type="button" id="n3">再推进到下一届入学</button>
     </div>
-    <p class="notice" id="auto-msg">当前 ${formatDateCn(state.date)}。${describePlayerStage(state)}${(() => { const g = gradeOf(state.player.cohortYear, state.date); return g >= 1 && g <= 3 ? "，尚未走完这届高考。" : "。"; })()}下一阶段会写明是哪一届的什么事，避免把其他年级的高考当成你带的班。</p>`;
+    <p class="notice" id="auto-msg">当前 ${formatDateCn(state.date)}。${describePlayerStage(state)}${(() => { const g = gradeOf(state.player.cohortYear, state.date); return g >= 1 && g <= 3 ? "，尚未走完这届高考。" : "。"; })()}下一阶段会写明是哪一届的什么事，避免把其他年级的高考当成你带的班。下一学年会连续结算考试和分班，停在该届高二或高三开学日，不会改成下一届入学。</p>`;
   host.querySelector("#n1").onclick = () => handleAct("skip");
+  host.querySelector("#n1y").onclick = () => handleAct("skip-year");
   host.querySelector("#n2").onclick = () => {
     toast("正在自动推进到高考录取，请稍候…");
     setTimeout(() => {
@@ -1940,10 +2201,14 @@ function renderAgenda() {
   box.innerHTML = `${schedBlock}
     <h3>任教班</h3>
     <p class="notice">${state.player.cohortYear}级卓行${state.player.classNo}班，${cls.length}人。班主任 ${state.player.homeroom}。</p>
-    <div class="row-actions"><button type="button" data-act="skip">跳到下一阶段</button></div>
+    <div class="row-actions">
+      <button type="button" data-act="skip">跳到下一阶段</button>
+      <button type="button" data-act="skip-year">下一学年</button>
+    </div>
     <h3>最近日志</h3>
     ${(state.log||[]).slice(0,8).map((l)=>`<div class="log-item"><b>${l.date}</b> ${l.text}</div>`).join("")}`;
   box.querySelector("[data-act=skip]").onclick = () => handleAct("skip");
+  box.querySelector("[data-act='skip-year']").onclick = () => handleAct("skip-year");
   box.querySelector("[data-act=nextperiod]").onclick = () => handleAct("nextperiod");
   const det = box.querySelector(".agenda-sched");
   if (det) det.addEventListener("toggle", () => { agendaSchedOpen = det.open; });
