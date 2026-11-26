@@ -989,7 +989,8 @@ function bindExamAi(host, report) {
     }
     const check = canAnalyzeReport(report, state.player.classNo);
     if (!check.ok) { setStatus(check.reason, "err"); return; }
-    const payload = buildExamAnalysisPayload(report, { player: state.player, classNo: state.player.classNo });
+    const prior = listExamReports(state, { entryYear: state.player.cohortYear });
+    const payload = buildExamAnalysisPayload(report, { player: state.player, classNo: state.player.classNo, reports: prior, previousReports: prior });
     if (!payload.ok) { setStatus(payload.reason, "err"); return; }
     examAiBusy = true;
     btn.disabled = true;
@@ -1058,13 +1059,13 @@ function examAiPanel(report) {
   const home = isPlayerHomeroom(p, p.classNo);
   const sub = playerSubjectName(p);
   const scopeText = home
-    ? "你现在是本班班主任，可以分析全班总分、均分、校内线与对照省控、排名分布，以及各门单科。"
-    : `你现在是本班${sub}任课老师，不是班主任，只能分析本班${sub}。若以后接任班主任，这里会改为可看全班整体。`;
+    ? "你现在是本班班主任，可以分析全班总分、均分、校内线与对照省控、班/层/校排和跨层次排、排名分布，以及各门单科。"
+    : `你现在是本班${sub}任课老师，不是班主任，只能分析本班${sub}（整体排名只作背景）。若以后接任班主任，这里会改为可看全班整体。`;
   const cached = examAiCache.get(examAiCacheKey(report, p));
   const body = cached ? escapeHtml(cached).replace(/\n/g, "<br/>") : "";
   return `<div class="paper exam-ai">
     <h4>考后分析</h4>
-    <p class="muted">${scopeText} 评语根据本页已算好的成绩生成，不会改分数或排名。</p>
+    <p class="muted">${scopeText} 分析会带上已算好的排名、与上一场的进退步，以及建议谈话对象；数字以本页表格为准，不会改分数、排名或上线人数。第一场或没有先前成绩时不会虚构进退步。</p>
     <div class="row-actions"><button type="button" class="accent" id="ai-run">生成分析</button></div>
     <p class="notice" id="ai-status" hidden></p>
     <div class="exam-ai-body" id="ai-body">${body}</div>
