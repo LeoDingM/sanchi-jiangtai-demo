@@ -6,7 +6,12 @@ import { runExam } from "../js/domain/examService.js";
 import {
   admitCohort, admitStudent, willRepeat, missedProvincialFirst, canInsertRepeat,
   supplementProbability, COLD_MAJORS, SUPPLEMENT_SOURCE, formatAdmissionBatch, formatAdmissionDest,
-  supplementUniversityPool, formatLastAdmissionLabel, packLastAdmission } from "../js/domain/admission.js";
+  supplementUniversityPool, formatLastAdmissionLabel, packLastAdmission,
+  enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions,
+  filterAdmissionResults, admissionCountKpis, resolveAdmissionStudentTier,
+  ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT,
+} from "../js/domain/admission.js";
+import { readFileSync } from "node:fs";
 import { provincialLines, universities, uniTier, UNI_985, UNI_211 } from "../js/domain/jiangxi.js";
 
 function stub(id, extra = {}) {
@@ -234,4 +239,157 @@ test("补习档案录取院校：有院校则写出名称，放弃或未考上�
   }, { abandoned: true });
   assert.equal(packed.noOffer, true);
   assert.equal(formatLastAdmissionLabel(packed), "无");
+});
+
+function admRow(extra = {}) {
+  return {
+    studentId: "s1",
+    name: "张三",
+    classNo: 16,
+    track: "li",
+    total: 520,
+    batch: "二批",
+    university: "某省属大学",
+    major: "金融学",
+    qingbei: false,
+    supplement: false,
+    destTier: "other",
+    ...extra,
+  };
+}
+
+test("新录取结果写入学生层次，destTier 仍是院校档次", () => {
+  const a = admitStudent(stub("tier-write", { tier: "zhuoxing", classNo: 16 }), 535, 2020);
+  assert.equal(a.tier, "zhuoxing");
+  assert.ok(a.destTier);
+  assert.notEqual(a.tier, a.destTier);
+  const bare = admitStudent(stub("no-tier-field", { classNo: 16 }), 535, 2020);
+  assert.equal(bare.tier, undefined);
+  assert.ok(bare.destTier);
+});
+
+test("录取去向可按班级、层次、文理筛选，并可与搜索组合", () => {
+  const rows = [
+    admRow({ studentId: "a", name: "甲", classNo: 16, track: "li", tier: "zhuoxing", batch: "一批", qingbei: true, university: "清华大学", major: "数学与应用数学", total: 690 }),
+    admRow({ studentId: "b", name: "乙", classNo: 16, track: "li", tier: "zhuoxing", batch: "一批", university: "南昌大学", major: "会计学", total: 560 }),
+    admRow({ studentId: "c", name: "丙", classNo: 12, track: "li", tier: "zhuoxing", batch: "二批", university: "江西师范大学", major: "汉语言文学", total: 500 }),
+    admRow({ studentId: "d", name: "丁", classNo: 10, track: "wen", tier: "lingxiao", batch: "一批", university: "南京大学", major: "历史学", total: 600 }),
+    admRow({ studentId: "e", name: "戊", classNo: 37, track: "li", tier: "fuzhuo", batch: "二批", supplement: true, university: "南昌工程学院", major: "采矿工程", total: 528 }),
+    admRow({ studentId: "f", name: "己", classNo: 1, track: "wen", tier: "yunxiu_exp", batch: "一批", university: "复旦大学", major: "新闻学", total: 640 }),
+  ];
+  const only16 = filterAdmissionResults(rows, { classNo: 16 });
+  assert.deepEqual(only16.map((r) => r.name), ["甲", "乙"]);
+  const zx = filterAdmissionResults(rows, { tier: "zhuoxing" });
+  assert.deepEqual(zx.map((r) => r.name), ["甲", "乙", "丙"]);
+  const wen = filterAdmissionResults(rows, { track: "wen" });
+  assert.deepEqual(wen.map((r) => r.name), ["丁", "己"]);
+  const liZx = filterAdmissionResults(rows, { tier: "zhuoxing", track: "li" });
+  assert.deepEqual(liZx.map((r) => r.name), ["甲", "乙", "丙"]);
+  const searchUni = filterAdmissionResults(rows, { query: "南昌" });
+  assert.deepEqual(searchUni.map((r) => r.name), ["乙", "戊"]);
+  const combo = filterAdmissionResults(rows, { classNo: 16, tier: "zhuoxing", track: "li", query: "清华" });
+  assert.deepEqual(combo.map((r) => r.name), ["甲"]);
+  const supp = filterAdmissionResults(rows, { query: "一本补录" });
+  assert.deepEqual(supp.map((r) => r.name), ["戊"]);
+  const empty = filterAdmissionResults(rows, { classNo: 99, query: "清华" });
+  assert.equal(empty.length, 0);
+  const all = filterAdmissionResults(rows, { classNo: "all", tier: "all", track: "all", query: "" });
+  assert.equal(all.length, 6);
+  assert.deepEqual(admissionClassOptions(rows), [1, 10, 12, 16, 37]);
+  const kpi16 = admissionCountKpis(only16);
+  assert.equal(kpi16.qingbei, 1);
+  assert.equal(kpi16.first, 2);
+  assert.equal(kpi16.published, 2);
+  const kpiAll = admissionCountKpis(rows);
+  assert.equal(kpiAll.qingbei, 1);
+  assert.equal(kpiAll.first, 4);
+  assert.equal(kpiAll.supplement, 1);
+  assert.equal(kpiAll.second, 6);
+  assert.equal(kpiAll.published, 6);
+});
+
+test("destTier 不能误当学生层次；旧存档缺 tier 时按 studentId 从该届名单补全", () => {
+  const stale = [
+    admRow({ studentId: "zx-1", name: "庚", classNo: 16, track: "li", destTier: "u985", university: "武汉大学" }),
+    admRow({ studentId: "lx-1", name: "辛", classNo: 8, track: "li", destTier: "other", university: "东华理工大学" }),
+    admRow({ studentId: "missing", name: "壬", classNo: 20, track: "li", destTier: "qingbei", university: "某校" }),
+  ];
+  // 旧行没有 tier 字段；destTier 即使碰巧像层次也不能用来筛
+  assert.equal(stale[0].tier, undefined);
+  const wronglyByDest = filterAdmissionResults(stale, { tier: "u985" });
+  assert.equal(wronglyByDest.length, 0, "院校档次 u985 不应当成学生层次");
+  const wronglyQingbeiTier = filterAdmissionResults(stale, { tier: "qingbei" });
+  assert.equal(wronglyQingbeiTier.length, 0);
+  assert.equal(resolveAdmissionStudentTier(stale[0], []), undefined);
+  assert.equal(resolveAdmissionStudentTier({ destTier: "zhuoxing", studentId: "x" }, []), undefined, "即便 destTier 写成学生层次名也不能用");
+
+  const students = [
+    { id: "zx-1", name: "庚", tier: "zhuoxing", classNo: 16, entryYear: 2017 },
+    { id: "lx-1", name: "辛", tier: "lingxiao", classNo: 8, entryYear: 2017 },
+  ];
+  const filled = enrichAdmissionResults(stale, students);
+  assert.equal(filled[0].tier, "zhuoxing");
+  assert.equal(filled[0].destTier, "u985", "补层次时不得改动 destTier");
+  assert.equal(filled[1].tier, "lingxiao");
+  assert.equal(filled[2].tier, undefined, "名单里没有的人不要编造层次");
+  assert.equal(stale[0].tier, undefined, "不要改写原存档对象");
+  const zx = filterAdmissionResults(filled, { tier: "zhuoxing" });
+  assert.deepEqual(zx.map((r) => r.name), ["庚"]);
+
+  const state = {
+    cohorts: {
+      2017: { students: students },
+    },
+    alumni: [{ id: "alum-1", entryYear: 2016, tier: "duxue" }],
+  };
+  const found = studentsForAdmissionYear(state, 2017);
+  assert.equal(found.length, 2);
+  assert.ok(found.every((s) => s.entryYear === 2017 || !s.entryYear || students.some((x) => x.id === s.id)));
+  // 毕业后该届 cohort 已删除，只从校友补
+  const after = studentsForAdmissionYear({
+    cohorts: { 2020: { students: [{ id: "fresh", entryYear: 2020, tier: "zhuoxing" }] } },
+    alumni: [
+      { id: "zx-1", entryYear: 2017, tier: "zhuoxing" },
+      { id: "other", entryYear: 2016, tier: "lingxiao" },
+    ],
+  }, 2017);
+  assert.deepEqual(after.map((s) => s.id), ["zx-1"]);
+  const filledAlum = enrichAdmissionResults(stale, after);
+  assert.equal(filledAlum[0].tier, "zhuoxing");
+});
+
+test("录取去向页有班级、层次、科类筛选，人数 KPI 随筛选更新，公开省控不随筛选改", () => {
+  const src = readFileSync(new URL("../js/ui/app.js", import.meta.url), "utf8");
+  const fn = src.match(/function viewAdmission\(host\) \{[\s\S]*?\n\}\n\nfunction viewAuto/);
+  assert.ok(fn, "找不到 viewAdmission");
+  const body = fn[0];
+  assert.match(body, /<label>班级 <select id="adm-class">/);
+  assert.match(body, /全部班级/);
+  assert.match(body, /<label>层次 <select id="adm-tier">/);
+  assert.match(body, /<label>科类 <select id="adm-track">/);
+  assert.match(body, /ADMISSION_TIER_FILTERS/);
+  assert.match(body, /ADMISSION_TRACK_FILTERS/);
+  assert.match(body, /placeholder="搜索姓名、大学或专业"/);
+  assert.match(body, /class="filters"/);
+  assert.match(body, /filterAdmissionResults/);
+  assert.match(body, /admissionCountKpis/);
+  assert.match(body, /enrichAdmissionResults/);
+  assert.match(body, /studentsForAdmissionYear/);
+  assert.match(body, /adm-official-kpi/);
+  assert.match(body, /adm-count-kpi/);
+  assert.match(body, /没有符合当前筛选的录取记录/);
+  assert.match(body, /其余 \$\{rest\} 人未列出/);
+  assert.match(body, /不随筛选变化/);
+  assert.doesNotMatch(body, /destTier === |destTier == /);
+  assert.equal(ADMISSION_TABLE_LIMIT, 250);
+  assert.deepEqual(ADMISSION_TIER_FILTERS.map((x) => x[0]), ["all", "yunxiu_exp", "yunxiu_key", "lingxiao", "zhuoxing", "duxue", "yiti", "fuzhuo"]);
+  assert.deepEqual(ADMISSION_TRACK_FILTERS.map((x) => x[0]), ["all", "li", "wen"]);
+  assert.match(ADMISSION_TIER_FILTERS.map((x) => x[1]).join(","), /云岫实验 0\/1/);
+  assert.match(ADMISSION_TIER_FILTERS.map((x) => x[1]).join(","), /云岫重点 2—4/);
+  // 教务处层次口径应一致
+  const office = src.match(/function viewOffice\(host\) \{[\s\S]*?const tiers = (\[[\s\S]*?\]);/);
+  assert.ok(office);
+  assert.match(office[1], /全部层次/);
+  assert.match(office[1], /yunxiu_exp/);
+  assert.match(office[1], /fuzhuo/);
 });

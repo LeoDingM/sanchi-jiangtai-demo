@@ -15,32 +15,32 @@ import {
   attendClassMeeting, hostClassMeeting, playerClassCommittee, playerClassBrief,
   playerDutyToday, playerWeekDuty, isHomeroomMeetingSlot, upcomingClassMeeting,
   committeeTitleOf, formatStudentShort,
-} from "../domain/simulation.js?v=t53u1";
-import { addDays } from "../domain/calendar.js?v=t53u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t53u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t53u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t53u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t53u1";
-import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t53u1";
-import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t53u1";
-import { hydrateReport } from "../domain/simulation.js?v=t53u1";
-import { renderSeating } from "./classroom.js?v=t53u1";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t53u1";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t53u1";
-import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t53u1";
-import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t53u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t53u1";
-import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel } from "../domain/admission.js?v=t53u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t53u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t53u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t53u1";
+} from "../domain/simulation.js?v=t54u1";
+import { addDays } from "../domain/calendar.js?v=t54u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t54u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t54u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t54u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t54u1";
+import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t54u1";
+import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t54u1";
+import { hydrateReport } from "../domain/simulation.js?v=t54u1";
+import { renderSeating } from "./classroom.js?v=t54u1";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t54u1";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t54u1";
+import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t54u1";
+import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t54u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t54u1";
+import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t54u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t54u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t54u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t54u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
   parseAiCommentary, emptyAiCommentary,
-} from "../domain/examAi.js?v=t53u1";
+} from "../domain/examAi.js?v=t54u1";
 
 let state = null;
 let view = "classroom";
@@ -2289,47 +2289,78 @@ function viewOffice(host) {
 }
 
 let admissionPick = "";
+let admissionFilter = { classNo: "all", tier: "all", track: "all", query: "" };
 
 function viewAdmission(host) {
   const keys = Object.keys(state.admissions||{}).sort().reverse();
   if (!keys.length) { host.innerHTML = "<h3>录取去向</h3><p>还没有走完高考录取。可用自动模式跳到本届高考。</p>"; return; }
   if (!admissionPick || !state.admissions[admissionPick]) admissionPick = keys[0];
   const pack = state.admissions[admissionPick];
-  const list = pack.results || [];
-  const qb = list.filter((x)=>x.qingbei);
-  const first = list.filter((x)=>x.batch==="一批");
-  const second = list.filter((x)=>x.batch==="一批" || x.batch==="二批");
-  const supp = list.filter((x)=>x.supplement);
+  const list = enrichAdmissionResults(pack.results || [], studentsForAdmissionYear(state, pack.entryYear));
+  const classNos = admissionClassOptions(list);
+  if (admissionFilter.classNo !== "all" && !classNos.some((n) => Number(n) === Number(admissionFilter.classNo))) {
+    admissionFilter = { ...admissionFilter, classNo: "all" };
+  }
   const opts = keys.map((k) => {
     const p = state.admissions[k];
     const mine = p.entryYear === state.player.cohortYear ? "（你带的这届）" : "";
     return `<option value="${k}" ${k===admissionPick?"selected":""}>${p.year}年 · ${p.entryYear}级${mine}</option>`;
   }).join("");
   const picker = keys.length > 1 ? `<div class="filters"><label>查看届次 <select id="adm-year">${opts}</select></label></div>` : "";
+  const classOpts = [["all","全部班级"], ...classNos.map((n) => [n, `${n}班`])]
+    .map(([v,n]) => `<option value="${v}" ${String(v)===String(admissionFilter.classNo)?"selected":""}>${n}</option>`).join("");
+  const tierOpts = ADMISSION_TIER_FILTERS.map(([v,n]) => `<option value="${v}" ${v===admissionFilter.tier?"selected":""}>${n}</option>`).join("");
+  const trackOpts = ADMISSION_TRACK_FILTERS.map(([v,n]) => `<option value="${v}" ${v===admissionFilter.track?"selected":""}>${n}</option>`).join("");
   host.innerHTML = `<h3>${pack.year}年高考录取（${pack.entryYear}级）</h3>
     <p class="notice">${describeAdmissionContext(state, pack)}</p>
     ${picker}
     <p class="notice">对照江西${pack.year}年公开省控线。院校投档与省位次以 2020 年公开投档线和一分一段为底；其他年份按当年与 2020 年省控分差平移，表格中会标明，不是当年完整投档表或一分一段。艺体生目前只对照文化课成绩，尚未收录术科专业分，不编造术科分。师范意向只影响在已有院校池中的匹配偏好，没有单独的师范提前批投档表。不随机派校名，也不为喜报虚造清北。</p>
     <p class="notice">${describeOfficialProvincialLines(pack.year)}</p>
-    <div class="kpi">
+    <div class="kpi" id="adm-official-kpi">
       <div><span>${pack.year}年公开省控理科一本</span><b>${officialProvincialPack(pack.year).li.first}</b></div>
       <div><span>公开省控理科二本</span><b>${officialProvincialPack(pack.year).li.second}</b></div>
       <div><span>理科国家线分差</span><b>${officialProvincialPack(pack.year).li.gap}</b></div>
       ${officialProvincialPack(pack.year).li.ranks ? `<div><span>理科一本全省位次</span><b>前 ${officialProvincialPack(pack.year).li.ranks.firstN}</b></div>` : ""}
     </div>
-    <div class="kpi"><div><span>清北</span><b>${qb.length}</b></div><div><span>一批（省控）</span><b>${first.length}</b></div><div><span>一本补录</span><b>${supp.length}</b></div><div><span>二本以上（省控）</span><b>${second.length}</b></div><div><span>公布人数</span><b>${list.length}</b></div></div>
-    <p class="notice">公布人数是本届应届与复读全员（含专科及未达专科线），不是二本以上人数。一批、二本以上按江西${pack.year}年公开省控（国家线）统计，不是校内线。「一批（省控）」只计分数达到官方一本省控的人；「一本补录」是离一本线很近的二本可能被弱一本院校的冷门专业征集，属于校内规则示意，不是官方征集名单，也不计入省控一本上线人数。</p>
-    <div class="filters"><input id="q" placeholder="搜索姓名、大学或专业" /></div>
+    <div class="filters">
+      <label>班级 <select id="adm-class">${classOpts}</select></label>
+      <label>层次 <select id="adm-tier">${tierOpts}</select></label>
+      <label>科类 <select id="adm-track">${trackOpts}</select></label>
+      <input id="q" placeholder="搜索姓名、大学或专业" />
+    </div>
+    <div class="kpi" id="adm-count-kpi"></div>
+    <p class="notice">顶部公开省控数字是官方口径，不随筛选变化。下列清北、一批、一本补录、二本以上和公布人数按当前班级、层次、科类和搜索统计。未筛选时，公布人数是本届应届与复读全员（含专科及未达专科线），不是二本以上人数。一批、二本以上按江西${pack.year}年公开省控（国家线）统计，不是校内线。「一批（省控）」只计分数达到官方一本省控的人；「一本补录」是离一本线很近的二本可能被弱一本院校的冷门专业征集，属于校内规则示意，不是官方征集名单，也不计入省控一本上线人数。</p>
     <div class="paper" id="adm-table"></div>`;
   const yearSel = host.querySelector("#adm-year");
   if (yearSel) yearSel.onchange = () => { admissionPick = yearSel.value; render(); };
+  const qInput = host.querySelector("#q");
+  if (qInput) qInput.value = admissionFilter.query || "";
   const draw = () => {
-    const q = (host.querySelector("#q").value||"").trim();
-    const rows = list.filter((a)=>!q || a.name.includes(q) || (a.university||"").includes(q) || (a.major||"").includes(q) || (a.supplement && "一本补录".includes(q)));
-    host.querySelector("#adm-table").innerHTML = `<table><thead><tr><th>姓名</th><th>班</th><th>科类</th><th>总分</th><th>省位次</th><th>批次</th><th>专业</th><th>去向</th></tr></thead>
-      <tbody>${rows.slice(0,250).map((a)=>`<tr><td>${a.name}</td><td>${a.classNo}</td><td>${a.track==="wen"?"文":"理"}</td><td>${a.total}</td><td>${a.provinceRank??"—"}</td><td>${formatAdmissionBatch(a)}</td><td>${a.major||"—"}</td><td>${formatAdmissionDest(a)}</td></tr>`).join("")}</tbody></table>`;
+    admissionFilter = {
+      classNo: host.querySelector("#adm-class").value,
+      tier: host.querySelector("#adm-tier").value,
+      track: host.querySelector("#adm-track").value,
+      query: host.querySelector("#q").value || "",
+    };
+    const rows = filterAdmissionResults(list, admissionFilter);
+    const kpi = admissionCountKpis(rows);
+    host.querySelector("#adm-count-kpi").innerHTML = `<div><span>清北</span><b>${kpi.qingbei}</b></div><div><span>一批（省控）</span><b>${kpi.first}</b></div><div><span>一本补录</span><b>${kpi.supplement}</b></div><div><span>二本以上（省控）</span><b>${kpi.second}</b></div><div><span>公布人数</span><b>${kpi.published}</b></div>`;
+    const table = host.querySelector("#adm-table");
+    if (!rows.length) {
+      table.innerHTML = `<p class="muted">没有符合当前筛选的录取记录。可改班级、层次、科类或清空搜索再试。</p>`;
+      return;
+    }
+    const shown = rows.slice(0, ADMISSION_TABLE_LIMIT);
+    const rest = rows.length - shown.length;
+    table.innerHTML = `<table><thead><tr><th>姓名</th><th>班</th><th>科类</th><th>总分</th><th>省位次</th><th>批次</th><th>专业</th><th>去向</th></tr></thead>
+      <tbody>${shown.map((a)=>`<tr><td>${a.name}</td><td>${a.classNo}</td><td>${a.track==="wen"?"文":"理"}</td><td>${a.total}</td><td>${a.provinceRank??"—"}</td><td>${formatAdmissionBatch(a)}</td><td>${a.major||"—"}</td><td>${formatAdmissionDest(a)}</td></tr>`).join("")}</tbody></table>
+      ${rest>0?`<p class='muted'>名单较长，这里先列出前 ${ADMISSION_TABLE_LIMIT} 人，其余 ${rest} 人未列出。请再用班级、层次、科类或搜索缩小范围。</p>`:""}`;
   };
-  host.querySelector("#q").oninput = draw; draw();
+  host.querySelector("#adm-class").onchange = draw;
+  host.querySelector("#adm-tier").onchange = draw;
+  host.querySelector("#adm-track").onchange = draw;
+  host.querySelector("#q").oninput = draw;
+  draw();
 }
 
 function viewAuto(host) {

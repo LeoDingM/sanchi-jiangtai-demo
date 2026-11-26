@@ -2,15 +2,15 @@
  * 考后 AI 分析：只根据已算好的成绩和排名写评语，不改分、不改排名、不上线人数。
  * API 密钥只放在独立的 localStorage 项里，与游戏存档 JSON 分开。
  */
-import { subjectById, TIER } from "./config.js?v=t53u1";
-import { usesComprehensive, comprehensiveMeta, comprehensiveScore } from "./scores.js?v=t53u1";
-import { subjectRanks } from "./scores.js?v=t53u1";
+import { subjectById, TIER } from "./config.js?v=t54u1";
+import { usesComprehensive, comprehensiveMeta, comprehensiveScore } from "./scores.js?v=t54u1";
+import { subjectRanks } from "./scores.js?v=t54u1";
 import {
   describeSchoolCutoff, describeClassProvincial, describeSchoolProvincial,
   describeZhuoxingPeers, classProvincialCounts, scaledTotal750, provincialCompareYear,
-} from "./schoolLines.js?v=t53u1";
-import { provincialLines } from "./jiangxi.js?v=t53u1";
-import { buildStudentExamSnapshot, strongerTiers, tierName } from "./studentHistory.js?v=t53u1";
+} from "./schoolLines.js?v=t54u1";
+import { provincialLines } from "./jiangxi.js?v=t54u1";
+import { buildStudentExamSnapshot, strongerTiers, tierName } from "./studentHistory.js?v=t54u1";
 
 export const AI_SETTINGS_KEY = "sanchi-jiangtai-ai-settings-v1";
 export const AI_KEY_KEY = "sanchi-jiangtai-ai-key-v1";

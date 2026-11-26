@@ -1,7 +1,7 @@
 /** 按江西公开投档线/位次将高考分数对应到真实大学，文理、年份、批次分开。 */
-import { provincialLines, provincialRank, universities, uniTier, QINGBEI } from "./jiangxi.js?v=t53u1";
-import { INSERT_REPEAT_CLASS_NOS } from "./config.js?v=t53u1";
-import { hash01 } from "./prng.js?v=t53u1";
+import { provincialLines, provincialRank, universities, uniTier, QINGBEI } from "./jiangxi.js?v=t54u1";
+import { INSERT_REPEAT_CLASS_NOS, TIER } from "./config.js?v=t54u1";
+import { hash01 } from "./prng.js?v=t54u1";
 
 /** 校内规则示意：不是官方征集志愿名单，也不计入省控一本上线人数。 */
 export const SUPPLEMENT_SOURCE = "校内规则示意：离一本省控线很近的二本可能被弱一本院校的冷门专业征集，不是官方征集志愿名单，也不计入省控一本上线人数。";
@@ -184,6 +184,7 @@ export function admitStudent(student, total, year) {
     shifted: year !== 2020,
     category: picked?.category || "",
     destTier: tier,
+    tier: (student.tier && student.tier in TIER) ? student.tier : undefined,
     qingbei: !supplement && (QINGBEI.has(uniName) || /^清华大学$|^北京大学$/.test(uniName)),
     firstLine: lines.first,
     secondLine: lines.second,
@@ -293,5 +294,109 @@ export function packLastAdmission(admission, { abandoned = false } = {}) {
     abandoned: !noOffer && !!(abandoned || admission.repeatIntent),
     noOffer,
     repeatIntent: !!admission.repeatIntent,
+  };
+}
+
+/** 学生层次（班级梯队），与院校档次 destTier 不是同一字段。 */
+export const STUDENT_TIER_IDS = ["yunxiu_exp", "yunxiu_key", "lingxiao", "zhuoxing", "duxue", "yiti", "fuzhuo"];
+
+export const ADMISSION_TIER_FILTERS = [
+  ["all", "全部层次"],
+  ["yunxiu_exp", "云岫实验 0/1"],
+  ["yunxiu_key", "云岫重点 2—4"],
+  ["lingxiao", "凌霄"],
+  ["zhuoxing", "卓行"],
+  ["duxue", "笃学"],
+  ["yiti", "艺体"],
+  ["fuzhuo", "补习班"],
+];
+
+export const ADMISSION_TRACK_FILTERS = [
+  ["all", "文理全部"],
+  ["li", "理科"],
+  ["wen", "文科"],
+];
+
+export const ADMISSION_TABLE_LIMIT = 250;
+
+export function isStudentTier(tier) {
+  return STUDENT_TIER_IDS.includes(tier);
+}
+
+/** 从该届 cohort / 校友名单按 studentId 取学生层次。绝不把 destTier 当学生层次。 */
+export function studentsForAdmissionYear(state, entryYear) {
+  const list = [];
+  const seen = new Set();
+  const add = (s) => {
+    if (!s || s.id == null || seen.has(s.id)) return;
+    seen.add(s.id);
+    list.push(s);
+  };
+  const cohort = state?.cohorts?.[entryYear];
+  for (const s of cohort?.students || []) add(s);
+  for (const s of state?.alumni || []) {
+    if (s.entryYear === entryYear) add(s);
+  }
+  return list;
+}
+
+function studentMapById(students) {
+  const byId = new Map();
+  for (const s of students || []) {
+    if (s?.id != null && !byId.has(s.id)) byId.set(s.id, s);
+  }
+  return byId;
+}
+
+export function resolveAdmissionStudentTier(row, students = []) {
+  if (isStudentTier(row?.tier)) return row.tier;
+  const byId = students instanceof Map ? students : studentMapById(students);
+  const s = row?.studentId != null ? byId.get(row.studentId) : null;
+  if (isStudentTier(s?.tier)) return s.tier;
+  return undefined;
+}
+
+/** 为缺 tier 的旧录取行补上学生层次；已有合法层次的行保持原对象，不改 destTier。 */
+export function enrichAdmissionResults(results, students) {
+  const byId = studentMapById(students);
+  return (results || []).map((a) => {
+    if (isStudentTier(a.tier)) return a;
+    const tier = resolveAdmissionStudentTier(a, byId);
+    return tier ? { ...a, tier } : a;
+  });
+}
+
+export function admissionClassOptions(results) {
+  const nos = [...new Set((results || []).map((a) => a.classNo).filter((n) => n != null && n !== ""))];
+  nos.sort((a, b) => Number(a) - Number(b));
+  return nos;
+}
+
+export function filterAdmissionResults(results, { classNo = "all", tier = "all", track = "all", query = "" } = {}) {
+  const q = String(query || "").trim();
+  const wantClass = classNo != null && classNo !== "" && classNo !== "all" ? Number(classNo) : null;
+  return (results || []).filter((a) => {
+    if (wantClass != null && Number(a.classNo) !== wantClass) return false;
+    if (tier && tier !== "all" && a.tier !== tier) return false;
+    if (track && track !== "all" && a.track !== track) return false;
+    if (q) {
+      const hit = (a.name || "").includes(q)
+        || (a.university || "").includes(q)
+        || (a.major || "").includes(q)
+        || (a.supplement && "一本补录".includes(q));
+      if (!hit) return false;
+    }
+    return true;
+  });
+}
+
+export function admissionCountKpis(results) {
+  const list = results || [];
+  return {
+    qingbei: list.filter((x) => x.qingbei).length,
+    first: list.filter((x) => x.batch === "一批").length,
+    supplement: list.filter((x) => x.supplement).length,
+    second: list.filter((x) => x.batch === "一批" || x.batch === "二批").length,
+    published: list.length,
   };
 }

@@ -1,5 +1,5 @@
 /** 虚构赣南风格姓名，避免使用真实校史人物。 */
-import { pick } from "./prng.js?v=t53u1";
+import { pick } from "./prng.js?v=t54u1";
 
 export const SURNAMES = [
   "李","王","张","刘","陈","杨","黄","赵","周","吴","徐","孙","马","朱","胡","郭","何","林","罗","高",
