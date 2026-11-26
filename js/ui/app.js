@@ -22,32 +22,36 @@ import {
   observeLesson, isObserveOpen, observeUnavailableReason, observeChoices, ensureObserveState,
   upcomingOpenClass, upcomingOpenClasses, openClassSlotOn, isOpenClassPeriod, isOpenClassDay,
   latestOpenClassReview, openClassReviewFor, OBSERVE_DAY_CAP, OBSERVE_TERM_CAP, OPEN_CLASS_SOURCE_NOTE,
-} from "../domain/simulation.js?v=t57u1";
-import { addDays, weekday } from "../domain/calendar.js?v=t57u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t57u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t57u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t57u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t57u1";
-import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t57u1";
-import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t57u1";
-import { hydrateReport } from "../domain/simulation.js?v=t57u1";
-import { renderSeating } from "./classroom.js?v=t57u1";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t57u1";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t57u1";
-import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t57u1";
-import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t57u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t57u1";
-import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t57u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t57u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t57u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t57u1";
+  doProctorAction, markClassPapers, isProctorOpen, proctorUnavailableReason, proctorChoices,
+  proctorAssignment, ensureProctorState, isMarkingOpen, markingUnavailableReason, markingPapers,
+  pendingGradeableExam, latestPlayerExam, isCalendarExamDay, isNonSchoolMarkKind,
+  examEventOn, examSessionOf, sessionLabel, PROCTOR_SOURCE_NOTE, PROCTOR_SESSION_CAP,
+} from "../domain/simulation.js?v=t58u1";
+import { addDays, weekday } from "../domain/calendar.js?v=t58u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t58u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t58u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t58u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t58u1";
+import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t58u1";
+import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t58u1";
+import { hydrateReport } from "../domain/simulation.js?v=t58u1";
+import { renderSeating } from "./classroom.js?v=t58u1";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t58u1";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t58u1";
+import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t58u1";
+import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t58u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t58u1";
+import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t58u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t58u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t58u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t58u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
   parseAiCommentary, emptyAiCommentary,
-} from "../domain/examAi.js?v=t57u1";
+} from "../domain/examAi.js?v=t58u1";
 
 let state = null;
 let view = "classroom";
@@ -468,7 +472,7 @@ function render() {
   const slot = currentSlot(state);
   const periodEl = $("#periodline");
   if (periodEl) {
-    const tag = slot?.isTutoring ? " · 可答疑" : slot?.isMath ? " · 数学课" : slot?.isExamDay ? " · 停课" : slot?.isActivityPeriod ? " · 活动" : slot?.id === "rest" ? " · 休息" : "";
+    const tag = slot?.isTutoring ? " · 可答疑" : slot?.isMath ? " · 数学课" : isCalendarExamDay(state.date) ? " · 监考" : slot?.isExamDay ? " · 停课" : slot?.isActivityPeriod ? " · 活动" : slot?.id === "rest" ? " · 休息" : "";
     periodEl.textContent = (slot ? formatSlotLabel(slot) : "") + tag;
   }
   const roleEl = $("#roleline");
@@ -812,6 +816,7 @@ function viewClassroom(host) {
   else if (slot?.isMath) slotLine += "（本节可上课，也可在座位边提醒）";
   else if (isParentsMeetingOpen(state) || (slot?.isExamDay && state.parentsMeeting?.date === state.date)) slotLine += "（今日家长会，由班主任主持，你可作为数学老师与本班家长面谈）";
   else if (isSchoolActivityOpen(state) || slot?.isActivityPeriod) slotLine += `（今日学校活动「${state.schoolActivity?.name || slot?.eventName || ""}」，可带队、看班或写记录；日期为校内安排）`;
+  else if (isCalendarExamDay(state.date)) slotLine += `（今日${examEventOn(state.date)?.name || "考试"}，全日停课，按宁川中学校内考务安排监考）`;
   else if (slot?.isExamDay) slotLine += "（今日停课）";
   else if (slot && !slot.isMath && slot.kind !== "break" && slot.id !== "rest") slotLine += "。这节不是数学课，谈话请到走廊门口简短说";
   if (nxtT && !slot?.isTutoring) slotLine += `。下一节可答疑：${nxtT.sameDay ? "" : nxtT.date + " "}${formatSlotLabel(nxtT.slot)}`;
@@ -822,6 +827,7 @@ function viewClassroom(host) {
     ${visitPanelHtml()}
     ${doorVisitPanelHtml()}
     ${isOpenClassDay(state.date) ? openClassPanelHtml() : ""}
+    ${proctorPanelHtml()}
     <div class="classroom-layout">
       <canvas id="classroom"></canvas>
       <div class="desk-panel paper">${deskPanelHtml(sel, slot, scene)}</div>
@@ -834,6 +840,7 @@ function viewClassroom(host) {
   bindHomeVisitActions(host);
   bindParentActions(host);
   bindActivityActions(host);
+  bindProctorActions(host);
 }
 
 function viewRoster(host) {
@@ -1495,6 +1502,80 @@ function openClassPanelHtml() {
     </div>`;
 }
 
+function proctorPanelHtml() {
+  if (!state) return "";
+  if (!isCalendarExamDay(state.date) && !examEventOn(state.date)) return "";
+  ensureProctorState(state);
+  const ev = examEventOn(state.date);
+  const slot = currentSlot(state);
+  const assignment = proctorAssignment(state);
+  const session = examSessionOf(slot?.id);
+  const open = isProctorOpen(state);
+  const title = ev?.name ? `监考 · ${ev.name}` : "监考";
+  const head = assignment
+    ? `按宁川中学校内考务安排，你今天在${assignment.room}值班。当天全日停课，不能上课、不能调课。${session ? sessionLabel(session) + "是白天考场时段。" : ""}${PROCTOR_SOURCE_NOTE}`
+    : `今天是校历上的考试日，全日停课。${PROCTOR_SOURCE_NOTE}`;
+  if (!open) {
+    return `<div class="paper visit-panel proctor-panel" data-proctor-panel="1">
+      <h3>${title}</h3>
+      <p class="muted">${head}</p>
+      <p class="muted">${proctorUnavailableReason(state)}</p>
+    </div>`;
+  }
+  const rows = proctorChoices(state).map((a) => `<button type="button" data-proctor="${a.id}">${a.label}</button>`).join("");
+  return `<div class="paper visit-panel proctor-panel" data-proctor-panel="1">
+      <h3>${title}</h3>
+      <p class="muted">${head}同一场不要反复刷，处理写入值班记录；若点到本班学生，会在档案近况记一句，但不改分数。</p>
+      <div class="row-actions">${rows || ""}</div>
+    </div>`;
+}
+
+function bindProctorActions(host) {
+  host.querySelectorAll("[data-proctor]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const r = doProctorAction(state, b.dataset.proctor);
+      toast(r.ok ? r.text : r.reason);
+      persist(); render();
+    };
+  });
+}
+
+function markingPanelHtml() {
+  if (!state) return "";
+  ensureProctorState(state);
+  const open = isMarkingOpen(state);
+  const pending = pendingGradeableExam(state);
+  const latest = latestPlayerExam(state);
+  if (!open) {
+    const why = markingUnavailableReason(state);
+    if (!pending && !latest && !isCalendarExamDay(state.date)) return "";
+    return `<div class="paper visit-panel marking-panel" data-marking-panel="1">
+      <h3>阅本班数学卷</h3>
+      <p class="muted">${why}</p>
+    </div>`;
+  }
+  const papers = markingPapers(state);
+  const rows = papers.map((p) => `<p><b>${p.name}</b>${p.seat ? "　" + p.seat : ""}　${p.note}</p>`).join("");
+  return `<div class="paper visit-panel marking-panel" data-marking-panel="1">
+      <h3>阅本班数学卷</h3>
+      <p class="muted">「${pending?.examName || "本场考试"}」已经出分。办公室坐班可以阅本班这几份数学卷，每天最多一轮，每场考试最多一轮。摘记只对照已经出的成绩方向，不改分数、排名或省控。市联考、省联考、会考和高考的卷子不在本校改。</p>
+      ${rows || `<p class="muted">眼下没有可看的本班试卷。</p>`}
+      ${papers.length ? `<div class="row-actions"><button type="button" class="accent" data-mark-papers="1">阅完这几份数学卷</button></div>` : ""}
+    </div>`;
+}
+
+function bindMarkingActions(host) {
+  host.querySelectorAll("[data-mark-papers]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const r = markClassPapers(state);
+      toast(r.ok ? r.text : r.reason);
+      persist(); render();
+    };
+  });
+}
+
 function officeLeaveLine() {
   const away = classAbsences(clsStudents(), state);
   if (!away.length) return "";
@@ -1520,6 +1601,7 @@ function officeCollabHtml() {
         <div class="row-actions">${watch.slice(0, 8).map((r)=>`<button type="button" data-home="${r.id}">通报${r.name}</button>`).join("")}</div>` : `<p class="muted">眼下没有特别要盯的缺交或订正。仍可和班主任对一下班情，或向${state.player.mentor}请教下一课。</p>`}
     </div>
     ${observePanelHtml()}
+    ${markingPanelHtml()}
     ${phoneVisitPanelHtml()}
     ${tiaokePanelHtml()}`;
 }
@@ -1534,6 +1616,8 @@ function bindOfficeActions(host) {
   bindVisitActions(host);
   bindHomeVisitActions(host);
   bindObserveActions(host);
+  bindProctorActions(host);
+  bindMarkingActions(host);
   host.querySelectorAll("[data-home]").forEach((b) => {
     b.onclick = (ev) => { ev.stopPropagation(); selectedId = b.dataset.home; const r = consultHomeroom(state, b.dataset.home); toast(r.ok ? r.text : r.reason); persist(); render(); };
   });
@@ -1695,9 +1779,13 @@ function viewTeach(host) {
     return rank(a) - rank(b) || (a.seq ?? 0) - (b.seq ?? 0);
   });
   const nxt = upcomingMath(state, { skipTaught: true });
+  const examBit = isCalendarExamDay(state.date)
+    ? `，今日${examEventOn(state.date)?.name || "考试"}全日停课，按宁川中学校内考务安排监考，不能上课、不能调课`
+    : (isOpenClassPeriod(state) ? "，本节是校内公开课，备课组长等组内老师来听，按平时规则上课即可" : slot?.isTutoring ? "，可以做晚自习答疑" : slot?.isMath ? "，可以进教室上课" : "。等到数学课再进教室，或先在办公室处理作业、在座位上谈话");
   host.innerHTML = `<h3>日常教学 · 数学课</h3>
-    <p class="notice">现在是${slot ? formatSlotLabel(slot) : formatDateCn(state.date)}${isOpenClassPeriod(state) ? "，本节是校内公开课，备课组长等组内老师来听，按平时规则上课即可" : slot?.isTutoring ? "，可以做晚自习答疑" : slot?.isMath ? "，可以进教室上课" : "。等到数学课再进教室，或先在办公室处理作业、在座位上谈话"}。${nxt && !slot?.isMath && !slot?.isTutoring ? `下一节数学：${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}。` : ""}先写教案，再上课；晚自习另做答疑，不另开课题。课后从缺交、错题跟到订正和复查。</p>
+    <p class="notice">现在是${slot ? formatSlotLabel(slot) : formatDateCn(state.date)}${examBit}。${!isCalendarExamDay(state.date) && nxt && !slot?.isMath && !slot?.isTutoring ? `下一节数学：${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}。` : ""}先写教案，再上课；晚自习另做答疑，不另开课题。课后从缺交、错题跟到订正和复查。</p>
     ${openClassPanelHtml()}
+    ${proctorPanelHtml()}
     <div class="kpi">
       <div><span>备课充分度</span><b>${state.player.prep || 0} / 3</b></div>
       <div><span>数学教学积累</span><b>${Number(state.player.mathTeaching || 0).toFixed(1)}</b></div>
@@ -2598,7 +2686,7 @@ function viewLog(host) {
   const calEvents = SCHOOL_CALENDAR.filter((e) => e.date >= state.date).concat(upcomingOpenClasses(state.date, 8)).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   const upcoming = calEvents.slice(0, 16);
   const cal = upcoming.map((e) => {
-    const tag = e.kind === "openClass" ? "（校内公开课）" : (e.kind === "activity" ? "（学校活动，校内安排）" : (e.kind === "parents" ? "（校内安排）" : ""));
+    const tag = e.kind === "openClass" ? "（校内公开课）" : (e.kind === "exam" ? "（校内考务安排）" : (e.kind === "activity" ? "（学校活动，校内安排）" : (e.kind === "parents" ? "（校内安排）" : "")));
     return `<div class="log-item"><b>${e.date}</b> ${e.name}${tag}</div>`;
   }).join("");
   host.innerHTML = `<h3>近期校历</h3>${cal || "<p class=\"muted\">暂无后续安排</p>"}
@@ -2667,7 +2755,8 @@ function renderAgenda() {
     <p class="notice">备课充分度 ${state.player.prep||0}　数学教学积累 ${Number(state.player.mathTeaching||0).toFixed(1)}</p>
     ${(() => { const req = pendingTimetableRequest(state); return req && req.status === "pending" ? `<p class="notice">有调课或借课请求：${req.peer}想${req.type === "borrow-out" ? "借走一节数学课" : "对调一节课"}。可在「日常教学」或「教务处」里处理。</p>` : ""; })()}
     <p class="notice">下一件大事：${next ? `${next.date} ${next.name}` : "（暂无）"}</p>
-    <p class="notice">${openClassLine()}</p>`;
+    <p class="notice">${openClassLine()}</p>
+    ${isCalendarExamDay(state.date) ? `<p class="notice">今日${examEventOn(state.date)?.name || "考试"}全日停课，按宁川中学校内考务安排监考。${PROCTOR_SOURCE_NOTE}</p>` : ""}`;
   const narrow = window.matchMedia("(max-width: 600px)").matches;
   lastNarrowAgenda = narrow;
   const schedBlock = narrow

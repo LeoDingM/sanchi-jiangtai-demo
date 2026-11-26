@@ -2,9 +2,9 @@
  * 校内一本/二本按该科类划线池约第 520、第 1100 名取分。
  * 高三池为应届与补习班同一池。应届省控上线人数仍只统应届，只作对照统计，不再当作校内划线名额。
  */
-import { FALLBACK_SCHOOL_QUOTA, SCHOOL_LINE_FIRST_RANK, SCHOOL_LINE_SECOND_RANK } from "./config.js?v=t57u1";
-import { provincialLines, officialProvincialPack } from "./jiangxi.js?v=t57u1";
-import { hash01 } from "./prng.js?v=t57u1";
+import { FALLBACK_SCHOOL_QUOTA, SCHOOL_LINE_FIRST_RANK, SCHOOL_LINE_SECOND_RANK } from "./config.js?v=t58u1";
+import { provincialLines, officialProvincialPack } from "./jiangxi.js?v=t58u1";
+import { hash01 } from "./prng.js?v=t58u1";
 
 function clampRank(want, n) {
   const cap = Math.max(1, n);

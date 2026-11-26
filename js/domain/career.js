@@ -1,7 +1,7 @@
 /**
  * 任职说明：实习与第一次升学后的转正。不另开骨干/班主任/校长晋升。
  */
-import { PLAYER_ROLE } from "./config.js?v=t57u1";
+import { PLAYER_ROLE } from "./config.js?v=t58u1";
 
 export const INTERN_ROLE = PLAYER_ROLE;
 export const OFFICIAL_ROLE = "中学数学教师";

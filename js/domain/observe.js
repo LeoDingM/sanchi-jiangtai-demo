@@ -3,14 +3,14 @@
  * 听课笔记和公开课评语用确定性 PRNG 从已有事实长出，不用 LLM，不改能力、分数或省控。
  * 这不是接任备课组长，也不是某所实校或教育局公告的公开课周。
  */
-import { pick, rngFrom } from "./prng.js?v=t57u1";
-import { addDays, cmpDate, occupiedEventDates, schoolYearOf, termOf, weekday, ymd, SCHOOL_CALENDAR } from "./calendar.js?v=t57u1";
+import { pick, rngFrom } from "./prng.js?v=t58u1";
+import { addDays, cmpDate, occupiedEventDates, schoolYearOf, termOf, weekday, ymd, SCHOOL_CALENDAR } from "./calendar.js?v=t58u1";
 import {
   activityEventOn, currentSlot, daySchedule, isEveningPeriodId, majorEventOn, MATH_SLOTS,
-} from "./timetable.js?v=t57u1";
-import { isOfficeSittingSlot } from "./homeVisit.js?v=t57u1";
-import { topicsForGrade } from "./teaching.js?v=t57u1";
-import { MENTOR_NAME } from "./config.js?v=t57u1";
+} from "./timetable.js?v=t58u1";
+import { isOfficeSittingSlot } from "./homeVisit.js?v=t58u1";
+import { topicsForGrade } from "./teaching.js?v=t58u1";
+import { MENTOR_NAME } from "./config.js?v=t58u1";
 
 export const OBSERVE_DAY_CAP = 1;
 export const OBSERVE_TERM_CAP = 8;
