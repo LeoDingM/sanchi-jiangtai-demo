@@ -8,7 +8,7 @@ import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js"
 import { runExam } from "./examService.js";
 import { admitCohort } from "./admission.js";
 import { rngFrom, clamp } from "./prng.js";
-import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands, homeroomEveningRoll as homeroomEveningRollCore, compileEveningRoll } from "./teaching.js";
+import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands, homeroomEveningRoll as homeroomEveningRollCore, compileEveningRoll, studentRecentStatus, rollCallStatusLine } from "./teaching.js";
 import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, upcomingTutoring, formatSlotLabel, isTutoringSlot } from "./timetable.js";
 
 export const SAVE_VERSION = 1;
@@ -91,6 +91,24 @@ export function getCohort(state, entryYear) {
 
 export function playerStudents(state) {
   return snapshotPlayerClass(state);
+}
+
+/** 0 尚未分班，1 第一次分班后，2 第二次分班后。只看玩家任教届。 */
+export function cohortPlacementStage(state) {
+  const year = state.player?.cohortYear;
+  const c = state.cohorts?.[year];
+  if (!c) return 0;
+  if (c.placed2 || state.flags?.[`place2-${year}`]) return 2;
+  if (c.trackSplit || c.placed1 || state.flags?.[`place1-${year}`]) return 1;
+  return 0;
+}
+
+/** 座位表提示。未分班时为空；分班后必含「这是分班后的新座次」。 */
+export function placementSeatNotice(state) {
+  const stage = cohortPlacementStage(state);
+  if (stage === 2) return "这是分班后的新座次。座号已按高一下学期第二次分班后的新编制重排。";
+  if (stage === 1) return "这是分班后的新座次。座号已按高一上学期第一次分班后的新编制重排。";
+  return "";
 }
 
 export function addLog(state, text, date = state.date) {
@@ -539,7 +557,7 @@ export function reviewHomework(state, studentId) {
   return r;
 }
 
-export { topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, daySchedule, currentSlot, formatSlotLabel, upcomingMath, upcomingTutoring, majorEventOn, pendingMajorEvent, isTutoringSlot, raisedHands, seatLabel, seatOf, compileEveningRoll };
+export { topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, daySchedule, currentSlot, formatSlotLabel, upcomingMath, upcomingTutoring, majorEventOn, pendingMajorEvent, isTutoringSlot, raisedHands, seatLabel, seatOf, compileEveningRoll, studentRecentStatus, rollCallStatusLine };
 
 function latestMathExam(state, studentId) {
   const reports = listExamReports(state, { entryYear: state.player.cohortYear });

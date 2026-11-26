@@ -6,6 +6,7 @@ import { seatLabel } from "../js/domain/school.js";
 import {
   createGame, prepareLesson, teach, talkTo, tutorEvening, reviewHomework,
   urgeHomework, playerStudents, periodTalkScene, advancePeriod, homeroomEveningRoll,
+  studentRecentStatus,
 } from "../js/domain/simulation.js";
 
 test("周一晚自习和周二答疑是辅导时段，不占用数学正课课题", () => {
@@ -130,6 +131,52 @@ test("晚自习巡视把名单交给班主任，点名按名单执行且可复�
     const again = homeroomEveningRoll(s);
     assert.equal(again.ok, false);
     return { patrol: patrol.text, roll: roll.text, n: patrol.roll.length };
+  }
+  const a = play();
+  const b = play();
+  assert.deepEqual(a, b);
+});
+
+test("点名结果写入学生档案近况，含事由和座位，且可复现", () => {
+  function play() {
+    const s = createGame(20170901);
+    prepareLesson(s, { topic: "集合与逻辑用语", depth: 2, homework: "中" });
+    teach(s, "精讲例题");
+    const miss = s.homework.rows.find((r) => r.correction === "待补交");
+    const weak = s.homework.rows.find((r) => r.quality === "错题较多" || r.quality === "未订正");
+    if (miss) urgeHomework(s, miss.id);
+    if (weak) reviewHomework(s, weak.id);
+    s.date = "2017-09-04";
+    s.periodId = "evening-1";
+    s.tutorSlotKey = null;
+    const patrol = tutorEvening(s, "巡视");
+    assert.equal(patrol.ok, true);
+    const roll = homeroomEveningRoll(s);
+    assert.equal(roll.ok, true);
+    const named = (s.eveningRoll.items || []).map((x) => x.id);
+    assert.ok(named.length > 0);
+    const sts = playerStudents(s);
+    const hit = sts.find((x) => x.id === named[0]);
+    assert.ok(hit.lastRollCall);
+    assert.equal(hit.lastRollCall.date, "2017-09-04");
+    assert.ok((hit.lastRollCall.reasons || []).length > 0);
+    assert.ok(hit.lastRollCall.text.includes("点到") || hit.lastRollCall.text.includes("点名"));
+    assert.ok(hit.lastRollCall.text.includes(hit.name));
+    const status = studentRecentStatus(hit, s);
+    assert.ok(status.includes("带班近况") || status.includes("晚自习点名"));
+    assert.ok(status.includes("2017-09-04"));
+    assert.ok(status.includes(hit.lastRollCall.reasons[0]) || status.includes(hit.lastRollCall.text));
+    const talk = (hit.talks || []).filter((t) => t.topic === "晚自习点名");
+    assert.ok(talk.length >= 1);
+    assert.equal(talk[0].text, hit.lastRollCall.text);
+    const missed = miss ? sts.find((x) => x.id === miss.id && named.includes(x.id)) : null;
+    return {
+      id: hit.id,
+      text: hit.lastRollCall.text,
+      reasons: hit.lastRollCall.reasons,
+      status,
+      missText: missed?.lastRollCall?.text || null,
+    };
   }
   const a = play();
   const b = play();

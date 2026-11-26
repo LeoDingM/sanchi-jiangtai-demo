@@ -189,7 +189,36 @@ export function studentTeachingContext(student, state) {
     hw,
     quiz: student.lastQuiz || null,
     flag: student.lastClassFlag || null,
+    roll: student.lastRollCall || null,
   };
+}
+
+export function rollCallStatusLine(roll) {
+  if (!roll) return "";
+  if (roll.text) return roll.text;
+  const why = (roll.reasons || []).join("、") || "在点名名单上";
+  const bits = [`${roll.date}晚自习点名：${why}`];
+  if (roll.late) bits.push("应到后进门");
+  if (roll.urged) bits.push("被催把缺交本子拿出来");
+  return bits.join("，") + "。";
+}
+
+/** 档案「带班近况」：座位、点名、课堂与作业，供界面和测试共用。 */
+export function studentRecentStatus(student, state, { placed = false } = {}) {
+  if (!student) return "";
+  const ctx = studentTeachingContext(student, state);
+  const seat = seatLabel(student) + (placed ? "（分班后的新座次）" : "");
+  const bits = [];
+  if (ctx?.roll) bits.push(rollCallStatusLine(ctx.roll));
+  if (ctx?.flag && ctx.topic) bits.push(`最近「${ctx.topic}」课堂上${ctx.flag}`);
+  else if (ctx?.flag) bits.push(`最近课堂上${ctx.flag}`);
+  if (ctx?.hw) {
+    const corr = ctx.hw.correction ? `，${ctx.hw.correction}` : "";
+    bits.push(ctx.hw.status === "缺交" || ctx.hw.correction === "待补交" ? "这趟作业缺交" : `作业${ctx.hw.quality}${ctx.hw.reviewed ? "（已面批）" : ""}${corr}`);
+  }
+  if (ctx?.quiz) bits.push(`随堂小测 ${ctx.quiz.score} 分`);
+  if (!bits.length) return `${seat}。还没有本班课堂或作业记录。`;
+  return `${seat}。带班近况：` + bits.join("；") + "。";
 }
 
 /** 上课：按教案和课型生成课堂纪要，并登记作业、微调班级状态与教学积累。 */
@@ -755,10 +784,31 @@ export function homeroomEveningRoll(state, students) {
   const lateIds = new Set(items.filter((x) => x.reasons.includes("还没回到座位")).map((x) => x.id));
   const missIds = new Set(items.filter((x) => x.reasons.includes("作业缺交")).map((x) => x.id));
   for (const s of list) {
-    if (!items.some((x) => x.id === s.id)) continue;
+    const item = items.find((x) => x.id === s.id);
+    if (!item) continue;
     s.homeroomWatch = true;
-    s.stress = clamp((s.stress || 40) + (lateIds.has(s.id) ? 1 : 0) - 1, 0, 95);
-    if (lateIds.has(s.id)) s.energy = clamp((s.energy || 70) + 3, 20, 98);
+    const late = lateIds.has(s.id);
+    const urged = missIds.has(s.id);
+    s.stress = clamp((s.stress || 40) + (late ? 1 : 0) - 1, 0, 95);
+    if (late) s.energy = clamp((s.energy || 70) + 3, 20, 98);
+    const reasons = item.reasons || [];
+    const why = reasons.join("、") || "在点名名单上";
+    const parts = [`${state.date}晚自习，班主任${home}点到${s.name}（${seatLabel(s)}）：${why}`];
+    if (late) parts.push("应到后从门口进教室");
+    if (urged) parts.push("被催把缺交的本子拿出来");
+    const rec = {
+      date: state.date,
+      periodId: state.periodId,
+      reasons,
+      late,
+      urged,
+      homeroom: home,
+      seat: seatLabel(s),
+      text: parts.join("，") + "。",
+    };
+    s.lastRollCall = rec;
+    s.rollCalls = [rec, ...(s.rollCalls || [])].slice(0, 8);
+    s.talks = [...(s.talks || []), { date: state.date, topic: "晚自习点名", text: rec.text, periodId: state.periodId, seat: rec.seat }];
   }
   for (const row of allHomeworkRows(state)) {
     if (missIds.has(row.id) && row.correction === "待补交") {

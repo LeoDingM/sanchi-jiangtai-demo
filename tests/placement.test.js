@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { generateCohort, seatFromSeq } from "../js/domain/school.js";
 import { firstPlacement, secondPlacement, rebuildClasses } from "../js/domain/placement.js";
+import { createGame, placementSeatNotice, cohortPlacementStage } from "../js/domain/simulation.js";
 import { runExam } from "../js/domain/examService.js";
 
 test("第一次分班：文理分科 + 梯队调整；0/1 不按普通淘汰踢出实验班", () => {
@@ -125,4 +126,24 @@ test("第一次和第二次分班后都按新座号重排座位，且可复现",
   }
   const c16b = sec.students.filter((s) => s.classNo === 16);
   assert.equal(c16b.length, 73);
+});
+
+test("分班后座位表提示是分班后的新座次，未分班时不提示", () => {
+  const g = createGame(20170901);
+  assert.equal(cohortPlacementStage(g), 0);
+  assert.equal(placementSeatNotice(g), "");
+  const c = g.cohorts[g.player.cohortYear];
+  c.placed1 = true;
+  c.trackSplit = true;
+  g.flags[`place1-${g.player.cohortYear}`] = true;
+  assert.equal(cohortPlacementStage(g), 1);
+  const n1 = placementSeatNotice(g);
+  assert.ok(n1.includes("这是分班后的新座次"));
+  assert.ok(n1.includes("第一次"));
+  c.placed2 = true;
+  g.flags[`place2-${g.player.cohortYear}`] = true;
+  assert.equal(cohortPlacementStage(g), 2);
+  const n2 = placementSeatNotice(g);
+  assert.ok(n2.includes("这是分班后的新座次"));
+  assert.ok(n2.includes("第二次"));
 });

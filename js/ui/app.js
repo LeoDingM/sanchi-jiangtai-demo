@@ -6,7 +6,7 @@ import {
   urgeHomework, checkCorrection, officeMarking, consultHomeroom, consultMentor,
   daySchedule, currentSlot, formatSlotLabel, upcomingMath, upcomingTutoring,
   tutorEvening, raisedHands, seatLabel, periodTalkScene, isTutoringSlot,
-  homeroomEveningRoll,
+  homeroomEveningRoll, placementSeatNotice, cohortPlacementStage, studentRecentStatus,
 } from "../domain/simulation.js";
 import { saveSlot, loadSlot, listSlots, toJSON, fromJSON } from "../domain/save.js";
 import { subjectById, SUBJECTS_G1 } from "../domain/config.js";
@@ -118,17 +118,7 @@ function clsStudents() { return playerStudents(state); }
 
 
 function teachingStatus(s) {
-  const ctx = studentTeachingContext(s, state);
-  if (!ctx || (!ctx.flag && !ctx.hw && !ctx.quiz)) return "还没有本班课堂或作业记录。";
-  const bits = [];
-  if (ctx.flag && ctx.topic) bits.push(`最近「${ctx.topic}」课堂上${ctx.flag}`);
-  else if (ctx.flag) bits.push(`最近课堂上${ctx.flag}`);
-  if (ctx.hw) {
-    const corr = ctx.hw.correction ? `，${ctx.hw.correction}` : "";
-    bits.push(ctx.hw.status === "缺交" || ctx.hw.correction === "待补交" ? "这趟作业缺交" : `作业${ctx.hw.quality}${ctx.hw.reviewed ? "（已面批）" : ""}${corr}`);
-  }
-  if (ctx.quiz) bits.push(`随堂小测 ${ctx.quiz.score} 分`);
-  return `${seatLabel(s)}。带班近况：` + bits.join("；") + "。";
+  return studentRecentStatus(s, state, { placed: cohortPlacementStage(state) > 0 });
 }
 
 
@@ -298,7 +288,9 @@ function viewClassroom(host) {
   else if (slot?.isExamDay) slotLine += "（今日停课）";
   else if (slot && !slot.isMath && slot.kind !== "break" && slot.id !== "rest") slotLine += "。这节不是数学课，谈话请到走廊门口简短说";
   if (nxtT && !slot?.isTutoring) slotLine += `。下一节可答疑：${nxtT.sameDay ? "" : nxtT.date + " "}${formatSlotLabel(nxtT.slot)}`;
+  const seatNote = placementSeatNotice(state);
   host.innerHTML = `<h3>教室座位表</h3>
+    ${seatNote ? `<p class="notice">${seatNote}</p>` : ""}
     <p class="notice">现在是${slotLine}。金圈是举手，红点是作业还要盯，颜色偏暗的是走神或精力不足。点击座位按当前课时处理，不必先跳到档案。任教班为卓行16班，约 73 人。</p>
     <div class="classroom-layout">
       <canvas id="classroom"></canvas>
@@ -312,7 +304,9 @@ function viewClassroom(host) {
 
 function viewRoster(host) {
   const sts = clsStudents().slice().sort((a, b) => a.seq - b.seq);
+  const seatNote = placementSeatNotice(state);
   host.innerHTML = `<h3>学生名册 · ${sts.length}人</h3>
+    ${seatNote ? `<p class="notice">${seatNote} 下表座号为当前编制。</p>` : ""}
     <table><thead><tr><th>座号</th><th>姓名</th><th>性别</th><th>性格</th><th>家庭</th><th>文理意向</th><th>师生关系</th></tr></thead>
     <tbody>${sts.map((s) => `<tr data-id="${s.id}" class="${s.id===selectedId?"me":""}"><td>${s.seq}</td><td>${s.name}</td><td>${s.gender==="F"?"女":"男"}</td><td>${s.personality}</td><td>${s.family.type}</td><td>${s.trackPref==="wen"?"文":"理"}</td><td>${s.relation||0}</td></tr>`).join("")}</tbody></table>`;
   host.querySelectorAll("tr[data-id]").forEach((tr) => tr.onclick = () => { selectedId = tr.dataset.id; view = "profile"; render(); });
@@ -397,6 +391,7 @@ function viewProfile(host) {
         <p><b>文理意向</b> ${trackLabel}　<b>专业倾向</b> ${s.majorPref||"—"}</p>
         <p><b>心情</b> ${s.mood ?? "—"}　<b>压力</b> ${s.stress ?? "—"}　<b>精力</b> ${s.energy ?? "—"}　<b>师生关系</b> ${s.relation||0}</p>
         <p class="muted">${teachingStatus(s)}</p>
+        ${(s.rollCalls || []).length ? `<p><b>晚自习点名记录</b></p>${(s.rollCalls||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : ""}
         <p class="muted">学科能力（潜能为个人上限，不是当场分数）</p>
         <p>${ab || "—"}</p>
       </div>
@@ -784,6 +779,7 @@ function viewPlacement(host) {
       <div><span>第二次分班（同层均衡）</span><b>${p2done ? "已完成" : "未到或未做"}</b></div>
       <div><span>任教班</span><b>${state.player.cohortYear}级卓行${state.player.classNo}班 · ${mine.length}人</b></div>
     </div>
+    ${p1done ? `<p class="notice">${placementSeatNotice(state) || "这是分班后的新座次。"}教室座位表已按新座号排列。</p>` : ""}
     <div class="paper">
       <h3>当前编制（${p1done ? "已分科" : "分科前"}）</h3>
       <table><thead><tr><th>科类</th><th>层次</th><th>人数</th><th>班级</th></tr></thead>
