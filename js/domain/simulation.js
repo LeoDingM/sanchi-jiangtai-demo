@@ -1,24 +1,25 @@
 /** 游戏状态机：上课/考试/分班/高考录取/毕业升学与自动跳阶段。 */
 import {
   PLAYER_CLASS_NO, PLAYER_DEFAULT_NAME, PLAYER_ROLE, START_DATE, GRADE_YEAR, HOMEROOM_NAME, MENTOR_NAME,
-} from "./config.js?v=t51u1";
-import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById, examParams, formatGradeTerm, formatCohortGrade, termOf } from "./calendar.js?v=t51u1";
-import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf, eraQuality, placeGraduatingRepeaters, applyRepeaterSeating } from "./school.js?v=t51u1";
-import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js?v=t51u1";
-import { runExam } from "./examService.js?v=t51u1";
-import { provincialPassCounts, schoolQuotaFromPrior, fallbackSchoolQuota, examResultLogText } from "./schoolLines.js?v=t51u1";
-import { admitCohort } from "./admission.js?v=t51u1";
-import { rngFrom, clamp } from "./prng.js?v=t51u1";
-import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands, homeroomEveningRoll as homeroomEveningRollCore, compileEveningRoll, studentRecentStatus, rollCallStatusLine, classLatecomers, wrongClassroomThisPeriod } from "./teaching.js?v=t51u1";
-import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, upcomingTutoring, formatSlotLabel, isTutoringSlot, weekMathCount, weekSchedule, weekStart } from "./timetable.js?v=t51u1";
-import { swapPeriods as swapPeriodsCore, borrowIn as borrowInCore, borrowOut as borrowOutCore, respondTimetableRequest as respondTimetableRequestCore, ensureIncomingRequest, pendingTimetableRequest, weekBorrowCounts, weekTiaokeSummary, canAlterSlot, shortSlotLabel, teacherOf, ensureTiaokeState } from "./tiaoke.js?v=t51u1";
-import { openParentsMeeting as openParentsMeetingCore, meetParent as meetParentCore, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE } from "./parents.js?v=t51u1";
-import { openSchoolActivity as openSchoolActivityCore, doActivityAction as doActivityActionCore, isSchoolActivityOpen, upcomingSchoolActivity, ACTIVITY_SOURCE_NOTE, playerStageLine } from "./activities.js?v=t51u1";
-import { classCommittee, dutyStudents, weekDuty, classBrief, isHomeroomMeetingSlot, attendClassMeeting as attendClassMeetingCore, hostClassMeeting as hostClassMeetingCore, committeeTitleOf, upcomingClassMeeting, formatStudentShort, DUTY_PER_DAY, COMMITTEE_ROLES } from "./classManage.js?v=t51u1";
-import { ensureStatePeers, ensureCohortPeers, classPeersOf } from "./peers.js?v=t51u1";
-import { syncStateHealth, classAbsences, isAwayFromClass, absenceLogLine } from "./health.js?v=t51u1";
-import { OFFICIAL_ROLE, OFFICIAL_LOG_TEXT } from "./career.js?v=t51u1";
-import { talkMathRoomBit, hasLargeRoom } from "./potential.js?v=t51u1";
+} from "./config.js?v=t52u1";
+import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById, examParams, formatGradeTerm, formatCohortGrade, termOf } from "./calendar.js?v=t52u1";
+import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf, eraQuality, placeGraduatingRepeaters, applyRepeaterSeating } from "./school.js?v=t52u1";
+import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js?v=t52u1";
+import { runExam } from "./examService.js?v=t52u1";
+import { provincialPassCounts, schoolQuotaFromPrior, fallbackSchoolQuota, examResultLogText } from "./schoolLines.js?v=t52u1";
+import { admitCohort, packLastAdmission } from "./admission.js?v=t52u1";
+import { packLastGaokao } from "./scores.js?v=t52u1";
+import { rngFrom, clamp } from "./prng.js?v=t52u1";
+import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands, homeroomEveningRoll as homeroomEveningRollCore, compileEveningRoll, studentRecentStatus, rollCallStatusLine, classLatecomers, wrongClassroomThisPeriod } from "./teaching.js?v=t52u1";
+import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, upcomingTutoring, formatSlotLabel, isTutoringSlot, weekMathCount, weekSchedule, weekStart } from "./timetable.js?v=t52u1";
+import { swapPeriods as swapPeriodsCore, borrowIn as borrowInCore, borrowOut as borrowOutCore, respondTimetableRequest as respondTimetableRequestCore, ensureIncomingRequest, pendingTimetableRequest, weekBorrowCounts, weekTiaokeSummary, canAlterSlot, shortSlotLabel, teacherOf, ensureTiaokeState } from "./tiaoke.js?v=t52u1";
+import { openParentsMeeting as openParentsMeetingCore, meetParent as meetParentCore, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE } from "./parents.js?v=t52u1";
+import { openSchoolActivity as openSchoolActivityCore, doActivityAction as doActivityActionCore, isSchoolActivityOpen, upcomingSchoolActivity, ACTIVITY_SOURCE_NOTE, playerStageLine } from "./activities.js?v=t52u1";
+import { classCommittee, dutyStudents, weekDuty, classBrief, isHomeroomMeetingSlot, attendClassMeeting as attendClassMeetingCore, hostClassMeeting as hostClassMeetingCore, committeeTitleOf, upcomingClassMeeting, formatStudentShort, DUTY_PER_DAY, COMMITTEE_ROLES } from "./classManage.js?v=t52u1";
+import { ensureStatePeers, ensureCohortPeers, classPeersOf } from "./peers.js?v=t52u1";
+import { syncStateHealth, classAbsences, isAwayFromClass, absenceLogLine } from "./health.js?v=t52u1";
+import { OFFICIAL_ROLE, OFFICIAL_LOG_TEXT } from "./career.js?v=t52u1";
+import { talkMathRoomBit, hasLargeRoom } from "./potential.js?v=t52u1";
 
 export const SAVE_VERSION = 1;
 
@@ -151,7 +152,7 @@ function assembleNewGameState(seed, playerName, cohorts) {
   };
   const prior = simulatePriorGaokaoStats(seed, GRADE_YEAR - 3, GRADE_YEAR);
   state.schoolLineHistory = [prior];
-  addLog(state, `校内划线按上一届高考本校省控实际上线人数滚动。开局已结算${prior.entryYear}级${prior.gaokaoYear}年高考应届上线：理科一本${prior.li.firstN}人、二本累计${prior.li.secondN}人；文科一本${prior.wen.firstN}人、二本累计${prior.wen.secondN}人。该届只保留统计，不进入可玩年级。高三校内线按应届与补习班同一池划（理科二本取前1000名）。无上一届数据时才用约理科一本460、文科一本60/二本250的兜底，不是官方精确名额。`, date);
+  addLog(state, `校内一本、二本按该科类划线池约第 520、第 1100 名取分（高三应届与补习班同一池；池人数不足时按池内规模收束，不伪造人数）。开局已结算${prior.entryYear}级${prior.gaokaoYear}年高考应届省控上线：理科一本${prior.li.firstN}人、二本累计${prior.li.secondN}人；文科一本${prior.wen.firstN}人、二本累计${prior.wen.secondN}人。该届只保留统计，不进入可玩年级，也不再作为校内划线名额。`, date);
   ensureStatePeers(state);
   syncStateHealth(state);
   return state;
@@ -415,6 +416,7 @@ export function doPromote(state, ev) {
   const c = state.cohorts[graduatedCohort];
   if (c && adm) {
     const byId = Object.fromEntries(adm.results.map((r) => [r.studentId, r]));
+    const gk = listExamReports(state, { entryYear: graduatedCohort }).find((r) => r.examKind === "gaokao");
     const staying = [];
     for (const s of c.students) {
       const a = byId[s.id];
@@ -423,14 +425,13 @@ export function doPromote(state, ev) {
           ...s,
           repeat: true,
           originClassNo: s.classNo,
-          lastGaokao: {
-            total: a.total,
+          lastGaokao: packLastGaokao((gk && gk.scoreMap && gk.scoreMap[s.id]) || a, {
             year: a.year,
             track: a.track,
-            math: a.math ?? 0,
-            chinese: a.chinese ?? 0,
             firstLine: a.firstLine ?? null,
-          },
+            secondLine: a.secondLine ?? null,
+          }),
+          lastAdmission: packLastAdmission(a, { abandoned: true }),
           // 复读一年能力微增，但压力上升
           ability: Object.fromEntries(Object.entries(s.ability).map(([k, v]) => [k, clamp(v + 1.6, 0, 99)])),
           stress: clamp((s.stress || 40) + 8, 0, 95),

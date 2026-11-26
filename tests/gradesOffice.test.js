@@ -206,5 +206,6 @@ test("教务处和校内线说明不再写不含补习班或只在应届池", ()
   for (const url of files) {
     const src = readFileSync(url, "utf8");
     assert.doesNotMatch(src, /不含复读|尚无补习班|只在应届池/);
+    assert.doesNotMatch(src, /约 460|前 1000 名|前1000名/);
   }
 });

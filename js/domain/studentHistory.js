@@ -1,7 +1,7 @@
 /** 从各次真实考试成绩汇总一名学生的分数与排名轨迹。不另造统计。 */
-import { TIER } from "./config.js?v=t51u1";
-import { listExamReports } from "./simulation.js?v=t51u1";
-import { subjectsFor } from "./scores.js?v=t51u1";
+import { TIER } from "./config.js?v=t52u1";
+import { listExamReports } from "./simulation.js?v=t52u1";
+import { subjectsFor, usesComprehensive, comprehensiveMeta, comprehensiveScore } from "./scores.js?v=t52u1";
 
 export const TIER_ORDER = ["yunxiu_exp", "yunxiu_key", "lingxiao", "zhuoxing", "duxue", "yiti", "fuzhuo"];
 
@@ -188,7 +188,43 @@ export function buildStudentExamSnapshot(studentId, report) {
     };
   }
   const maxTotal = me.maxTotal || (report.scale === "g1-950" ? 950 : 750);
-  const subjectIds = (me.subjects || []).filter((id) => subjects[id]);
+  let subjectIds = (me.subjects || []).filter((id) => subjects[id]);
+  if (usesComprehensive(report.scale || report.grade) && me.track && me.track !== "mixed") {
+    const meta = comprehensiveMeta(me.track === "wen" ? "wen" : "li");
+    const score = comprehensiveScore(me, me.track === "wen" ? "wen" : "li");
+    if (score != null) {
+      const partIds = meta.parts.map((p) => p.id);
+      const packCompRank = (keyRows) => packRank(score, keyRows.map((r) => ({
+        ...r,
+        [meta.id]: comprehensiveScore(r, me.track === "wen" ? "wen" : "li"),
+      })), studentId, meta.id, report);
+      const c = packCompRank(classRows);
+      const ti = packCompRank(tierRows);
+      const sch = packCompRank(schoolRows);
+      const gradeS = packCompRank(gradeRows);
+      const subCross = {};
+      for (const tid of TIER_ORDER) {
+        const prow = cachedPool(report, { tier: tid, track: me.track });
+        if (!prow.length && tid !== me.tier) continue;
+        subCross[tid] = { tier: tid, name: tierName(tid), ...packCompRank(prow) };
+      }
+      subjects[meta.id] = {
+        score,
+        max: meta.max,
+        classRank: c.rank,
+        tierRank: ti.rank,
+        schoolRank: sch.rank,
+        class: c,
+        tier: ti,
+        school: sch,
+        grade: gradeS,
+        cross: subCross,
+        parts: Object.fromEntries(partIds.filter((id) => me[id] != null).map((id) => [id, me[id]])),
+      };
+      const core = ["chinese", "math", "english"].filter((id) => subjects[id]);
+      subjectIds = [...core, meta.id];
+    }
+  }
   return {
     date: report.date,
     examId: report.examId,

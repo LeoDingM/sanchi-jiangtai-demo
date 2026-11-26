@@ -3,11 +3,11 @@
  * 玩家是数学实习教师，协助班主任，不能主持班会，也不能撤换班委。
  * 只为玩家任教班做完整生成，不为全校每班另开一套。
  */
-import { HOMEROOM_NAME } from "./config.js?v=t51u1";
-import { hash01 } from "./prng.js?v=t51u1";
-import { addDays, formatDateCn, parseYmd, weekday, weekdayName } from "./calendar.js?v=t51u1";
-import { currentSlot, daySchedule, weekDates, weekStart } from "./timetable.js?v=t51u1";
-import { homeworkWatchlist } from "./teaching.js?v=t51u1";
+import { HOMEROOM_NAME } from "./config.js?v=t52u1";
+import { hash01 } from "./prng.js?v=t52u1";
+import { addDays, formatDateCn, parseYmd, weekday, weekdayName } from "./calendar.js?v=t52u1";
+import { currentSlot, daySchedule, weekDates, weekStart } from "./timetable.js?v=t52u1";
+import { homeworkWatchlist } from "./teaching.js?v=t52u1";
 
 export const COMMITTEE_ROLES = [
   { id: "study", title: "学习委员" },

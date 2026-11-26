@@ -3,13 +3,13 @@ import {
   CLASS_BLUEPRINT, TIER, SUBJECT_IDS, PERSONALITIES, FAMILY_TYPES,
   PLAYER_CLASS_NO, GRADE_YEAR, LI_SUBJECTS, WEN_SUBJECTS,
   REPEAT_CLASS_SIZE, REPEAT_WEN_NOS, REPEAT_LI_NOS, INSERT_REPEAT_CLASS_NOS,
-} from "./config.js?v=t51u1";
-import { clamp, gauss, hash01, pick, rngFrom, shuffle } from "./prng.js?v=t51u1";
-import { generateName } from "./names.js?v=t51u1";
-import { gradeStudent, scaleOf } from "./scores.js?v=t51u1";
-import { provincialLines } from "./jiangxi.js?v=t51u1";
-import { canInsertRepeat } from "./admission.js?v=t51u1";
-import { examParams } from "./calendar.js?v=t51u1";
+} from "./config.js?v=t52u1";
+import { clamp, gauss, hash01, pick, rngFrom, shuffle } from "./prng.js?v=t52u1";
+import { generateName } from "./names.js?v=t52u1";
+import { gradeStudent, scaleOf, packLastGaokao } from "./scores.js?v=t52u1";
+import { provincialLines } from "./jiangxi.js?v=t52u1";
+import { admitStudent, canInsertRepeat, packLastAdmission } from "./admission.js?v=t52u1";
+import { examParams } from "./calendar.js?v=t52u1";
 
 export const ALL_SUBJECTS = [...SUBJECT_IDS, "biology"];
 
@@ -217,7 +217,7 @@ function lastGaokaoExam(year) {
   return { ...ev, difficulty: params.difficulty, dispersion: params.dispersion };
 }
 
-/** 为开局合成的复读生补上上次高考总分；必要时压到省控一本以下，表示发挥失常。 */
+/** 为开局合成的复读生补上上次高考各科分数；必要时压到省控一本以下，表示发挥失常。 */
 export function synthesizeLastGaokao(student, gaokaoYear, { forceMissFirst = false, rng = null } = {}) {
   const track = student.track === "wen" ? "wen" : "li";
   const lines = provincialLines(gaokaoYear, track) || provincialLines(2020, track);
@@ -227,14 +227,19 @@ export function synthesizeLastGaokao(student, gaokaoYear, { forceMissFirst = fal
     const gap = rng ? 1 + Math.floor(rng() * 22) : 8;
     total = lines.first - gap;
   }
-  return {
-    total,
+  return packLastGaokao({ ...sc, total }, {
     year: gaokaoYear,
     track,
-    math: sc.math ?? 0,
-    chinese: sc.chinese ?? 0,
     firstLine: lines?.first ?? null,
-  };
+    secondLine: lines?.second ?? null,
+  });
+}
+
+export function attachSynthesizedLastAdmission(student, lastGaokao, { abandoned = true } = {}) {
+  if (!student || !lastGaokao) return student;
+  const adm = admitStudent(student, lastGaokao.total, lastGaokao.year);
+  student.lastAdmission = packLastAdmission(adm, { abandoned });
+  return student;
 }
 
 function rollInsertCount(rng, n, rate, cap) {
@@ -666,7 +671,10 @@ export function generateRepeaters(forSeniorEntryYear, seed, usedNames, quality =
     }
   }
   plantTutoringProfile(students, rng);
-  for (const st of students) st.lastGaokao = synthesizeLastGaokao(st, gaokaoYear);
+  for (const st of students) {
+    st.lastGaokao = synthesizeLastGaokao(st, gaokaoYear);
+    attachSynthesizedLastAdmission(st, st.lastGaokao, { abandoned: true });
+  }
   const assigned = assignTutoringClasses(students, [seed, "repeat-assign", forSeniorEntryYear].join("|"));
 
   const insertRng = rngFrom(seed, "repeat-inserts", forSeniorEntryYear);
@@ -686,6 +694,7 @@ export function generateRepeaters(forSeniorEntryYear, seed, usedNames, quality =
       st.originTier = p.tier;
       st.insertedRepeat = true;
       st.lastGaokao = synthesizeLastGaokao(st, gaokaoYear, { forceMissFirst: true, rng: insertRng });
+      attachSynthesizedLastAdmission(st, st.lastGaokao, { abandoned: true });
       inserts.push(st);
     }
   }

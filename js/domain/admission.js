@@ -1,7 +1,7 @@
 /** 按江西公开投档线/位次将高考分数对应到真实大学，文理、年份、批次分开。 */
-import { provincialLines, provincialRank, universities, uniTier, QINGBEI } from "./jiangxi.js?v=t51u1";
-import { INSERT_REPEAT_CLASS_NOS } from "./config.js?v=t51u1";
-import { hash01 } from "./prng.js?v=t51u1";
+import { provincialLines, provincialRank, universities, uniTier, QINGBEI } from "./jiangxi.js?v=t52u1";
+import { INSERT_REPEAT_CLASS_NOS } from "./config.js?v=t52u1";
+import { hash01 } from "./prng.js?v=t52u1";
 
 /** 校内规则示意：不是官方征集志愿名单，也不计入省控一本上线人数。 */
 export const SUPPLEMENT_SOURCE = "校内规则示意：离一本省控线很近的二本可能被弱一本院校的冷门专业征集，不是官方征集志愿名单，也不计入省控一本上线人数。";
@@ -261,4 +261,37 @@ export function admitCohort(students, scoreMap, year) {
   }
   results.sort((a, b) => b.total - a.total);
   return results;
+}
+
+export function hasAdmissionOffer(admission) {
+  if (!admission) return false;
+  const name = admission.university || admission.dest || "";
+  if (!name) return false;
+  if (/未录取|未达专科/.test(name)) return false;
+  return true;
+}
+
+/** 补习班档案用的录取院校：放弃录取或未考上为「无」；旧存档缺字段为「暂缺」。 */
+export function formatLastAdmissionLabel(lastAdmission) {
+  if (lastAdmission == null) return "暂缺";
+  if (lastAdmission.abandoned || lastAdmission.repeatIntent || lastAdmission.noOffer) return "无";
+  if (!hasAdmissionOffer(lastAdmission)) return "无";
+  return lastAdmission.university || lastAdmission.dest;
+}
+
+export function packLastAdmission(admission, { abandoned = false } = {}) {
+  if (!admission) return null;
+  const noOffer = !hasAdmissionOffer(admission);
+  return {
+    university: admission.university || "",
+    major: admission.major || "",
+    batch: admission.batch || "",
+    total: admission.total,
+    year: admission.year,
+    track: admission.track,
+    supplement: !!admission.supplement,
+    abandoned: !noOffer && !!(abandoned || admission.repeatIntent),
+    noOffer,
+    repeatIntent: !!admission.repeatIntent,
+  };
 }

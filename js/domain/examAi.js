@@ -2,14 +2,15 @@
  * 考后 AI 分析：只根据已算好的成绩和排名写评语，不改分、不改排名、不上线人数。
  * API 密钥只放在独立的 localStorage 项里，与游戏存档 JSON 分开。
  */
-import { subjectById, TIER } from "./config.js?v=t51u1";
-import { subjectRanks } from "./scores.js?v=t51u1";
+import { subjectById, TIER } from "./config.js?v=t52u1";
+import { usesComprehensive, comprehensiveMeta, comprehensiveScore } from "./scores.js?v=t52u1";
+import { subjectRanks } from "./scores.js?v=t52u1";
 import {
   describeSchoolCutoff, describeClassProvincial, describeSchoolProvincial,
   describeZhuoxingPeers, classProvincialCounts, scaledTotal750, provincialCompareYear,
-} from "./schoolLines.js?v=t51u1";
-import { provincialLines } from "./jiangxi.js?v=t51u1";
-import { buildStudentExamSnapshot, strongerTiers, tierName } from "./studentHistory.js?v=t51u1";
+} from "./schoolLines.js?v=t52u1";
+import { provincialLines } from "./jiangxi.js?v=t52u1";
+import { buildStudentExamSnapshot, strongerTiers, tierName } from "./studentHistory.js?v=t52u1";
 
 export const AI_SETTINGS_KEY = "sanchi-jiangtai-ai-settings-v1";
 export const AI_KEY_KEY = "sanchi-jiangtai-ai-key-v1";
@@ -612,7 +613,18 @@ export function buildExamAnalysisPayload(report, { player, classNo, previousRepo
     fact.排名分布 = rankBuckets(mine).map((b) => ({ 分段: b.label, 人数: b.n }));
     fact.各科均分 = {};
     fact.各科排名概要 = {};
-    const ids = [...new Set(mine.flatMap((r) => r.subjects || []))];
+    let ids = [...new Set(mine.flatMap((r) => r.subjects || []))];
+    const gradeOrScale = report.grade ?? report.scale;
+    if (usesComprehensive(gradeOrScale)) {
+      const track = mine[0]?.track === "wen" ? "wen" : "li";
+      const meta = comprehensiveMeta(track);
+      const hidden = new Set(meta.parts.map((p) => p.id));
+      ids = ids.filter((id) => !hidden.has(id));
+      if (!ids.includes(meta.id)) ids.push(meta.id);
+      for (const r of [...mine, ...schoolRows, ...tierRows]) {
+        if (r[meta.id] == null) r[meta.id] = comprehensiveScore(r, track);
+      }
+    }
     for (const id of ids) {
       const classAvg = avg(mine.map((r) => r[id]).filter((n) => typeof n === "number"));
       const schoolAvg = avg(schoolRows.map((r) => r[id]).filter((n) => typeof n === "number"));

@@ -211,9 +211,8 @@ export function drawScoreChart(canvas, history, subjectIds, subjectNames) {
         if (!s) return null;
         // 单科也用得分率，跨学段满分不同时仍可对比
         const maxGuess = sid === "chinese" || sid === "math" || sid === "english" ? 150
-          : sid === "physics" && h.grade >= 3 ? 110
-          : sid === "biology" && h.grade >= 3 ? 90
-          : 100;
+          : sid === "lizong" || sid === "wenzong" ? 300
+          : (s.max || 100);
         return Math.round((s.score / maxGuess) * 1000) / 10;
       }),
     });

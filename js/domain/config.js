@@ -28,21 +28,24 @@ export const G1_TOTAL = 950;
 export const BIOLOGY_STARTS = "高二";
 
 /** 高三传统高考（规则备查，MVP 不考）。 */
-export const GAOKAO_LI = { chinese: 150, math: 150, english: 150, physics: 110, chemistry: 100, biology: 90, total: 750 };
+export const GAOKAO_LI = { chinese: 150, math: 150, english: 150, physics: 100, chemistry: 100, biology: 100, total: 750 };
 export const GAOKAO_WEN = { chinese: 150, math: 150, english: 150, politics: 100, history: 100, geography: 100, total: 750 };
 
-/** 旧校内名额常量，仅作文档对照。现行校内一本按上一届高考省控实际人数，不再用 400 分摊。 */
+/** 旧全校 400/1000 分摊名额，仅作文档对照，不再用于校内划线。 */
 export const CUTOFF_FIRST_RANK = 400;
 export const CUTOFF_SECOND_RANK = 1000;
 
+/** 现行校内一本/二本目标名次：该科类划线池约第 520、第 1100 名（允许小幅波动）。 */
+export const SCHOOL_LINE_FIRST_RANK = 520;
+export const SCHOOL_LINE_SECOND_RANK = 1100;
+
 /**
- * 无上一届高考数据时的校内名额近似兜底，不是官方精确名额。
- * 理科一本约 460、二本取前 1000；文科一本约 40–90 取 60，二本累计约 200–300 取 250。
+ * 应届省控上线人数在无上一届数据时的近似量级，只作历史统计兜底，不再作为校内划线名额。
  */
 export const FALLBACK_SCHOOL_QUOTA = {
-  li: { firstN: 460, secondN: 1000 },
-  wen: { firstN: 60, secondN: 250 },
-  mixed: { firstN: 520, secondN: 1000 },
+  li: { firstN: 520, secondN: 1100 },
+  wen: { firstN: 520, secondN: 1100 },
+  mixed: { firstN: 520, secondN: 1100 },
 };
 
 /** 高三补习班：文科 31–36、理科 37–42，每班 70 人。只在 withRepeat 的高三届生成，不要在高一高二出现。 */
@@ -219,5 +222,8 @@ export function examByDate(date) {
 }
 
 export function subjectById(id) {
+  if (id === "lizong") return { id: "lizong", name: "理综", max: 300 };
+  if (id === "wenzong") return { id: "wenzong", name: "文综", max: 300 };
+  if (id === "biology") return { id: "biology", name: "生物", max: 100 };
   return SUBJECTS_G1.find((s) => s.id === id);
 }

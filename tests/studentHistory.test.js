@@ -80,6 +80,13 @@ test("高考录取后一键可进入下一届，不会停在录取日", () => {
   assert.ok(playerStudents(g).length >= 60);
   assert.ok((g.alumni || []).length > 100);
   assert.ok(Object.values(g.cohorts).some((c) => c.students.some((s) => s.repeat || s.tier === "fuzhuo")));
+  const newRepeats = Object.values(g.cohorts).flatMap((c) => c.students || []).filter((s) => s.repeat && s.entryYear === 2017);
+  assert.ok(newRepeats.length >= 1, "应有刚结束高考后进入补习班的原应届生");
+  for (const s of newRepeats) {
+    assert.ok(s.lastGaokao && Number.isFinite(s.lastGaokao.total));
+    assert.ok(s.lastAdmission, "应届进补习班须带上录取结果（含放弃录取）");
+    assert.equal(s.lastAdmission.abandoned || s.lastAdmission.noOffer, true);
+  }
 });
 
 test("同场快照对全班多次计算时，班排校排与 rankInPool 完全一致", () => {
@@ -103,4 +110,26 @@ test("同场快照对全班多次计算时，班排校排与 rankInPool 完全�
       assert.equal(snap.cross.yunxiu_exp.n, ins.n);
     }
   }
+});
+
+test("高三档案快照用理综列，高一不出现理综科目", () => {
+  const g1 = generateCohort(2017, 20170901);
+  const r1 = runExam(g1, { id: "m1", name: "第一次月考", examKind: "monthly", difficulty: 1, dispersion: 1, date: "2017-10-16" }, { grade: 1, split: false });
+  const s1 = r1.rows.find((r) => r.classNo === 16);
+  const snap1 = buildStudentExamSnapshot(s1.studentId, r1);
+  assert.ok(!snap1.subjectIds.includes("lizong"));
+  assert.ok(!snap1.subjects.lizong);
+  assert.ok(snap1.subjectIds.includes("physics"));
+
+  const g3 = generateCohort(2015, 20170901, { alreadySplit: true, withRepeat: true });
+  const r3 = runExam(g3, { id: "gk", name: "高考", examKind: "gaokao", difficulty: 1.003, dispersion: 1, date: "2018-06-07" }, { grade: 3, split: true });
+  const li = r3.rows.find((r) => r.track === "li" && r.classNo === 16);
+  const snap3 = buildStudentExamSnapshot(li.studentId, r3);
+  assert.ok(snap3.subjectIds.includes("lizong"));
+  assert.ok(!snap3.subjectIds.includes("physics"));
+  assert.equal(snap3.subjects.lizong.score, (li.physics ?? 0) + (li.chemistry ?? 0) + (li.biology ?? 0));
+  const wen = r3.rows.find((r) => r.track === "wen");
+  const snapW = buildStudentExamSnapshot(wen.studentId, r3);
+  assert.ok(snapW.subjectIds.includes("wenzong"));
+  assert.equal(snapW.subjects.wenzong.score, (wen.politics ?? 0) + (wen.history ?? 0) + (wen.geography ?? 0));
 });

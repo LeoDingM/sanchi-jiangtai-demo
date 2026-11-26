@@ -6,8 +6,7 @@ import { runExam } from "../js/domain/examService.js";
 import {
   admitCohort, admitStudent, willRepeat, missedProvincialFirst, canInsertRepeat,
   supplementProbability, COLD_MAJORS, SUPPLEMENT_SOURCE, formatAdmissionBatch, formatAdmissionDest,
-  supplementUniversityPool,
-} from "../js/domain/admission.js";
+  supplementUniversityPool, formatLastAdmissionLabel, packLastAdmission } from "../js/domain/admission.js";
 import { provincialLines, universities, uniTier, UNI_985, UNI_211 } from "../js/domain/jiangxi.js";
 
 function stub(id, extra = {}) {
@@ -221,4 +220,18 @@ test("已补录上一本时多数就读，未达省控一本仍算 missedProvinc
   assert.ok(ambitiousSuppN >= 10, `应有足够的好强补录样本，实际 ${ambitiousSuppN}`);
   const rate = ambitiousSuppRepeat / ambitiousSuppN;
   assert.ok(rate <= 0.25, `补录后好强复读率应明显降低，实际 ${ambitiousSuppRepeat}/${ambitiousSuppN}`);
+});
+
+test("补习档案录取院校：有院校则写出名称，放弃或未考上为无，旧存档缺字段为暂缺", () => {
+  assert.equal(formatLastAdmissionLabel(null), "暂缺");
+  assert.equal(formatLastAdmissionLabel(undefined), "暂缺");
+  assert.equal(formatLastAdmissionLabel({ university: "未录取", noOffer: true }), "无");
+  assert.equal(formatLastAdmissionLabel({ university: "某省属大学", abandoned: true }), "无");
+  assert.equal(formatLastAdmissionLabel({ university: "某省属大学", repeatIntent: true }), "无");
+  assert.equal(formatLastAdmissionLabel({ university: "某省属大学", abandoned: false, noOffer: false }), "某省属大学");
+  const packed = packLastAdmission({
+    university: "未录取", batch: "未达专科线", total: 200, year: 2019, track: "li",
+  }, { abandoned: true });
+  assert.equal(packed.noOffer, true);
+  assert.equal(formatLastAdmissionLabel(packed), "无");
 });

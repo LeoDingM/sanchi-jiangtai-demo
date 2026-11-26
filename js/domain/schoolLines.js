@@ -1,10 +1,10 @@
 /**
- * 校内一本/二本名额：按上一届高考本校省控实际上线人数滚动，
- * 不再把全校 400/1000 按文理人数分摊。
- * 高三校内线按应届与补习班同一池取名次。滚动到下一届的校内线名额仍用应届省控实际上线人数。
+ * 校内一本/二本按该科类划线池约第 520、第 1100 名取分。
+ * 高三池为应届与补习班同一池。应届省控上线人数仍只统应届，只作对照统计，不再当作校内划线名额。
  */
-import { FALLBACK_SCHOOL_QUOTA } from "./config.js?v=t51u1";
-import { provincialLines, officialProvincialPack } from "./jiangxi.js?v=t51u1";
+import { FALLBACK_SCHOOL_QUOTA, SCHOOL_LINE_FIRST_RANK, SCHOOL_LINE_SECOND_RANK } from "./config.js?v=t52u1";
+import { provincialLines, officialProvincialPack } from "./jiangxi.js?v=t52u1";
+import { hash01 } from "./prng.js?v=t52u1";
 
 function clampRank(want, n) {
   const cap = Math.max(1, n);
@@ -16,7 +16,7 @@ export function fallbackSchoolQuota() {
     li: { ...FALLBACK_SCHOOL_QUOTA.li },
     wen: { ...FALLBACK_SCHOOL_QUOTA.wen },
     mixed: { ...FALLBACK_SCHOOL_QUOTA.mixed },
-    source: "无上一届高考数据时的近似兜底：理科一本约 460、二本取前 1000；文科一本约 60、二本约 250。这不是官方精确名额。",
+    source: "无上一届高考数据时，应届省控上线人数只用近似量级作历史统计，不是校内划线名额，也不是官方精确名额。",
     fallback: true,
   };
 }
@@ -42,24 +42,62 @@ export function schoolQuotaFromPrior(prior) {
   };
 }
 
-/** 算出本场一本/二本名额。理科二本固定取该划线池前 1000（不超过池内人数），不用上一届二本人数。高三池含补习班。 */
-export function resolveSchoolQuota({ split, track, regularN, trackN, quotas } = {}) {
-  const q = quotas?.li && quotas?.wen && quotas?.mixed ? quotas : fallbackSchoolQuota();
-  if (!split) {
-    const n = regularN;
-    const firstN = clampRank(q.mixed.firstN, n);
-    const secondN = Math.max(firstN, clampRank(q.mixed.secondN ?? 1000, n));
-    return { firstN, secondN, track: "mixed" };
+/** 一本目标约第 520 名、二本约第 1100 名。池不足时收束，绝不伪造人数。 */
+const FIRST_RATE_CAP = 0.50;
+const FIRST_RATE_REF = SCHOOL_LINE_FIRST_RANK / 1696;
+const LATE_FRAC = 0.90;
+
+function jitterAround(base, amplitude, salt) {
+  if (salt == null || salt === "") return Math.round(base);
+  const t = hash01(String(salt), "school-line", String(base)) * 2 - 1;
+  return Math.round(base + t * amplitude);
+}
+
+export function adaptSchoolCutoffRanks(n, { salt } = {}) {
+  const size = Math.max(0, Math.round(Number(n) || 0));
+  if (size <= 0) return { firstN: 1, secondN: 1, poolN: 0, adapted: true };
+  let firstWant = SCHOOL_LINE_FIRST_RANK;
+  let secondWant = SCHOOL_LINE_SECOND_RANK;
+  if (salt) {
+    firstWant = Math.max(500, Math.min(540, jitterAround(SCHOOL_LINE_FIRST_RANK, 20, `${salt}|first`)));
+    secondWant = Math.max(1060, Math.min(1140, jitterAround(SCHOOL_LINE_SECOND_RANK, 40, `${salt}|second`)));
   }
-  const n = trackN;
-  if (track === "wen") {
-    const firstN = clampRank(q.wen.firstN, n);
-    const secondN = Math.max(firstN, clampRank(q.wen.secondN, n));
-    return { firstN, secondN, track: "wen" };
+  let adapted = false;
+  let firstN;
+  let secondN;
+  if (size >= secondWant && firstWant / size <= FIRST_RATE_CAP) {
+    firstN = clampRank(firstWant, size);
+    secondN = Math.max(firstN + 1, clampRank(secondWant, size));
+  } else {
+    adapted = true;
+    if (size < firstWant || firstWant / size > FIRST_RATE_CAP) {
+      firstN = clampRank(Math.round(size * FIRST_RATE_REF), size);
+    } else {
+      firstN = clampRank(firstWant, size);
+    }
+    if (size < secondWant) {
+      const late = Math.round(size * LATE_FRAC);
+      secondN = clampRank(Math.max(late, firstN + 1), size);
+    } else {
+      secondN = clampRank(secondWant, size);
+    }
+    if (secondN <= firstN) secondN = Math.min(size, firstN + 1);
   }
-  const firstN = clampRank(q.li.firstN, n);
-  const secondN = Math.max(firstN, clampRank(1000, n));
-  return { firstN, secondN, track: "li" };
+  return { firstN, secondN, poolN: size, adapted };
+}
+
+/** 算出本场一本/二本名额。按该科类划线池约第 520、第 1100 名；池不足则收束。高三池含补习班。 */
+export function resolveSchoolQuota({ split, track, regularN, trackN, salt } = {}) {
+  const n = split ? (trackN ?? regularN) : (regularN ?? trackN);
+  const kind = split ? (track === "wen" ? "wen" : "li") : "mixed";
+  const ranks = adaptSchoolCutoffRanks(n, { salt: salt ? `${salt}|${kind}` : "" });
+  return {
+    firstN: ranks.firstN,
+    secondN: ranks.secondN,
+    track: kind,
+    adapted: ranks.adapted,
+    poolN: ranks.poolN,
+  };
 }
 
 export function rowTrackForProvincial(row, split) {
@@ -229,19 +267,27 @@ export function schoolCutoffView(report, track = "li") {
   };
 }
 
-export function describeSchoolCutoff(quota, split, opts = {}) {
-  const q = quota?.li && quota?.wen && quota?.mixed ? quota : fallbackSchoolQuota();
+export function describeSchoolCutoff(cutOrQuota, split, opts = {}) {
   const pool = opts.includeRepeat
     ? "高三校内名次按应届与补习班同一池划"
     : "校内名次按本场考生排序";
-  if (q.fallback) {
-    return `${q.source}${pool}，只作对照，不是国家线`;
-  }
-  const tag = `${q.priorEntryYear}级${q.priorYear}年高考`;
+  const cut = opts.cutoffs || cutOrQuota || {};
+  const mixed = opts.mixed || cut.mixed;
+  const li = opts.li || cut.li;
+  const wen = opts.wen || cut.wen;
   if (!split) {
-    return `分科前校内一本按上一届（${tag}）文理合计省控一本 ${q.mixed.firstN} 人，二本取全年级前 ${q.mixed.secondN} 名（${pool}），只作对照，不是国家线`;
+    const firstN = mixed?.firstN ?? opts.firstN ?? SCHOOL_LINE_FIRST_RANK;
+    const secondN = mixed?.secondN ?? opts.secondN ?? SCHOOL_LINE_SECOND_RANK;
+    return `分科前校内一本取该年级划线池第 ${firstN} 名，二本取第 ${secondN} 名（目标约全校第 520、第 1100 名，池人数不足时按池内规模收束；${pool}），只作对照，不是国家线`;
   }
-  return `理科校内一本按上一届（${tag}）理科省控一本实际 ${q.li.firstN} 人，二本取该池前 ${q.li.secondN} 名；文科按同一届文科省控实际一本 ${q.wen.firstN} 人、二本累计 ${q.wen.secondN} 人（${pool}），只作对照，不是国家线`;
+  const lf = li?.firstN ?? opts.firstN ?? SCHOOL_LINE_FIRST_RANK;
+  const ls = li?.secondN ?? opts.secondN ?? SCHOOL_LINE_SECOND_RANK;
+  const wf = wen?.firstN;
+  const ws = wen?.secondN;
+  const wenPart = (wf != null && ws != null)
+    ? `；文科第 ${wf}、第 ${ws} 名`
+    : "；文科同样按该科类池约第 520、第 1100 名，池不足时二本取靠后名次、一本取靠前名次且不超出池规模";
+  return `校内一本、二本按该科类划线池约第 520、第 1100 名取分（本场理科第 ${lf}、第 ${ls} 名${wenPart}；${pool}），只作对照，不是国家线`;
 }
 
 export function provincialCompareNote(report) {
@@ -270,7 +316,7 @@ export function describeSchoolProvincial(report) {
 /** 考试日志：同时写校内线、对照省控、卓行同层次对比。 */
 export function examResultLogText(report, { classSummary, classNo, schoolQuota } = {}) {
   const cls = classSummary;
-  const cutExplain = describeSchoolCutoff(schoolQuota || report.quota, report.split, { includeRepeat: report.grade >= 3 || report.cutoffs?.includeRepeat });
+  const cutExplain = describeSchoolCutoff(report.cutoffs || schoolQuota || report.quota, report.split, { includeRepeat: report.grade >= 3 || report.cutoffs?.includeRepeat, cutoffs: report.cutoffs });
   const prov = describeClassProvincial(report, classNo);
   const peers = describeZhuoxingPeers(report, classNo);
   const head = `${report.examName}结束。任教班均分${cls.avg}，最高${cls.max}。`;
@@ -284,7 +330,7 @@ export function examLineNoticeText(report, schoolQuota) {
   const cut = report.split ? report.cutoffs?.li : report.cutoffs?.mixed;
   const cutW = report.split ? report.cutoffs?.wen : null;
   const parts = [];
-  parts.push(describeSchoolCutoff(quota, report.split, { includeRepeat: report.grade >= 3 || report.cutoffs?.includeRepeat }) + "。");
+  parts.push(describeSchoolCutoff(report.cutoffs || quota, report.split, { includeRepeat: report.grade >= 3 || report.cutoffs?.includeRepeat, cutoffs: report.cutoffs }) + "。");
   if (cut) {
     parts.push(`本场校内线${report.split ? "理科" : ""}一本 ${cut.firstLine}（第${cut.firstN}名），二本 ${cut.secondLine}（第${cut.secondN}名），分差 ${cut.firstLine - cut.secondLine}。`);
   }
