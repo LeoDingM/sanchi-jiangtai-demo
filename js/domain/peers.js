@@ -2,8 +2,8 @@
  * 同伴关系：同桌按当前座位现算，同班要好与轻微别扭用种子确定、互相指向。
  * 分班后只保留仍在同班的关系并补缺。不改学科能力均值，不用真实姓名。
  */
-import { hash01 } from "./prng.js?v=t60u1";
-import { columnsForClass, seatOf } from "./school.js?v=t60u1";
+import { hash01 } from "./prng.js?v=t61u1";
+import { columnsForClass, seatOf } from "./school.js?v=t61u1";
 
 /** 从左起两两同桌：1-2、3-4、5-6；奇数列多出的末座没有同桌。 */
 export function deskPairCol(col, cols) {

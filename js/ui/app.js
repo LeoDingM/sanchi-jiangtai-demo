@@ -32,32 +32,37 @@ import {
   handleTermComment, suggestTermComments, isCommentOpen, isCommentWindow,
   commentUnavailableReason, ensureCommentState, currentCommentExam, isCommentTimeSlot,
   COMMENT_DAY_CAP, COMMENT_BATCH_MIN, COMMENT_BATCH_MAX, COMMENT_TONES, COMMENT_SOURCE_NOTE,
-} from "../domain/simulation.js?v=t60u1";
-import { addDays, weekday } from "../domain/calendar.js?v=t60u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t60u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t60u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t60u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t60u1";
-import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t60u1";
-import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t60u1";
-import { hydrateReport } from "../domain/simulation.js?v=t60u1";
-import { renderSeating } from "./classroom.js?v=t60u1";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t60u1";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t60u1";
-import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t60u1";
-import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t60u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t60u1";
-import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t60u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t60u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t60u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t60u1";
+  handleTeachersDayCard, handleTeachersDayColleague, suggestTeachersDayCards, teachersDayColleague,
+  isTeachersDayOpen, isTeachersDayWindow, teachersDayUnavailableReason, ensureTeachersDayState,
+  isTeachersDayTimeSlot, isTeachersDayPlayDate, teachersDayPlayDate, teachersDayNominalDate,
+  TEACHERS_DAY_CARD_MIN, TEACHERS_DAY_CARD_MAX, TEACHERS_DAY_CARD_CAP,
+  TEACHERS_DAY_SOURCE_NOTE, CARD_REPLIES, COLLEAGUE_ACTIONS,
+} from "../domain/simulation.js?v=t61u1";
+import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t61u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t61u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t61u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t61u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t61u1";
+import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t61u1";
+import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t61u1";
+import { hydrateReport } from "../domain/simulation.js?v=t61u1";
+import { renderSeating } from "./classroom.js?v=t61u1";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t61u1";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t61u1";
+import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t61u1";
+import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t61u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t61u1";
+import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t61u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t61u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t61u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t61u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
   parseAiCommentary, emptyAiCommentary,
-} from "../domain/examAi.js?v=t60u1";
+} from "../domain/examAi.js?v=t61u1";
 
 let state = null;
 let view = "classroom";
@@ -801,6 +806,75 @@ function bindCommentActions(host) {
   });
 }
 
+function teachersDayPanelHtml({ place = "office" } = {}) {
+  if (!state) return "";
+  if (!isTeachersDayPlayDate(state.date)) return "";
+  ensureTeachersDayState(state);
+  const rec = state.teachersDay || {};
+  const sy = schoolYearOf(state.date);
+  const play = teachersDayPlayDate(sy);
+  const nominal = teachersDayNominalDate(sy);
+  const dateNote = play && nominal && play !== nominal
+    ? `校历上的教师节仍是 9 月 10 日，今年适逢周末，问候改在 ${play} 进行。`
+    : "校历上的教师节是 9 月 10 日，今年就在当天问候。";
+  if (!isTeachersDayOpen(state)) {
+    return `<div class="paper visit-panel teachers-day-panel" data-teachers-day-panel="1">
+      <h3>教师节</h3>
+      <p class="muted">${teachersDayUnavailableReason(state)} ${TEACHERS_DAY_SOURCE_NOTE}</p>
+    </div>`;
+  }
+  const cards = suggestTeachersDayCards(state);
+  const cardRows = cards.map((v) => {
+    const btns = (v.options || CARD_REPLIES).map((o) => `<button type="button" data-td-card="${v.studentId}" data-td-reply="${o.id}">${o.label}</button>`).join("");
+    return `<p><b>${v.name}</b>　${v.reason}　${v.message || ""}</p><div class="row-actions">${btns}</div>`;
+  }).join("");
+  const cardBlock = cards.length
+    ? `${cardRows}`
+    : `<p class="muted">本班贺卡已经收下完了。</p>`;
+  let colleagueBlock = "";
+  if (place !== "classroom") {
+    if (rec.colleagueDone) {
+      colleagueBlock = `<p class="muted">办公室同事问候今年已经做过了。</p>`;
+    } else {
+      const person = teachersDayColleague(state);
+      const btns = (person?.options || COLLEAGUE_ACTIONS).map((o) => `<button type="button" data-td-colleague="${o.id}">${o.label}</button>`).join("");
+      colleagueBlock = `<p><b>办公室问候</b>　${person ? person.reason : "备课组老师互相问候"}。</p><div class="row-actions">${btns}</div>`;
+    }
+  } else if (rec.colleagueDone) {
+    colleagueBlock = "";
+  } else {
+    colleagueBlock = `<p class="muted">办公室同事问候请到坐班时再做。</p>`;
+  }
+  const intro = place === "classroom"
+    ? `教室里可以简短收下本班学生送来的贺卡或花，写一句回应。不要打断上课，也不要占用辅导时段整场。`
+    : `办公室坐班时可以收下本班学生的贺卡或花，也可以接受同事问候或回贺备课组老师。`;
+  return `<div class="paper visit-panel teachers-day-panel" data-teachers-day-panel="1">
+      <h3>教师节</h3>
+      <p class="muted">${intro}${dateNote}当天可收下 ${TEACHERS_DAY_CARD_MIN}–${TEACHERS_DAY_CARD_MAX} 名本班学生的贺卡或花，外加一次办公室同事问候。请假不在校的学生不在当场送礼名单里。${TEACHERS_DAY_SOURCE_NOTE}</p>
+      ${cardBlock}
+      ${colleagueBlock}
+    </div>`;
+}
+
+function bindTeachersDayActions(host) {
+  host.querySelectorAll("[data-td-card]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const r = handleTeachersDayCard(state, b.dataset.tdCard, b.dataset.tdReply);
+      toast(r.ok ? r.text : r.reason);
+      persist(); render();
+    };
+  });
+  host.querySelectorAll("[data-td-colleague]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const r = handleTeachersDayColleague(state, b.dataset.tdColleague);
+      toast(r.ok ? r.text : r.reason);
+      persist(); render();
+    };
+  });
+}
+
 function deskPanelHtml(student, slot, scene) {
   const tutorBtns = slot?.isTutoring
     ? `<div class="row-actions">
@@ -914,6 +988,7 @@ function viewClassroom(host) {
     ${visitPanelHtml()}
     ${doorVisitPanelHtml()}
     ${coachingPanelHtml()}
+    ${teachersDayPanelHtml({ place: "classroom" })}
     ${isOpenClassDay(state.date) ? openClassPanelHtml() : ""}
     ${proctorPanelHtml()}
     <div class="classroom-layout">
@@ -927,6 +1002,7 @@ function viewClassroom(host) {
   bindVisitActions(host);
   bindHomeVisitActions(host);
   bindCoachingActions(host);
+  bindTeachersDayActions(host);
   bindParentActions(host);
   bindActivityActions(host);
   bindProctorActions(host);
@@ -1060,6 +1136,7 @@ function viewProfile(host) {
         ${(s.homeVisits || []).length ? `<p><b>家访记录</b></p>${(s.homeVisits||[]).map((r)=>`<p class="muted">${r.date}　${r.kind === "door" ? "上门家访" : "电话家访"}　${r.text}</p>`).join("")}` : (s.lastHomeVisit ? `<p><b>家访记录</b></p><p class="muted">${s.lastHomeVisit.date}　${s.lastHomeVisit.text}</p>` : "")}
         ${(s.coachings || []).length ? `<p><b>培优补差记录</b></p>${(s.coachings||[]).map((r)=>`<p class="muted">${r.date}　${r.kind === "enrich" ? "培优" : "补差"}　${r.text}</p>`).join("")}` : (s.lastCoaching ? `<p><b>培优补差记录</b></p><p class="muted">${s.lastCoaching.date}　${s.lastCoaching.kind === "enrich" ? "培优" : "补差"}　${s.lastCoaching.text}</p>` : "")}
         ${(s.termComments || []).length ? `<p><b>数学学期评语记录</b></p>${(s.termComments||[]).map((r)=>`<p class="muted">${r.date}　${r.examName || "期中/期末"}　${r.tone === "encourage" ? "鼓励" : r.tone === "remind" ? "提醒" : "如实"}　${r.text}</p>`).join("")}` : (s.lastTermComment ? `<p><b>数学学期评语记录</b></p><p class="muted">${s.lastTermComment.date}　${s.lastTermComment.examName || ""}　${s.lastTermComment.text}</p>` : "")}
+        ${(s.teachersDayNotes || []).length ? `<p><b>教师节记录</b></p>${(s.teachersDayNotes||[]).map((r)=>`<p class="muted">${r.date}　${r.gift === "flower" ? "花" : "贺卡"}　${r.reply === "encourage" ? "鼓励" : r.reply === "remind" ? "提醒认真听课" : "致谢"}　${r.text}</p>`).join("")}` : (s.lastTeachersDay ? `<p><b>教师节记录</b></p><p class="muted">${s.lastTeachersDay.date}　${s.lastTeachersDay.text}</p>` : "")}
         ${(s.activityNotes || []).length ? `<p><b>学校活动</b></p>${(s.activityNotes||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : ""}
         <p class="muted">学科能力（潜能为个人上限，不是当场分数；括号里是距上限的余地，不是又一张分数表）</p>
         <p>${ab || "—"}</p>
@@ -1696,6 +1773,7 @@ function officeCollabHtml() {
     ${phoneVisitPanelHtml()}
     ${coachingPanelHtml({ always: true })}
     ${commentPanelHtml()}
+    ${teachersDayPanelHtml({ place: "office" })}
     ${tiaokePanelHtml()}`;
 }
 
@@ -1710,6 +1788,7 @@ function bindOfficeActions(host) {
   bindHomeVisitActions(host);
   bindCoachingActions(host);
   bindCommentActions(host);
+  bindTeachersDayActions(host);
   bindObserveActions(host);
   bindProctorActions(host);
   bindMarkingActions(host);
