@@ -12,27 +12,30 @@ import {
   doActivityAction, isSchoolActivityOpen, upcomingSchoolActivity, ACTIVITY_SOURCE_NOTE,
   weekSchedule, weekStart, weekMathCount, swapPeriods, borrowIn, respondTimetableRequest,
   ensureIncomingRequest, pendingTimetableRequest, weekTiaokeSummary, classLatecomers,
-} from "../domain/simulation.js?v=t42u1";
-import { addDays } from "../domain/calendar.js?v=t42u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t42u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t42u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t42u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t42u1";
-import { rankRows } from "../domain/scores.js?v=t42u1";
-import { filterRows, sameTierCompare, classStandings, classCompareRows, examReportKey, pickExamReport } from "../domain/examService.js?v=t42u1";
-import { hydrateReport } from "../domain/simulation.js?v=t42u1";
-import { renderSeating } from "./classroom.js?v=t42u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t42u1";
-import { formatAdmissionBatch, formatAdmissionDest } from "../domain/admission.js?v=t42u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t42u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t42u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t42u1";
+  attendClassMeeting, hostClassMeeting, playerClassCommittee, playerClassBrief,
+  playerDutyToday, playerWeekDuty, isHomeroomMeetingSlot, upcomingClassMeeting,
+  committeeTitleOf, formatStudentShort,
+} from "../domain/simulation.js?v=t43u1";
+import { addDays } from "../domain/calendar.js?v=t43u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t43u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t43u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t43u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t43u1";
+import { rankRows } from "../domain/scores.js?v=t43u1";
+import { filterRows, sameTierCompare, classStandings, classCompareRows, examReportKey, pickExamReport } from "../domain/examService.js?v=t43u1";
+import { hydrateReport } from "../domain/simulation.js?v=t43u1";
+import { renderSeating } from "./classroom.js?v=t43u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t43u1";
+import { formatAdmissionBatch, formatAdmissionDest } from "../domain/admission.js?v=t43u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t43u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t43u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t43u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
-} from "../domain/examAi.js?v=t42u1";
+} from "../domain/examAi.js?v=t43u1";
 
 let state = null;
 let view = "classroom";
@@ -310,7 +313,7 @@ function render() {
   $("#roleline").textContent = `${state.player.role} ${state.player.name} · ${state.player.cohortYear}级卓行${state.player.classNo}班 ${playerSubjectName(state.player)}`;
   document.querySelectorAll("#sidenav [data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
   const host = $("#view");
-  const map = { classroom: viewClassroom, roster: viewRoster, profile: viewProfile, teach: viewTeach, placement: viewPlacement, grades: viewGrades, office: viewOffice, admission: viewAdmission, auto: viewAuto, log: viewLog, save: viewSave, settings: viewSettings };
+  const map = { classroom: viewClassroom, roster: viewRoster, profile: viewProfile, teach: viewTeach, class: viewClassManage, placement: viewPlacement, grades: viewGrades, office: viewOffice, admission: viewAdmission, auto: viewAuto, log: viewLog, save: viewSave, settings: viewSettings };
   host.innerHTML = "";
   try {
     (map[view] || viewClassroom)(host);
@@ -527,8 +530,8 @@ function viewRoster(host) {
   const seatNote = placementSeatNotice(state);
   host.innerHTML = `<h3>学生名册 · ${sts.length}人</h3>
     ${seatNote ? `<p class="notice">${seatNote} 下表座号为当前编制。</p>` : ""}
-    <table><thead><tr><th>座号</th><th>姓名</th><th>性别</th><th>性格</th><th>家庭</th><th>文理意向</th><th>师生关系</th></tr></thead>
-    <tbody>${sts.map((s) => `<tr data-id="${s.id}" class="${s.id===selectedId?"me":""}"><td>${s.seq}</td><td>${s.name}</td><td>${s.gender==="F"?"女":"男"}</td><td>${s.personality}</td><td>${s.family.type}</td><td>${s.trackPref==="wen"?"文":"理"}</td><td>${s.relation||0}</td></tr>`).join("")}</tbody></table>`;
+    <table><thead><tr><th>座号</th><th>姓名</th><th>职务</th><th>性别</th><th>性格</th><th>家庭</th><th>文理意向</th><th>师生关系</th></tr></thead>
+    <tbody>${sts.map((s) => `<tr data-id="${s.id}" class="${s.id===selectedId?"me":""}"><td>${s.seq}</td><td>${s.name}</td><td>${committeeTitleOf(playerClassCommittee(state), s.id) || ""}</td><td>${s.gender==="F"?"女":"男"}</td><td>${s.personality}</td><td>${s.family.type}</td><td>${s.trackPref==="wen"?"文":"理"}</td><td>${s.relation||0}</td></tr>`).join("")}</tbody></table>`;
   host.querySelectorAll("tr[data-id]").forEach((tr) => tr.onclick = () => { selectedId = tr.dataset.id; view = "profile"; render(); });
 }
 
@@ -625,7 +628,7 @@ function viewProfile(host) {
     </div>
     <div class="profile-grid">
       <div class="paper">
-        <p><b>学号</b> ${s.id}　<b>性别</b> ${s.gender==="F"?"女":"男"}　<b>性格</b> ${s.personality || "—"}　<b>班级</b> ${tierLabel(s.tier)}${s.classNo ?? ""}班</p>
+        <p><b>学号</b> ${s.id}　<b>性别</b> ${s.gender==="F"?"女":"男"}　<b>性格</b> ${s.personality || "—"}　<b>班委</b> ${committeeTitleOf(playerClassCommittee(state), s.id) || "—"}　<b>班级</b> ${tierLabel(s.tier)}${s.classNo ?? ""}班</p>
         <p><b>家庭</b> ${family}</p>
         <p><b>文理意向</b> ${trackLabel}　<b>专业倾向</b> ${s.majorPref||"—"}</p>
         ${admissionProfileHtml(s.id)}
@@ -1154,6 +1157,98 @@ function eveningTutorHtml() {
       ${slot?.isTutoring ? eveningRollPanel() : ""}
       ${hands.length && slot?.isTutoring ? `<p>举手或需要盯的座位：</p><div class="row-actions">${hands.map((s)=>`<button type="button" data-tutor="答疑" data-sid="${s.id}">${s.name}（${seatLabel(s)}）</button>`).join("")}</div>` : ""}
     </div>`;
+}
+
+
+function viewClassManage(host) {
+  const sts = clsStudents().slice().sort((a, b) => a.seq - b.seq);
+  const home = state.player.homeroom || "赵映秋";
+  const committee = playerClassCommittee(state);
+  const brief = playerClassBrief(state);
+  const todayDuty = playerDutyToday(state);
+  const week = playerWeekDuty(state);
+  const slot = currentSlot(state);
+  const open = isHomeroomMeetingSlot(state);
+  const nxt = upcomingClassMeeting(state);
+  const meetings = state.classMeetings || [];
+  const todayKey = `${state.date}|${state.periodId}`;
+  const already = meetings.some((m) => `${m.date}|${m.periodId}` === todayKey);
+  const roleRows = committee.roles.map((r) => {
+    const s = r.student;
+    return `<tr data-id="${s.id}"><td>${r.title}</td><td>${s.seq ?? ""}号</td><td>${s.name}</td><td>${s.personality || "—"}</td></tr>`;
+  }).join("");
+  const todayRest = week.some((d) => d.isToday && d.rest);
+  const todayLine = todayRest
+    ? "今天是周日，不排值日。"
+    : (todayDuty.length ? todayDuty.map(formatStudentShort).join("、") : "还没有排到值日生。");
+  const weekLines = week.map((d) => {
+    const mark = d.isToday ? "（今天）" : "";
+    if (d.rest) return `<li>星期${d.weekdayName} ${d.date}${mark}：休息，不排值日</li>`;
+    const names = (d.students || []).map(formatStudentShort).join("、") || "—";
+    return `<li>星期${d.weekdayName} ${d.date}${mark}：${names}</li>`;
+  }).join("");
+  const watch = homeworkWatchlist(state.homework, state);
+  const meetingHint = open
+    ? `现在是${formatSlotLabel(slot)}，由班主任${home}主持。你可以旁听或协助整理要点，但不能推开她去主持。${already ? "这节班会已经记录过了。" : ""}`
+    : `现在不是班会课，要等到班会课再旁听或协助班主任。${nxt ? `下一节班会：${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}。` : ""}`;
+  const minutes = meetings.slice().reverse().map((m) => `<p class="muted">${m.date}　「${m.theme}」· ${m.mode === "assist" ? "协助" : "旁听"}<br/>${m.minutes}</p>`).join("")
+    || `<p class="muted">还没有班会纪要。等到班会课再旁听或协助，纪要会记在这里。</p>`;
+  host.innerHTML = `<h3>班级管理 · ${state.player.cohortYear}级卓行${state.player.classNo}班</h3>
+    <p class="notice">你是本班数学实习教师，协助班主任${home}管理日常事务：查看班委和值日、整理班情、在班会课旁听或协助。班委由本班学生特质硬定，一人一职；分班后若人员变化会按新名单重算。你不能代替班主任主持班会，也不能随意撤换班委。</p>
+    <div class="kpi">
+      <div><span>班主任</span><b>${home}</b></div>
+      <div><span>任教班</span><b>卓行${state.player.classNo}班 · ${sts.length}人</b></div>
+      <div><span>今日值日</span><b>${todayRest ? "周日休息" : (todayDuty.length + "人")}</b></div>
+    </div>
+    <div class="profile-grid">
+      <div class="paper lesson-card">
+        <h3>班委</h3>
+        <p class="muted">班长、学习委员、纪律委员、劳动委员按性格和能力从本班硬定，同一局名单不变则人选不变。</p>
+        <div class="scroll-table"><table><thead><tr><th>职务</th><th>座号</th><th>姓名</th><th>性格</th></tr></thead>
+        <tbody>${roleRows}</tbody></table></div>
+      </div>
+      <div class="paper lesson-card">
+        <h3>值日</h3>
+        <p><b>今天</b>　${todayLine}</p>
+        <p class="muted">按座号轮换，同一天同一份名单结果稳定。</p>
+        <p><b>本周值日</b></p>
+        <ul class="notes-list">${weekLines}</ul>
+      </div>
+    </div>
+    <div class="paper lesson-card">
+      <h3>班情摘要</h3>
+      <p>${brief.text}</p>
+      <div class="row-actions">
+        <button type="button" class="accent" id="cm-home">向班主任通报本班</button>
+        ${watch.slice(0, 8).map((r) => `<button type="button" data-home="${r.id}">通报${r.name}</button>`).join("")}
+      </div>
+    </div>
+    <div class="paper lesson-card">
+      <h3>班会旁听与协助</h3>
+      <p>${meetingHint}</p>
+      <p class="muted">主讲是班主任${home}。实习教师可以旁听或协助，不能主持班会。</p>
+      <div class="row-actions">
+        <button type="button" class="accent" id="cm-attend">旁听班会</button>
+        <button type="button" id="cm-assist">协助班主任</button>
+        <button type="button" id="cm-host">主持班会</button>
+      </div>
+      <h3>班会纪要</h3>
+      ${minutes}
+    </div>`;
+  host.querySelectorAll("tr[data-id]").forEach((tr) => {
+    tr.onclick = () => { selectedId = tr.dataset.id; view = "profile"; render(); };
+  });
+  const briefHome = host.querySelector("#cm-home");
+  if (briefHome) briefHome.onclick = () => { const r = consultHomeroom(state); toast(r.ok ? r.text : r.reason); persist(); render(); };
+  host.querySelectorAll("[data-home]").forEach((b) => {
+    b.onclick = (ev) => { ev.stopPropagation(); selectedId = b.dataset.home; const r = consultHomeroom(state, b.dataset.home); toast(r.ok ? r.text : r.reason); persist(); render(); };
+  });
+  const attendBtn = host.querySelector("#cm-attend");
+  if (attendBtn) attendBtn.onclick = () => { const r = attendClassMeeting(state); toast(r.ok ? r.text : r.reason); persist(); render(); };
+  const assistBtn = host.querySelector("#cm-assist");
+  if (assistBtn) assistBtn.onclick = () => { const r = attendClassMeeting(state, { assist: true }); toast(r.ok ? r.text : r.reason); persist(); render(); };
+  const hostBtn = host.querySelector("#cm-host");
+  if (hostBtn) hostBtn.onclick = () => { const r = hostClassMeeting(state); toast(r.ok ? r.text : r.reason); persist(); render(); };
 }
 
 function viewTeach(host) {

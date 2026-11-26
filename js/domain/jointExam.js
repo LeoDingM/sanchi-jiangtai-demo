@@ -3,8 +3,8 @@
  * 分数线由当次模拟池实考分和位次算出，不手写；也不把模拟池伪装成
  * 江西省教育考试院正式公布的联考一分一段。
  */
-import { JX_DATA } from "../data/jiangxi2020.js?v=t42u1";
-import { clamp } from "./prng.js?v=t42u1";
+import { JX_DATA } from "../data/jiangxi2020.js?v=t43u1";
+import { clamp } from "./prng.js?v=t43u1";
 
 const PIVOT = Math.round(0.62 * 750); // 与 scores.js 难度平移支点一致
 

@@ -2,8 +2,8 @@
  * 日常教学：备课、上课、作业登记、课后面批。
  * 效果写入备课充分度与数学教学积累，并确定性影响任教班学生状态；不用 LLM 编课堂。
  */
-import { clamp, hash01, rngFrom, round1 } from "./prng.js?v=t42u1";
-import { seatLabel } from "./school.js?v=t42u1";
+import { clamp, hash01, rngFrom, round1 } from "./prng.js?v=t43u1";
+import { seatLabel } from "./school.js?v=t43u1";
 
 export const LESSON_TOPICS = {
   1: [
