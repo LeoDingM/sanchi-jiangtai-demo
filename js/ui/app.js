@@ -15,32 +15,33 @@ import {
   attendClassMeeting, hostClassMeeting, playerClassCommittee, playerClassBrief,
   playerDutyToday, playerWeekDuty, isHomeroomMeetingSlot, upcomingClassMeeting,
   committeeTitleOf, formatStudentShort,
-} from "../domain/simulation.js?v=t54u1";
-import { addDays } from "../domain/calendar.js?v=t54u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t54u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t54u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t54u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t54u1";
-import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t54u1";
-import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t54u1";
-import { hydrateReport } from "../domain/simulation.js?v=t54u1";
-import { renderSeating } from "./classroom.js?v=t54u1";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t54u1";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t54u1";
-import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t54u1";
-import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t54u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t54u1";
-import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t54u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t54u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t54u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t54u1";
+  handleVisit, ensureVisits, currentVisitItems,
+} from "../domain/simulation.js?v=t55u1";
+import { addDays } from "../domain/calendar.js?v=t55u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t55u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t55u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t55u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t55u1";
+import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t55u1";
+import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t55u1";
+import { hydrateReport } from "../domain/simulation.js?v=t55u1";
+import { renderSeating } from "./classroom.js?v=t55u1";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t55u1";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t55u1";
+import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t55u1";
+import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t55u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t55u1";
+import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t55u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t55u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t55u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t55u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
   parseAiCommentary, emptyAiCommentary,
-} from "../domain/examAi.js?v=t54u1";
+} from "../domain/examAi.js?v=t55u1";
 
 let state = null;
 let view = "classroom";
@@ -599,6 +600,35 @@ function eveningRollPanel() {
     ${live.called ? "" : btn}`;
 }
 
+function visitPanelHtml() {
+  if (!state) return "";
+  ensureVisits(state);
+  const items = currentVisitItems(state);
+  if (!items.length) return "";
+  const rows = items.map((v) => {
+    if (v.handled) {
+      return `<p class="muted">已处理：${v.resolution || "这趟来访已经记下来了。"}</p>`;
+    }
+    const btns = (v.options || []).map((o) => `<button type="button" data-visit="${v.studentId}" data-visit-act="${o.id}">${o.label}</button>`).join("");
+    return `<p><b>${v.name}</b>　${v.reason}</p><div class="row-actions">${btns}</div>`;
+  }).join("");
+  return `<div class="paper visit-panel" data-visit-panel="1">
+      <h3>学生来访</h3>
+      ${rows}
+    </div>`;
+}
+
+function bindVisitActions(host) {
+  host.querySelectorAll("[data-visit]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const r = handleVisit(state, b.dataset.visit, b.dataset.visitAct);
+      toast(r.ok ? r.text : r.reason);
+      persist(); render();
+    };
+  });
+}
+
 function deskPanelHtml(student, slot, scene) {
   const tutorBtns = slot?.isTutoring
     ? `<div class="row-actions">
@@ -706,6 +736,7 @@ function viewClassroom(host) {
   host.innerHTML = `<h3>教室座位表</h3>
     ${seatNote ? `<p class="notice">${seatNote}</p>` : ""}
     <p class="notice">现在是${slotLine}${absenceNotice(sts)}。金圈是举手，红点是作业还要盯，颜色偏暗的是走神或精力不足，橙点是这节正课迟到，空灰位是今天请假。点开座位后，浅金圈是同桌，淡绿圈是要好的同学。点击座位按当前课时处理，不必先跳到档案。任教班为卓行16班，74 人。</p>
+    ${visitPanelHtml()}
     <div class="classroom-layout">
       <canvas id="classroom"></canvas>
       <div class="desk-panel paper">${deskPanelHtml(sel, slot, scene)}</div>
@@ -714,6 +745,7 @@ function viewClassroom(host) {
   const board = slot ? `${formatSlotLabel(slot)} · 卓行16班` : "宁川中学 · 卓行16班";
   renderSeating(c, sts, selectedId, (id) => { selectedId = id; render(); }, { boardTitle: board, marks });
   bindDeskAndTutor(host);
+  bindVisitActions(host);
   bindParentActions(host);
   bindActivityActions(host);
 }
@@ -1319,7 +1351,8 @@ function officeCollabHtml() {
   const names = [...new Set(watch.map((r) => r.name))];
   const nxt = upcomingMath(state, { skipTaught: true });
   const slot = currentSlot(state);
-  return `<div class="paper lesson-card office-actions">
+  return `${visitPanelHtml()}
+    <div class="paper lesson-card office-actions">
       <h3>办公室与班主任</h3>
       <p class="muted">现在是${slot ? formatSlotLabel(slot) : formatDateCn(state.date)}。${nxt ? `下一节数学：${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}。` : ""}${officeLeaveLine()}不是空菜单：坐班改作业、向班主任通报、向备课组长请教都会留下记录，并且用确定性规则推进作业订正。</p>
       <div class="row-actions">
@@ -1340,6 +1373,7 @@ function bindOfficeActions(host) {
   if (home) home.onclick = () => { const r = consultHomeroom(state); toast(r.ok ? r.text : r.reason); persist(); render(); };
   const mentor = host.querySelector("#do-mentor");
   if (mentor) mentor.onclick = () => { const r = consultMentor(state); toast(r.ok ? r.text : r.reason); persist(); render(); };
+  bindVisitActions(host);
   host.querySelectorAll("[data-home]").forEach((b) => {
     b.onclick = (ev) => { ev.stopPropagation(); selectedId = b.dataset.home; const r = consultHomeroom(state, b.dataset.home); toast(r.ok ? r.text : r.reason); persist(); render(); };
   });
@@ -2286,6 +2320,8 @@ function viewOffice(host) {
   host.querySelector("#tier").onchange = draw;
   host.querySelector("#track").onchange = draw;
   draw();
+  bindOfficeActions(host);
+  bindParentActions(host);
 }
 
 let admissionPick = "";

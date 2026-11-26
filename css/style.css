@@ -557,3 +557,7 @@ button.peer-link {
 .career-banner p { margin: 0; line-height: 1.55; }
 .career-banner.hidden { display: none; }
 .settings-section#career-brief { margin-bottom: 18px; }
+
+.visit-panel { margin: 0 0 12px; padding: 10px 14px; border-left: 3px solid var(--gold); }
+.visit-panel h3 { margin: 0 0 6px; color: var(--gold); font-size: 15px; }
+.visit-panel p { margin: 0 0 6px; }
