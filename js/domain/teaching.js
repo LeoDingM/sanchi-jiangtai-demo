@@ -127,6 +127,9 @@ function homeworkRow(student, key, load, reaction, prep, depth) {
   else if (qh + skill < 0.58 || reaction.flag === "走神") quality = "错题较多";
   else if (qh > 0.8) quality = "未订正";
   const score = status === "缺交" ? 0 : clamp(Math.round(38 + skill * 48 + (qh - 0.5) * 16), 18, 100);
+  let correction = "可归档";
+  if (status === "缺交") correction = "待补交";
+  else if (quality === "错题较多" || quality === "未订正") correction = "待面批";
   return {
     id: student.id,
     name: student.name,
@@ -136,16 +139,50 @@ function homeworkRow(student, key, load, reaction, prep, depth) {
     score,
     flag: reaction.flag,
     reviewed: false,
+    urged: false,
+    correction,
   };
 }
 
-export function homeworkWatchlist(homework) {
-  return (homework?.rows || []).filter((r) => r.status === "缺交" || r.quality === "错题较多" || r.quality === "未订正" || r.flag === "走神");
+export function isOpenHomework(row) {
+  if (!row) return false;
+  return ["待补交", "已补交待面批", "待面批", "待订正", "已订正待复查"].includes(row.correction)
+    || row.status === "缺交" || row.quality === "错题较多" || row.quality === "未订正";
+}
+
+export function allHomeworkRows(state) {
+  const map = new Map();
+  for (const r of state.homeworkOpen || []) map.set(`${r.id}|${r.date || ""}|${r.topic || ""}`, r);
+  for (const r of state.homework?.rows || []) {
+    const key = `${r.id}|${state.homework?.date || r.date || ""}|${state.homework?.topic || r.topic || ""}`;
+    if (!r.date) r.date = state.homework?.date;
+    if (!r.topic) r.topic = state.homework?.topic;
+    map.set(key, r);
+  }
+  return [...map.values()];
+}
+
+export function homeworkWatchlist(homework, state = null) {
+  const rows = state ? allHomeworkRows(state) : (homework?.rows || []);
+  const seen = new Set();
+  const out = [];
+  for (const r of rows) {
+    const k = `${r.id}|${r.date || ""}|${r.topic || ""}`;
+    if (seen.has(k)) continue;
+    if (isOpenHomework(r) || r.flag === "走神") {
+      seen.add(k);
+      out.push(r);
+    }
+  }
+  return out;
 }
 
 export function studentTeachingContext(student, state) {
   if (!student) return null;
-  const hw = (state.homework?.rows || []).find((r) => r.id === student.id) || student.lastHomework || null;
+  const hw = allHomeworkRows(state).find((r) => r.id === student.id && isOpenHomework(r))
+    || (state.homework?.rows || []).find((r) => r.id === student.id)
+    || student.lastHomework
+    || null;
   return {
     topic: state.homework?.topic || state.player.lastTaught?.topic || student.lastClassTopic || null,
     hw,
@@ -204,9 +241,13 @@ export function teachLesson(state, students, { style = "精讲例题", callId = 
 
   const hwRows = students.map((s, i) => {
     const row = homeworkRow(s, key, plan.homework, reactions[i], prep, plan.depth);
+    row.date = state.date;
+    row.topic = plan.topic;
     s.lastHomework = { ...row, date: state.date, topic: plan.topic, load: plan.homework };
     return row;
   }).sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0));
+  const prevOpen = allHomeworkRows(state).filter((r) => isOpenHomework(r) && !(r.date === state.date && r.topic === plan.topic));
+  state.homeworkOpen = prevOpen;
   state.homework = {
     date: state.date,
     topic: plan.topic,
@@ -278,8 +319,9 @@ function reviewText(student, row, topic) {
       ? `你把${student.name}叫到办公桌前，把这道题的关键步重新走了一遍。`
       : `你看了${student.name}的作业，订正了几处书写，肯定了思路。`;
   }
-  if (row.status === "缺交") return `你问了${student.name}为什么「${topic}」这趟作业没交，约好明天补上，并叮嘱别再空本子。`;
-  if (row.quality === "错题较多") return `你把${student.name}叫到办公桌前，对着「${topic}」本子把错题的关键步重新走了一遍。`;
+  if (row.status === "缺交" || row.correction === "待补交") return `你问了${student.name}为什么「${topic}」这趟作业没交，约好补上后再来面批，并叮嘱别再空本子。`;
+  if (row.correction === "已补交待面批") return `你收下${student.name}补交的「${topic}」作业，当面看了错题，让回去订正后再送复查。`;
+  if (row.quality === "错题较多") return `你把${student.name}叫到办公桌前，对着「${topic}」本子把错题的关键步重新走了一遍，让订正后再送来复查。`;
   if (row.quality === "未订正") return `你看了${student.name}的「${topic}」作业，督促把错题订正完整再交回来。`;
   if (row.quality === "较好") return `你看了${student.name}的「${topic}」作业，书写和思路都清楚，只点了一处可以写得更简的步骤。`;
   if (row.status === "迟交") return `你收下${student.name}迟交的「${topic}」作业，提醒下次按时交，并订正了两处计算。`;
@@ -290,8 +332,11 @@ function reviewText(student, row, topic) {
 export function reviewHomework(state, student, topic = "面批作业") {
   if (!student) return { ok: false, reason: "找不到这名学生" };
   if ((state.reviewsToday || 0) >= 6) return { ok: false, reason: "今天面批已经不少，其余的改到办公桌上去看。" };
-  const row = (state.homework?.rows || []).find((r) => r.id === student.id) || student.lastHomework || null;
-  const hwTopic = state.homework?.topic || student.lastHomework?.topic || topic;
+  const row = allHomeworkRows(state).find((r) => r.id === student.id && isOpenHomework(r))
+    || (state.homework?.rows || []).find((r) => r.id === student.id)
+    || student.lastHomework
+    || null;
+  const hwTopic = row?.topic || state.homework?.topic || student.lastHomework?.topic || topic;
   const text = reviewText(student, row, hwTopic);
   const weak = !row || row.status === "缺交" || row.quality === "错题较多" || row.quality === "未订正";
   student.relation = clamp((student.relation || 0) + 2, 0, 100);
@@ -299,9 +344,165 @@ export function reviewHomework(state, student, topic = "面批作业") {
   student.stress = clamp((student.stress || 40) - 2, 0, 95);
   if (row) {
     row.reviewed = true;
-    if (student.lastHomework && student.lastHomework.id === row.id) student.lastHomework.reviewed = true;
+    if (row.correction === "待补交") row.urged = true;
+    else if (row.correction === "已补交待面批" || row.correction === "待面批" || row.quality === "错题较多" || row.quality === "未订正") {
+      row.correction = "待订正";
+    } else if (row.status !== "缺交") {
+      row.correction = "已闭环";
+    }
+    if (student.lastHomework && student.lastHomework.id === row.id) {
+      student.lastHomework.reviewed = true;
+      student.lastHomework.correction = row.correction;
+      student.lastHomework.urged = row.urged;
+    }
   }
   state.reviewsToday = (state.reviewsToday || 0) + 1;
   student.talks = [...(student.talks || []), { date: state.date, topic, text }];
   return { ok: true, text, student, homework: row };
+}
+
+
+function syncStudentHomework(state, row) {
+  const c = state.cohorts?.[state.player?.cohortYear];
+  const s = c?.students?.find((x) => x.id === row.id);
+  if (s && s.lastHomework && s.lastHomework.id === row.id && s.lastHomework.topic === row.topic) {
+    Object.assign(s.lastHomework, row);
+  }
+}
+
+/** 随课时推进：缺交的可能补交，已面批的可能交来订正本。 */
+export function collectHomeworkFollowups(state, reason = "period") {
+  const rows = allHomeworkRows(state);
+  const updates = [];
+  for (const row of rows) {
+    const keySeed = `${row.id}|${row.date}|${row.topic}|${state.date}|${state.periodId}|${reason}`;
+    if (row.correction === "待补交") {
+      const p = 0.4 + (row.urged ? 0.28 : 0);
+      if (hash01(keySeed, "makeup") < p) {
+        row.status = "迟交";
+        row.quality = hash01(keySeed, "makeup-q") < 0.55 ? "错题较多" : "一般";
+        row.score = clamp(Math.round(40 + hash01(keySeed, "makeup-s") * 40), 20, 90);
+        row.correction = "已补交待面批";
+        updates.push({ id: row.id, name: row.name, change: "补交" });
+      }
+    } else if (row.correction === "待订正") {
+      const p = 0.5 + (row.reviewed ? 0.2 : 0);
+      if (hash01(keySeed, "corr") < p) {
+        row.correction = "已订正待复查";
+        updates.push({ id: row.id, name: row.name, change: "交订正" });
+      }
+    }
+    syncStudentHomework(state, row);
+  }
+  return updates;
+}
+
+/** 催交缺交作业，提高下一节补交的可能。 */
+export function urgeHomework(state, student) {
+  if (!student) return { ok: false, reason: "找不到这名学生" };
+  const row = allHomeworkRows(state).find((r) => r.id === student.id && r.correction === "待补交");
+  if (!row) return { ok: false, reason: `${student.name}目前没有待补交的作业。` };
+  row.urged = true;
+  syncStudentHomework(state, row);
+  const text = `你催了${student.name}把「${row.topic}」作业补上，让下一节课前放到办公桌上。`;
+  student.talks = [...(student.talks || []), { date: state.date, topic: "催交作业", text }];
+  return { ok: true, text, homework: row };
+}
+
+/** 复查已经交回的订正本。 */
+export function checkCorrection(state, student) {
+  if (!student) return { ok: false, reason: "找不到这名学生" };
+  if ((state.reviewsToday || 0) >= 6) return { ok: false, reason: "今天面批和复查已经不少，其余的放到办公室再看。" };
+  const row = allHomeworkRows(state).find((r) => r.id === student.id && r.correction === "已订正待复查")
+    || allHomeworkRows(state).find((r) => r.id === student.id && r.correction === "待订正");
+  if (!row) return { ok: false, reason: `${student.name}还没有交来待复查的订正。` };
+  if (row.correction === "待订正") return { ok: false, reason: `${student.name}的「${row.topic}」订正还没交回来。` };
+  state.reviewsToday = (state.reviewsToday || 0) + 1;
+  const pass = hash01(student.id, row.date, row.topic, state.date, "recheck") < 0.82;
+  let text;
+  if (pass) {
+    row.correction = "已闭环";
+    row.quality = "较好";
+    student.ability.math = clamp((student.ability.math || 50) + 0.06, 0, 99);
+    student.relation = clamp((student.relation || 0) + 1, 0, 100);
+    text = `你复查了${student.name}「${row.topic}」的订正，关键步已经写对，这本可以合上了。`;
+  } else {
+    row.correction = "待订正";
+    text = `你复查了${student.name}「${row.topic}」的订正，还有两处没改对，让拿回去再改一次。`;
+  }
+  syncStudentHomework(state, row);
+  student.talks = [...(student.talks || []), { date: state.date, topic: "复查订正", text }];
+  return { ok: true, text, passed: pass, homework: row };
+}
+
+/** 坐班批改已交未面批的作业（不是叫到面前），一次处理多本。 */
+export function officeMarking(state, students) {
+  if (state.officeMarkedOn === state.date) return { ok: false, reason: "今天已经在办公室集中改过一轮，剩下的明天再清。" };
+  const rows = allHomeworkRows(state).filter((r) => r.correction === "待面批" || r.correction === "已补交待面批" || (r.status !== "缺交" && !r.reviewed && r.correction !== "已闭环" && r.correction !== "待补交"));
+  if (!rows.length) return { ok: false, reason: "桌上没有待改的作业。缺交的要先催到，订正本要用复查。" };
+  const pri = (r) => (r.correction === "已补交待面批" ? 0 : (r.quality === "错题较多" || r.quality === "未订正") ? 1 : 2);
+  rows.sort((a, b) => pri(a) - pri(b) || (a.seq ?? 0) - (b.seq ?? 0));
+  const batch = rows.slice(0, 10);
+  const weak = [];
+  for (const row of batch) {
+    row.reviewed = true;
+    if (row.quality === "错题较多" || row.quality === "未订正" || row.correction === "已补交待面批") {
+      row.correction = "待订正";
+      weak.push(row.name);
+    } else {
+      row.correction = "已闭环";
+    }
+    syncStudentHomework(state, row);
+  }
+  state.officeMarkedOn = state.date;
+  const text = `你在办公室改了 ${batch.length} 本「${batch[0].topic}」作业` + (weak.length ? `，给${weak.slice(0, 4).join("、")}${weak.length > 4 ? "等" : ""}夹了订正条子。` : "，这几本大体清楚，先收起来。");
+  return { ok: true, text, marked: batch.length, weak: weak.length };
+}
+
+/** 向班主任通报本班需要盯的人，或单独通报一名学生。 */
+export function consultHomeroom(state, students, student = null) {
+  const home = state.player.homeroom || "班主任";
+  if (student) {
+    if ((state.homeroomTalksToday || 0) >= 3) return { ok: false, reason: "今天已经麻烦班主任不少回了，其余的明天再通报。" };
+    const row = allHomeworkRows(state).find((r) => r.id === student.id && isOpenHomework(r));
+    const flag = student.lastClassFlag;
+    let issue = "最近的学习状态";
+    if (row?.correction === "待补交") issue = `「${row.topic}」作业缺交`;
+    else if (row) issue = `「${row.topic}」作业还要盯（${row.correction}）`;
+    else if (flag === "走神") issue = "这堂课有些走神";
+    student.homeroomWatch = true;
+    student.stress = clamp((student.stress || 40) - 1, 0, 95);
+    state.homeroomTalksToday = (state.homeroomTalksToday || 0) + 1;
+    const text = `你把${student.name}${issue}的情况告诉了班主任${home}。她记下了，晚自习会先看这名学生，也让你把订正落实到位。`;
+    student.talks = [...(student.talks || []), { date: state.date, topic: "通报班主任", text }];
+    return { ok: true, text };
+  }
+  if (state.homeroomBriefedOn === state.date) return { ok: false, reason: "今天已经和班主任对过一次班情。" };
+  const watch = homeworkWatchlist(state.homework, state);
+  const names = [...new Set(watch.map((r) => r.name))];
+  state.homeroomBriefedOn = state.date;
+  for (const s of students) {
+    if (watch.some((r) => r.id === s.id)) s.homeroomWatch = true;
+  }
+  const text = names.length
+    ? `你把${names.slice(0, 5).join("、")}${names.length > 5 ? "等" : ""}的缺交或课堂情况告诉了班主任${home}。她记下了，晚自习先点这几个人。`
+    : `你和班主任${home}对了一下班里近况。眼下没有特别要盯的人，她嘱咐把作业订正按名单落实。`;
+  return { ok: true, text, names };
+}
+
+/** 向备课组长请教当前课题，换来可执行的建议和一点备课充分度。 */
+export function consultMentor(state, grade = 1) {
+  if (state.mentorConsultedOn === state.date) return { ok: false, reason: "今天已经向备课组长请教过一次，先把教案落下去。" };
+  const mentor = state.player.mentor || "备课组长";
+  const topic = state.player.lessonPlan?.topic || suggestedTopic(state, grade);
+  state.mentorConsultedOn = state.date;
+  state.player.prep = Math.min(3, (state.player.prep || 0) + 1);
+  const hints = [
+    `把基本定义和易混点写在黑板左侧，例题不要一上来就上综合。`,
+    `先让中等生板演再讲变式，避免只盯着前面几排。`,
+    `作业里只保留一道稍难点的，错题明天必须订正到位。`,
+  ];
+  const hint = hints[Math.floor(hash01(state.seed, state.date, topic, "mentor") * hints.length)];
+  const text = `${mentor}看了你准备的「${topic}」，提醒：${hint}备课充分度现为${state.player.prep}。`;
+  return { ok: true, text, prep: state.player.prep, topic };
 }

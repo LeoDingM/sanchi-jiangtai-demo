@@ -1,8 +1,10 @@
 import {
   createGame, playerStudents, skipToNextStage, skipToGaokaoOf, skipToNextCohort,
-  advanceDay, prepareLesson, teach, talkTo, reviewHomework, listExamReports, formatDateCn,
+  advanceDay, advancePeriod, prepareLesson, teach, talkTo, reviewHomework, listExamReports, formatDateCn,
   applyEvent, SCHOOL_CALENDAR, gradeOf, topicsForGrade, LESSON_STYLES,
   suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext,
+  urgeHomework, checkCorrection, officeMarking, consultHomeroom, consultMentor,
+  daySchedule, currentSlot, formatSlotLabel, upcomingMath,
 } from "../domain/simulation.js";
 import { saveSlot, loadSlot, listSlots, toJSON, fromJSON } from "../domain/save.js";
 import { subjectById, SUBJECTS_G1 } from "../domain/config.js";
@@ -71,10 +73,18 @@ function showMain() {
 function handleAct(act) {
   if (!state) return;
   if (act === "prep") { const r = prepareLesson(state); toast(r.text || "备课完成"); }
-  if (act === "teach") { const r = teach(state, "精讲例题", selectedId); toast(r.text || "已上完一节数学课"); }
+  if (act === "teach") {
+    const r = teach(state, "精讲例题", selectedId);
+    toast(r.ok === false ? (r.reason || r.text) : (r.text || "已上完一节数学课"));
+  }
+  if (act === "nextperiod") {
+    const r = advancePeriod(state);
+    toast(r.settled ? (r.text || `结算：${r.type}`) : (r.text || r.reason || "已到下一节"));
+  }
   if (act === "nextday") {
     const r = advanceDay(state);
     if (r.type && r.type !== "day") toast(`结算：${r.type}`);
+    else if (r.text) toast(r.text);
   }
   if (act === "skip") {
     const r = skipToNextStage(state);
@@ -87,6 +97,12 @@ function handleAct(act) {
 function render() {
   if (!state) return;
   $("#clock").textContent = formatDateCn(state.date);
+  const slot = currentSlot(state);
+  const periodEl = $("#periodline");
+  if (periodEl) {
+    const tag = slot?.isMath ? " · 数学课" : slot?.isExamDay ? " · 停课" : slot?.id === "rest" ? " · 休息" : "";
+    periodEl.textContent = (slot ? formatSlotLabel(slot) : "") + tag;
+  }
   $("#roleline").textContent = `${state.player.role} ${state.player.name} · ${state.player.cohortYear}级卓行${state.player.classNo}班 数学`;
   document.querySelectorAll("#sidenav [data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
   const host = $("#view");
@@ -158,7 +174,9 @@ function examSourceNotice(report) {
 }
 
 function viewClassroom(host) {
-  host.innerHTML = `<h3>教室座位表</h3><p class="notice">点击头像查看档案并谈话。任教班为 2017 年起的卓行16班，约 73 人，不是云岫 0/1 的 30—35 人编制。</p><canvas id="classroom"></canvas>`;
+  const slot = currentSlot(state);
+  const slotLine = slot ? `${formatSlotLabel(slot)}${slot.isMath ? "（本节可上课）" : slot.isExamDay ? "（今日停课）" : ""}` : "";
+  host.innerHTML = `<h3>教室座位表</h3><p class="notice">现在是${slotLine || formatDateCn(state.date)}。点击头像查看档案并谈话。任教班为 2017 年起的卓行16班，约 73 人，不是云岫 0/1 的 30—35 人编制。</p><canvas id="classroom"></canvas>`;
   const c = host.querySelector("#classroom");
   renderSeating(c, clsStudents(), selectedId, (id) => { selectedId = id; view = "profile"; render(); });
 }
@@ -429,6 +447,56 @@ function viewProfile(host) {
 }
 
 
+
+function correctionLabel(r) {
+  return r?.correction || (r?.status === "缺交" ? "待补交" : "可归档");
+}
+
+function hwActionButtons(r) {
+  const c = correctionLabel(r);
+  if (c === "待补交") return `<button type="button" data-urge="${r.id}">催交</button>`;
+  if (c === "已订正待复查") return `<button type="button" data-chk="${r.id}">复查</button>`;
+  if (c === "待订正") return `<span class="muted">等订正</span>`;
+  if (c === "已闭环") return "已闭环";
+  return `<button type="button" data-rv="${r.id}">面批</button>`;
+}
+
+function officeCollabHtml() {
+  const watch = homeworkWatchlist(state.homework, state);
+  const names = [...new Set(watch.map((r) => r.name))];
+  const nxt = upcomingMath(state, { skipTaught: true });
+  const slot = currentSlot(state);
+  return `<div class="paper lesson-card office-actions">
+      <h3>办公室与班主任</h3>
+      <p class="muted">现在是${slot ? formatSlotLabel(slot) : formatDateCn(state.date)}。${nxt ? `下一节数学：${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}。` : ""}不是空菜单：坐班改作业、向班主任通报、向备课组长请教都会留下记录，并且用确定性规则推进作业订正。</p>
+      <div class="row-actions">
+        <button type="button" class="accent" id="do-mark">坐班批改</button>
+        <button type="button" id="do-home">向班主任通报本班</button>
+        <button type="button" id="do-mentor">向备课组长请教</button>
+      </div>
+      ${names.length ? `<p>需要盯的人：${names.slice(0, 8).join("、")}${names.length > 8 ? "等" : ""}。也可单独通报：</p>
+        <div class="row-actions">${watch.slice(0, 8).map((r)=>`<button type="button" data-home="${r.id}">通报${r.name}</button>`).join("")}</div>` : `<p class="muted">眼下没有特别要盯的缺交或订正。仍可和班主任对一下班情，或向${state.player.mentor}请教下一课。</p>`}
+    </div>`;
+}
+
+function bindOfficeActions(host) {
+  const mark = host.querySelector("#do-mark");
+  if (mark) mark.onclick = () => { const r = officeMarking(state); toast(r.ok ? r.text : r.reason); persist(); render(); };
+  const home = host.querySelector("#do-home");
+  if (home) home.onclick = () => { const r = consultHomeroom(state); toast(r.ok ? r.text : r.reason); persist(); render(); };
+  const mentor = host.querySelector("#do-mentor");
+  if (mentor) mentor.onclick = () => { const r = consultMentor(state); toast(r.ok ? r.text : r.reason); persist(); render(); };
+  host.querySelectorAll("[data-home]").forEach((b) => {
+    b.onclick = (ev) => { ev.stopPropagation(); selectedId = b.dataset.home; const r = consultHomeroom(state, b.dataset.home); toast(r.ok ? r.text : r.reason); persist(); render(); };
+  });
+  host.querySelectorAll("[data-urge]").forEach((b) => {
+    b.onclick = (ev) => { ev.stopPropagation(); selectedId = b.dataset.urge; const r = urgeHomework(state, b.dataset.urge); toast(r.ok ? r.text : r.reason); persist(); render(); };
+  });
+  host.querySelectorAll("[data-chk]").forEach((b) => {
+    b.onclick = (ev) => { ev.stopPropagation(); selectedId = b.dataset.chk; const r = checkCorrection(state, b.dataset.chk); toast(r.ok ? r.text : r.reason); persist(); render(); };
+  });
+}
+
 function viewTeach(host) {
   const grade = gradeOf(state.player.cohortYear, state.date);
   const topics = topicsForGrade(grade);
@@ -439,17 +507,30 @@ function viewTeach(host) {
   const prog = topicProgress(state, grade);
   const suggest = suggestedTopic(state, grade);
   const hw = state.homework;
-  const watch = homeworkWatchlist(hw);
+  const watch = homeworkWatchlist(hw, state);
+  const openRows = watch;
+  const slot = currentSlot(state);
   const planBlock = plan ? `<p><b>课题</b> ${plan.topic}　<b>例题深度</b> ${plan.depth}　<b>作业</b> ${plan.homework}</p>
       <p>${plan.goals || ""}</p>
       <p class="muted">${plan.examples || ""} ${plan.homeworkNote || ""}</p>` : `<p class="muted">还没有教案。先选课题备一节课，再进教室。</p>`;
   const quizLow = (last?.quizAll || last?.quiz || []).slice().sort((a, b) => a.score - b.score).slice(0, 5);
-  const hwRows = (hw?.rows || []).slice().sort((a, b) => {
-    const rank = (r) => (r.status === "缺交" ? 0 : r.quality === "错题较多" ? 1 : r.quality === "未订正" ? 2 : r.flag === "走神" ? 3 : r.reviewed ? 9 : 5);
+  const hwRows = ((hw?.rows || []).concat((state.homeworkOpen || []).filter((r) => !(r.date === hw?.date && r.topic === hw?.topic)))).slice().sort((a, b) => {
+    const rank = (r) => {
+      const c = correctionLabel(r);
+      if (c === "待补交") return 0;
+      if (c === "已补交待面批") return 1;
+      if (c === "待面批") return 2;
+      if (c === "已订正待复查") return 3;
+      if (c === "待订正") return 4;
+      if (r.flag === "走神") return 5;
+      if (r.reviewed || c === "已闭环") return 9;
+      return 6;
+    };
     return rank(a) - rank(b) || (a.seq ?? 0) - (b.seq ?? 0);
   });
+  const nxt = upcomingMath(state, { skipTaught: true });
   host.innerHTML = `<h3>日常教学 · 数学课</h3>
-    <p class="notice">先写教案，再上课，课后看作业登记，当面批改或个别谈话。备课充分度和教学积累会进入下一次考试的数学成绩。课题按本学期进度推进，课堂纪要、作业和小测都会写到学生档案里，不是几个空按钮。</p>
+    <p class="notice">现在是${slot ? formatSlotLabel(slot) : formatDateCn(state.date)}${slot?.isMath ? "，可以进教室上课" : "。等到数学课再进教室，或先在办公室处理作业"}。${nxt && !slot?.isMath ? `下一节数学：${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}。` : ""}先写教案，再上课；课后从缺交、错题跟到订正和复查。备课充分度和教学积累会进入下一次考试的数学成绩。</p>
     <div class="kpi">
       <div><span>备课充分度</span><b>${state.player.prep || 0} / 3</b></div>
       <div><span>数学教学积累</span><b>${Number(state.player.mathTeaching || 0).toFixed(1)}</b></div>
@@ -475,15 +556,16 @@ function viewTeach(host) {
           <label>提问/板演 <select id="call"><option value="">（不点名）</option>${sts.map((s)=>`<option value="${s.id}" ${s.id===selectedId?"selected":""}>${s.seq}号 ${s.name}${s.lastClassFlag==="走神"?" · 上次走神":""}</option>`).join("")}</select></label>
         </div>
         <div class="row-actions"><button type="button" class="accent" id="do-teach">开始上课</button></div>
-        ${last ? `<p class="muted">${last.date}　${last.topic} · ${last.style}</p><ol class="notes-list">${(last.notes||[]).map((n)=>`<li>${n}</li>`).join("")}</ol>${last.quiz?`<p class="muted">小测均分 ${last.quizAvg}。前列：${last.quiz.slice(0,5).map((q)=>`${q.name}${q.score}`).join("、")}${quizLow.length?`。偏低：${quizLow.map((q)=>`${q.name}${q.score}`).join("、")}`:""}</p>`:""}` : `<p class="muted">今天还没上课。</p>`}
+        ${last ? `<p class="muted">${last.date}　${last.topic} · ${last.style}</p><ol class="notes-list">${(last.notes||[]).map((n)=>`<li>${n}</li>`).join("")}</ol>${last.quiz?`<p class="muted">小测均分 ${last.quizAvg}。前列：${last.quiz.slice(0,5).map((q)=>`${q.name}${q.score}`).join("、")}${quizLow.length?`。偏低：${quizLow.map((q)=>`${q.name}${q.score}`).join("、")}`:""}</p>`:""}` : `<p class="muted">今天还没上数学课。</p>`}
       </div>
     </div>
+    ${officeCollabHtml()}
     <div class="paper lesson-card">
-      <h3>作业登记与面批</h3>
-      ${hw ? `<p>「${hw.topic}」· ${hw.date}　缺交 ${hw.rows.filter((r)=>r.status==="缺交").length} 本，需盯 ${watch.length} 人。每天最多当面批 6 本，建议先看缺交和错题。</p>` : `<p class="muted">上完一节课之后，这里会登记全班作业情况，再决定先面批谁。</p>`}
-      ${watch.length ? `<p>建议先面批：</p><div class="row-actions">${watch.slice(0, 12).map((s)=>`<button type="button" data-rv="${s.id}">${s.name}${s.status==="缺交"?"（缺交）":s.quality==="错题较多"?"（错题）":""}</button>`).join("")}</div>` : ""}
-      ${hwRows.length ? `<div class="scroll-table"><table class="hw-table"><thead><tr><th>座号</th><th>姓名</th><th>课堂</th><th>交作业</th><th>质量</th><th>面批</th></tr></thead>
-        <tbody>${hwRows.map((r)=>`<tr data-id="${r.id}" class="${r.status==="缺交"||r.quality==="错题较多"?"hw-bad":""}"><td>${r.seq??""}</td><td>${r.name}</td><td>${r.flag||""}</td><td>${r.status}</td><td>${r.quality}</td><td>${r.reviewed?"已面批":`<button type="button" data-rv="${r.id}">面批</button>`}</td></tr>`).join("")}</tbody></table></div>` : `<div class="row-actions">${sts.slice(0, 16).map((s)=>`<button type="button" data-rv="${s.id}">${s.name}</button>`).join("")}</div>`}
+      <h3>作业登记、订正与复查</h3>
+      ${hw ? `<p>「${hw.topic}」· ${hw.date}　缺交 ${hw.rows.filter((r)=>r.status==="缺交"||r.correction==="待补交").length} 本，待跟进 ${openRows.length} 人。缺交先催交，错题面批后等订正，交回后再复查。每天最多当面批或复查 6 本。</p>` : `<p class="muted">上完一节课之后，这里会登记全班作业，并从缺交、错题跟到订正和复查。</p>`}
+      ${watch.length ? `<p>建议先处理：</p><div class="row-actions">${watch.slice(0, 12).map((s)=>`${s.correction==="待补交"?`<button type="button" data-urge="${s.id}">催${s.name}</button>`:s.correction==="已订正待复查"?`<button type="button" data-chk="${s.id}">复查${s.name}</button>`:`<button type="button" data-rv="${s.id}">${s.name}${s.correction==="已补交待面批"?"（补交）":s.quality==="错题较多"?"（错题）":s.correction==="待订正"?"（待订正）":""}</button>`}`).join("")}</div>` : ""}
+      ${hwRows.length ? `<div class="scroll-table"><table class="hw-table"><thead><tr><th>座号</th><th>姓名</th><th>课堂</th><th>交作业</th><th>质量</th><th>订正</th><th>处理</th></tr></thead>
+        <tbody>${hwRows.map((r)=>`<tr data-id="${r.id}" class="${r.status==="缺交"||r.quality==="错题较多"||r.correction==="待补交"?"hw-bad":""}"><td>${r.seq??""}</td><td>${r.name}</td><td>${r.flag||""}</td><td>${r.status}</td><td>${r.quality}</td><td>${correctionLabel(r)}</td><td>${hwActionButtons(r)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="row-actions">${sts.slice(0, 16).map((s)=>`<button type="button" data-rv="${s.id}">${s.name}</button>`).join("")}</div>`}
     </div>
     ${lessons.length ? `<h3>最近课堂记录</h3>
       <div class="paper scroll-table"><table><thead><tr><th>日期</th><th>课题</th><th>课型</th><th>备课</th><th>缺交</th><th>纪要</th></tr></thead>
@@ -513,6 +595,7 @@ function viewTeach(host) {
       persist(); render();
     };
   });
+  bindOfficeActions(host);
   host.querySelectorAll("tr[data-id]").forEach((tr) => {
     tr.onclick = () => { selectedId = tr.dataset.id; view = "profile"; render(); };
   });
@@ -628,7 +711,13 @@ function viewOffice(host) {
   const byDate = {};
   for (const r of all) (byDate[r.date+" "+r.examName] ??= []).push(r);
   const names = Object.keys(byDate);
-  if (!names.length) { host.innerHTML = "<h3>教务处</h3><p>暂无全校成绩。</p>"; return; }
+  if (!names.length) {
+    host.innerHTML = `<h3>教务处</h3>
+      ${officeCollabHtml()}
+      <p class="muted">全校成绩要等第一次考试结算之后才会出现在这里。办公室坐班、班主任通报和备课请教现在就可以做。</p>`;
+    bindOfficeActions(host);
+    return;
+  }
   const pick = examPick && names.find((n)=>n.includes(examPick.split("|")[0])) || names[0];
   const reports = byDate[pick] || byDate[names[0]];
   const report = reports.find((r)=>r.entryYear==null) || reports[0];
@@ -642,6 +731,7 @@ function viewOffice(host) {
   const tiers = [["all","全部层次"],["yunxiu_exp","云岫实验 0/1"],["yunxiu_key","云岫重点 2—4"],["lingxiao","凌霄"],["zhuoxing","卓行"],["duxue","笃学"],["yiti","艺体"],["fuzhuo","复卓"]];
   const tracks = live.split ? [["all","文理全部"],["li","理科"],["wen","文科"]] : [["all","未分科"]];
   host.innerHTML = `<h3>教务处 · 全校成绩</h3>
+    ${officeCollabHtml()}
     <div class="filters">
       <label>场次 <select id="exsel">${flat.map((e)=>{const v=`${e.date}|${e.examId}`; return `<option value="${v}" ${`${e.date}|${e.examId}`===`${live.date}|${live.examId}`?"selected":""}>${e.date} ${e.examName} · 高${e.grade}</option>`;}).join("")}</select></label>
       <label>层次 <select id="tier">${tiers.map(([v,n])=>`<option value="${v}">${n}</option>`).join("")}</select></label>
@@ -780,8 +870,13 @@ function renderAgenda() {
   const box = $("#agenda");
   const next = SCHOOL_CALENDAR.find((e) => e.date >= state.date && ["exam","placement1","placement2","admission","promote"].includes(e.kind));
   const cls = clsStudents();
-  box.innerHTML = `<h3>今日</h3>
+  const sched = daySchedule(state.date, state);
+  const curId = state.periodId;
+  const tt = `<table class="tt-table"><tbody>${sched.map((p)=>`<tr class="${p.id===curId?"now":""}${p.isMath?" math":""}"><td>${p.clock||""}</td><td>${p.short||p.name}</td><td>${p.subject}${p.isMath?" <span class=\"math-tag\">数学</span>":""}</td></tr>`).join("")}</tbody></table>`;
+  box.innerHTML = `<h3>今日课表</h3>
     <p>${formatDateCn(state.date)}</p>
+    ${tt}
+    <div class="row-actions"><button type="button" data-act="nextperiod">下一节</button></div>
     <p class="notice">备课充分度 ${state.player.prep||0}　数学教学积累 ${Number(state.player.mathTeaching||0).toFixed(1)}</p>
     <p class="notice">下一件大事：${next ? `${next.date} ${next.name}` : "（暂无）"}</p>
     <h3>任教班</h3>
@@ -790,4 +885,5 @@ function renderAgenda() {
     <h3>最近日志</h3>
     ${(state.log||[]).slice(0,8).map((l)=>`<div class="log-item"><b>${l.date}</b> ${l.text}</div>`).join("")}`;
   box.querySelector("[data-act=skip]").onclick = () => handleAct("skip");
+  box.querySelector("[data-act=nextperiod]").onclick = () => handleAct("nextperiod");
 }

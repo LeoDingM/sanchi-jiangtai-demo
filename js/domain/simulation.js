@@ -8,7 +8,8 @@ import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js"
 import { runExam } from "./examService.js";
 import { admitCohort } from "./admission.js";
 import { rngFrom, clamp } from "./prng.js";
-import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext } from "./teaching.js";
+import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore } from "./teaching.js";
+import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, formatSlotLabel } from "./timetable.js";
 
 export const SAVE_VERSION = 1;
 
@@ -346,7 +347,7 @@ export function skipToNextStage(state) {
   const ev = nextExamEvent(state.date, SCHOOL_CALENDAR);
   if (!ev) return { ok: false, reason: "校历已无后续事件" };
   state.date = ev.date;
-  state.periodId = "morning-read";
+  state.periodId = startPeriodId(ev.date, state);
   state.talksToday = 0;
   state.reviewsToday = 0;
   const result = applyEvent(state, ev);
@@ -387,11 +388,66 @@ export function advanceDay(state) {
     return applyEvent(state, major);
   }
   state.date = addDays(state.date, 1);
-  state.periodId = "morning-read";
+  state.periodId = startPeriodId(state.date, state);
   state.talksToday = 0;
   state.reviewsToday = 0;
+  const updates = collectHomeworkFollowups(state, "day");
   const incoming = SCHOOL_CALENDAR.filter((e) => e.date === state.date);
-  return { type: "day", date: state.date, events: incoming };
+  const slot = currentSlot(state);
+  return { type: "day", date: state.date, events: incoming, updates, slot, text: `到了${formatDateCn(state.date)}${slot ? " " + formatSlotLabel(slot) : ""}。` };
+}
+
+function resetDailyCounters(state) {
+  state.talksToday = 0;
+  state.reviewsToday = 0;
+}
+
+/** 按课表走到下一节（周日直接跨到周一早读）。考试/分班日若尚未结算，先结算再停在当天。 */
+export function advancePeriod(state) {
+  const pending = pendingMajorEvent(state);
+  if (pending) {
+    state.flags[`done-${pending.id}`] = true;
+    const result = applyEvent(state, pending);
+    return { type: pending.kind, settled: true, ok: true, event: pending, result, text: `今日${pending.name}，先在这一节把这场结算了。` };
+  }
+  const n = nextPeriodAfter(state);
+  if (!n) return { type: "period", ok: false, reason: "课表已经走到尽头" };
+  const rolledDay = n.rolledDay || n.date !== state.date;
+  state.date = n.date;
+  state.periodId = n.slot.id;
+  if (rolledDay) resetDailyCounters(state);
+  const updates = collectHomeworkFollowups(state, "period");
+  const slot = currentSlot(state);
+  const follow = updates.length
+    ? `作业跟进：${updates.slice(0, 3).map((u) => u.name + u.change).join("、")}${updates.length > 3 ? "等" : ""}。`
+    : "";
+  const text = rolledDay
+    ? `到了${formatDateCn(state.date)} ${formatSlotLabel(slot)}。${follow}`
+    : `到了${formatSlotLabel(slot)}。${follow}`;
+  return { type: "period", ok: true, rolledDay, slot, updates, text, events: SCHOOL_CALENDAR.filter((e) => e.date === state.date) };
+}
+
+function jumpToNextMathSameDay(state) {
+  const cur = currentSlot(state);
+  if (cur?.isMath && state.taughtPeriodKey !== `${state.date}|${cur.id}`) return { ok: true, jumped: false };
+  const later = upcomingMath(state, { sameDay: true, skipTaught: true });
+  if (!later) {
+    const nxt = upcomingMath(state, { sameDay: false, skipTaught: true });
+    const hint = nxt ? `下一节数学在${nxt.date} ${nxt.slot.name}${nxt.slot.clock ? " " + nxt.slot.clock : ""}。请用「下一节」或「下一天」走到那时再进教室。` : "最近没有可上的数学课。";
+    const major = majorEventOn(state.date);
+    if (cur?.id === "rest" || cur?.kind === "rest") return { ok: false, reason: `今日休息。${hint}` };
+    if (major) return { ok: false, reason: `今日${major.name}，停课。${hint}` };
+    return { ok: false, reason: `今天的数学课已经上完。${hint}` };
+  }
+  let guard = 0;
+  while (state.periodId !== later.slot.id && guard++ < 16) {
+    const r = advancePeriod(state);
+    if (r.settled) return { ok: false, reason: r.text };
+    if (!r.ok || r.rolledDay) break;
+  }
+  const cur2 = currentSlot(state);
+  if (cur2?.isMath && state.taughtPeriodKey !== `${state.date}|${cur2.id}`) return { ok: true, jumped: true };
+  return { ok: false, reason: "没有排到本节数学课。" };
 }
 
 export function prepareLesson(state, opts = {}) {
@@ -402,11 +458,63 @@ export function prepareLesson(state, opts = {}) {
 }
 
 export function teach(state, style = "精讲例题", callId = null) {
+  const pending = pendingMajorEvent(state);
+  if (pending) return { ok: false, reason: `今日${pending.name}，停课，请先用「下一天」或「下一节」结算。` };
+  const major = majorEventOn(state.date);
+  if (major) return { ok: false, reason: `今日${major.name}，全天停课，改在办公室处理作业，或用「下一节」走到下一天。` };
+  const land = jumpToNextMathSameDay(state);
+  if (!land.ok) return { ok: false, reason: land.reason, text: land.reason };
   const grade = gradeOf(state.player.cohortYear, state.date);
   const cls = snapshotPlayerClass(state);
   const lastExam = listExamReports(state, { entryYear: state.player.cohortYear })[0] || null;
   const r = teachLesson(state, cls, { style, callId, grade, lastExam });
+  r.periodId = state.periodId;
+  r.slot = currentSlot(state);
+  state.taughtPeriodKey = `${state.date}|${state.periodId}`;
+  const after = nextPeriodAfter(state);
+  if (after && after.date === state.date) {
+    const moved = advancePeriod(state);
+    if (moved.ok && !moved.settled) r.text = `${r.text} 下课，现在是${formatSlotLabel(moved.slot)}。`;
+  }
   addLog(state, r.text);
+  return r;
+}
+
+export function urgeHomework(state, studentId) {
+  const c = state.cohorts[state.player.cohortYear];
+  const s = c?.students.find((x) => x.id === studentId);
+  const r = urgeHomeworkCore(state, s);
+  if (r.ok) addLog(state, r.text);
+  return r;
+}
+
+export function checkCorrection(state, studentId) {
+  const c = state.cohorts[state.player.cohortYear];
+  const s = c?.students.find((x) => x.id === studentId);
+  const r = checkCorrectionCore(state, s);
+  if (r.ok) addLog(state, r.text);
+  return r;
+}
+
+export function officeMarking(state) {
+  const cls = snapshotPlayerClass(state);
+  const r = officeMarkingCore(state, cls);
+  if (r.ok) addLog(state, r.text);
+  return r;
+}
+
+export function consultHomeroom(state, studentId = null) {
+  const cls = snapshotPlayerClass(state);
+  const s = studentId ? cls.find((x) => x.id === studentId) || state.cohorts[state.player.cohortYear]?.students.find((x) => x.id === studentId) : null;
+  const r = consultHomeroomCore(state, cls, s || null);
+  if (r.ok) addLog(state, r.text);
+  return r;
+}
+
+export function consultMentor(state) {
+  const grade = gradeOf(state.player.cohortYear, state.date);
+  const r = consultMentorCore(state, grade);
+  if (r.ok) addLog(state, r.text);
   return r;
 }
 
@@ -418,7 +526,7 @@ export function reviewHomework(state, studentId) {
   return r;
 }
 
-export { topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext };
+export { topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, daySchedule, currentSlot, formatSlotLabel, upcomingMath, majorEventOn, pendingMajorEvent };
 
 function latestMathExam(state, studentId) {
   const reports = listExamReports(state, { entryYear: state.player.cohortYear });

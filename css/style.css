@@ -37,6 +37,7 @@ h1 { margin: 0; font-size: 22px; font-weight: 700; color: var(--gold); }
 h1 + .school { margin: 0; font-size: 12px; }
 .status { flex: 1; }
 #clock { font-size: 18px; color: var(--chalk); }
+#periodline { font-size: 13px; color: var(--gold); margin-top: 2px; }
 #roleline { font-size: 13px; color: var(--chalk-dim); }
 .top-actions, .boot-btns, .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 button {
@@ -133,3 +134,9 @@ a { color: var(--gold); }
 
 .hw-table .hw-bad td { background: color-mix(in srgb, var(--gold, #c45c4a) 10%, transparent); }
 .hw-table button { padding: 2px 8px; font-size: 12px; }
+
+.tt-table { font-size: 12px; }
+.tt-table tr.now td { background: rgba(232, 213, 163, 0.22); font-weight: 600; }
+.tt-table tr.math td:last-child { color: var(--ok, #2c5e3f); }
+.tt-table .math-tag { color: var(--seal, #8b2b2b); font-size: 11px; }
+.office-actions { margin-bottom: 14px; }
