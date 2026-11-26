@@ -1,5 +1,5 @@
 /** 教室座位表（Canvas）：7 列 × 若干排，点击查看档案或当堂处理。 */
-import { seatOf, columnsForClass } from "../domain/school.js?v=t43u1";
+import { seatOf, columnsForClass } from "../domain/school.js?v=t44u1";
 
 function fitText(ctx, text, maxWidth, maxSize, family) {
   let size = maxSize;

@@ -3,13 +3,13 @@ import {
   CLASS_BLUEPRINT, TIER, SUBJECT_IDS, PERSONALITIES, FAMILY_TYPES,
   PLAYER_CLASS_NO, GRADE_YEAR, LI_SUBJECTS, WEN_SUBJECTS,
   REPEAT_CLASS_SIZE, REPEAT_WEN_NOS, REPEAT_LI_NOS, INSERT_REPEAT_CLASS_NOS,
-} from "./config.js?v=t43u1";
-import { clamp, gauss, hash01, pick, rngFrom, shuffle } from "./prng.js?v=t43u1";
-import { generateName } from "./names.js?v=t43u1";
-import { gradeStudent, scaleOf } from "./scores.js?v=t43u1";
-import { provincialLines } from "./jiangxi.js?v=t43u1";
-import { canInsertRepeat } from "./admission.js?v=t43u1";
-import { examParams } from "./calendar.js?v=t43u1";
+} from "./config.js?v=t44u1";
+import { clamp, gauss, hash01, pick, rngFrom, shuffle } from "./prng.js?v=t44u1";
+import { generateName } from "./names.js?v=t44u1";
+import { gradeStudent, scaleOf } from "./scores.js?v=t44u1";
+import { provincialLines } from "./jiangxi.js?v=t44u1";
+import { canInsertRepeat } from "./admission.js?v=t44u1";
+import { examParams } from "./calendar.js?v=t44u1";
 
 export const ALL_SUBJECTS = [...SUBJECT_IDS, "biology"];
 
@@ -301,6 +301,40 @@ function evenShare(total, parts) {
   });
 }
 
+function fitQuotas(desired, seats) {
+  const q = desired.map((v, i) => Math.max(0, Math.min(Math.max(0, v), seats[i] || 0)));
+  let unplaced = 0;
+  for (let i = 0; i < desired.length; i++) {
+    const want = Math.max(0, desired[i] || 0);
+    unplaced += want - q[i];
+  }
+  for (let i = 0; i < q.length && unplaced > 0; i++) {
+    const room = (seats[i] || 0) - q[i];
+    if (room <= 0) continue;
+    const take = Math.min(room, unplaced);
+    q[i] += take;
+    unplaced -= take;
+  }
+  return q;
+}
+
+/** 把二本以下再分成「刚掉线」和长低分尾巴，避免最低分全被最弱班收走。 */
+function splitLowTail(rest, secondLine) {
+  const cut = secondLine != null ? secondLine - 80 : null;
+  if (cut != null) {
+    const upper = [];
+    const tail = [];
+    for (const s of rest) {
+      if ((s.lastGaokao?.total ?? -Infinity) < cut) tail.push(s);
+      else upper.push(s);
+    }
+    return { upper, tail };
+  }
+  const nTail = Math.round(rest.length * 0.18);
+  const splitAt = Math.max(0, rest.length - nTail);
+  return { upper: rest.slice(0, splitAt), tail: rest.slice(splitAt) };
+}
+
 function argmaxQuota(left) {
   let best = -1;
   for (let i = 0; i < left.length; i++) {
@@ -327,6 +361,7 @@ function fillByQuota(buckets, list, quotas, cap, pickIdx) {
 /**
  * 把补习生分到文/理科各班：按上次高考位次分带，不按某年省控绝对人数（开局合成分与当年线可能错位）。
  * 最好的一班拿更多一本，但尖子不全塞进 37/31；第一进最好的班，第二、第三尽量进其他班。
+ * 最好班不是清一色尖子班：二本以上约按 70 人里 40% 掉线来留位子，并分到一部分长低分尾巴。
  */
 function distributeToTutoringClasses(sorted, nos, rng) {
   if (!sorted.length) return [];
@@ -364,7 +399,7 @@ function distributeToTutoringClasses(sorted, nos, rng) {
   let bestFirst = 0;
   if (nFirst > 0) {
     const raw = Math.round(nFirst * 8 / 33);
-    bestFirst = clamp(raw, Math.min(6, nFirst), Math.min(10, nFirst));
+    bestFirst = clamp(raw, Math.min(6, nFirst), Math.min(9, nFirst));
     if (nFirst >= nClasses && nFirst - bestFirst < nClasses - 1) bestFirst = nFirst - (nClasses - 1);
     bestFirst = clamp(bestFirst, 1, Math.min(cap, nFirst));
   }
@@ -373,7 +408,9 @@ function distributeToTutoringClasses(sorted, nos, rng) {
     qFirst[i < bestIdx ? i : i + 1] = v;
   });
 
-  const bestSecond = Math.min(nSecond, Math.max(0, 47 - bestFirst), cap - qFirst[bestIdx]);
+  // 70 人编制下若仍按 47 人上二本去塞，最好班平均会被抬离二本线；约 44 人上线、近四成掉线更接近真实量级。
+  const bestAboveTarget = 44;
+  const bestSecond = Math.min(nSecond, Math.max(0, bestAboveTarget - bestFirst), cap - qFirst[bestIdx]);
   qSecond[bestIdx] = bestSecond;
   evenShare(nSecond - bestSecond, nClasses - 1).forEach((v, i) => {
     qSecond[i < bestIdx ? i : i + 1] = v;
@@ -394,40 +431,71 @@ function distributeToTutoringClasses(sorted, nos, rng) {
   }
 
   const seats = qFirst.map((f, i) => cap - f - qSecond[i]);
-  const nRest = rest.length;
+  const { upper, tail } = splitLowTail(rest, secondLine);
   const seatSum = seats.reduce((a, b) => a + b, 0);
-  if (nRest >= seatSum) {
-    seats.forEach((v, i) => { qRest[i] = v; });
-  } else if (nRest === seatSum) {
-    seats.forEach((v, i) => { qRest[i] = v; });
+  const qTail = Array(nClasses).fill(0);
+  const nTail = Math.min(tail.length, seatSum);
+  if (nTail > 0) {
+    const bestTail = Math.min(
+      seats[bestIdx],
+      nTail,
+      Math.max(5, Math.round(nTail * 0.12)),
+      10,
+    );
+    const desiredTail = Array(nClasses).fill(0);
+    desiredTail[bestIdx] = bestTail;
+    evenShare(nTail - bestTail, nClasses - 1).forEach((v, i) => {
+      desiredTail[i < bestIdx ? i : i + 1] = v;
+    });
+    fitQuotas(desiredTail, seats).forEach((v, i) => { qTail[i] = v; });
+  }
+  const seatsAfterTail = seats.map((s, i) => Math.max(0, s - qTail[i]));
+  const nUpper = upper.length;
+  const upperSeatSum = seatsAfterTail.reduce((a, b) => a + b, 0);
+  if (nUpper >= upperSeatSum) {
+    seatsAfterTail.forEach((v, i) => { qRest[i] = v; });
   } else {
-    evenShare(nRest, nClasses).forEach((v, i) => { qRest[i] = v; });
-    let extra = 0;
-    for (let i = 0; i < nClasses; i++) {
-      if (qRest[i] > seats[i]) {
-        extra += qRest[i] - seats[i];
-        qRest[i] = seats[i];
-      }
-    }
-    for (let i = 0; i < nClasses && extra > 0; i++) {
-      const room = seats[i] - qRest[i];
-      if (room <= 0) continue;
-      const take = Math.min(room, extra);
-      qRest[i] += take;
-      extra -= take;
-    }
+    const desiredUpper = evenShare(nUpper, nClasses);
+    fitQuotas(desiredUpper, seatsAfterTail).forEach((v, i) => { qRest[i] = v; });
   }
 
   const buckets = Array.from({ length: nClasses }, () => []);
   const otherFirst = shuffle(rng, qFirst.map((n, j) => j).filter((j) => j !== bestIdx && qFirst[j] > 0));
   fillByQuota(buckets, firstBand, qFirst, cap, (i, left) => {
     if (i === 0 && left[bestIdx] > 0) return bestIdx;
-    if (i === 1 && otherFirst[0] != null && left[otherFirst[0]] > 0) return otherFirst[0];
-    if (i === 2 && otherFirst[1] != null && left[otherFirst[1]] > 0) return otherFirst[1];
+    // 第二、第三及随后几名较稳的一本先各进其他班，避免有的班只分到擦线生、今年一本掉光。
+    if (i >= 1 && i <= otherFirst.length) {
+      const dest = otherFirst[i - 1];
+      if (dest != null && left[dest] > 0) return dest;
+    }
+    // 最好班再拿够较稳的一本额度，避免只剩擦线的人、今年最高分掉到 550 出头。
+    if (left[bestIdx] > 0) return bestIdx;
     return -1;
   });
-  fillByQuota(buckets, secondBand, qSecond, cap);
-  fillByQuota(buckets, rest, qRest, cap);
+  const nearCut = firstLine != null ? firstLine - 18 : null;
+  let highSecond, midSecond;
+  if (nearCut != null) {
+    highSecond = secondBand.filter((s) => (s.lastGaokao?.total ?? -Infinity) >= nearCut);
+    midSecond = secondBand.filter((s) => (s.lastGaokao?.total ?? -Infinity) < nearCut);
+  } else {
+    const nHigh = Math.round(secondBand.length * 0.25);
+    highSecond = secondBand.slice(0, nHigh);
+    midSecond = secondBand.slice(nHigh);
+  }
+  const qHigh = Array(nClasses).fill(0);
+  const qMid = Array(nClasses).fill(0);
+  fitQuotas(evenShare(highSecond.length, nClasses), qSecond).forEach((v, i) => { qHigh[i] = v; });
+  const seatsForMid = qSecond.map((q, i) => q - qHigh[i]);
+  const desiredMid = Array(nClasses).fill(0);
+  desiredMid[bestIdx] = Math.min(seatsForMid[bestIdx], midSecond.length);
+  evenShare(Math.max(0, midSecond.length - desiredMid[bestIdx]), Math.max(1, nClasses - 1)).forEach((v, i) => {
+    desiredMid[i < bestIdx ? i : i + 1] = v;
+  });
+  fitQuotas(desiredMid, seatsForMid).forEach((v, i) => { qMid[i] = v; });
+  fillByQuota(buckets, highSecond, qHigh, cap);
+  fillByQuota(buckets, midSecond, qMid, cap);
+  fillByQuota(buckets, upper, qRest, cap);
+  fillByQuota(buckets, tail, qTail, cap);
   const assigned = new Set(buckets.flat().map((s) => s.id));
   for (const s of sorted) {
     if (assigned.has(s.id)) continue;
@@ -481,20 +549,33 @@ function examAbilityIds(track) {
     : ["chinese", "math", "english", "physics", "chemistry", "biology"];
 }
 
-function shiftAbilityToward(st, targetBase, cap = 99) {
+function shiftAbilityToward(st, targetBase, cap = 99, floor = 16) {
   const ids = examAbilityIds(st.track);
   const have = ids.filter((id) => st.ability?.[id] != null);
   if (!have.length) return st;
   const cur = have.reduce((sum, id) => sum + Number(st.ability[id] || 0), 0) / have.length;
   const shift = targetBase - cur;
   const allIds = new Set([...Object.keys(st.ability || {}), ...have]);
+  const lo = Math.max(0, floor);
   for (const id of allIds) {
-    const a = clamp((st.ability[id] || 0) + shift, 16, Math.min(99, cap));
+    const a = clamp((st.ability[id] || 0) + shift, lo, Math.min(99, cap));
     st.ability[id] = round1(a);
     const pot = clamp((st.potential?.[id] || a) + shift, a, 99.5);
     st.potential[id] = round1(pot);
   }
   return st;
+}
+
+function examAbilityMean(st) {
+  const ids = examAbilityIds(st.track);
+  const have = ids.filter((id) => st.ability?.[id] != null);
+  if (!have.length) return 0;
+  return have.reduce((sum, id) => sum + Number(st.ability[id] || 0), 0) / have.length;
+}
+
+function firmStability(st, lo, hi, rng) {
+  const v = lo + rng() * Math.max(0, hi - lo);
+  st.stability = round1(clamp(Math.max(st.stability || 0, v), lo, 97));
 }
 
 function takeUnique(list, n, rng, used) {
@@ -504,31 +585,58 @@ function takeUnique(list, n, rng, used) {
   return out;
 }
 
-/** 给补习班点出一本带与薄薄高尾：理科压在厦大/矿大/南大量级，文科顶端可到人大/厦大，不年年剧本化。 */
+/** 给补习班点出一本带、薄薄高尾，以及理科长低分尾巴。理科压在厦大/矿大/南大量级，文科顶端可到人大/厦大，不年年剧本化。 */
 function plantTutoringProfile(students, rng) {
   const used = new Set();
   const li = students.filter((s) => s.track !== "wen");
   const wen = students.filter((s) => s.track === "wen");
 
   const liTops = [
-    90.8 + rng() * 2.2, // 约 630–640，厦大量级；按考试科目对齐，避免弱科把理综抬到 660+
-    84.4 + rng() * 2.0, // 约 600 上下，矿大量级
-    82.2 + rng() * 1.8, // 约 590 上下，南大量级
+    93.8 + rng() * 0.9, // 约 630–640：按计分锚点约 94 能力才到这档，高稳定以免个别场次冲到 655
+    85.4 + rng() * 1.2, // 约 590–610，矿大量级
+    79.8 + rng() * 2.0, // 约 555–590，南大量级
   ];
-  if (rng() < 0.35) liTops.push(77.5 + rng() * 2.2);
-  takeUnique(li, liTops.length, rng, used).forEach((s, i) => shiftAbilityToward(s, liTops[i], 93.8));
-  // 其余一本来自一条较窄的刚过线带，避免整班二十多个一本。
+  if (rng() < 0.35) liTops.push(76.8 + rng() * 1.8);
+  takeUnique(li, liTops.length, rng, used).forEach((s, i) => {
+    shiftAbilityToward(s, liTops[i], i === 0 ? 95.0 : (i === 1 ? 87.6 : 84.2));
+    firmStability(s, 88, 96, rng);
+  });
+  // 其余一本来自稍稳的过线带，避免整班二十多个一本，也避免弱班只有擦线生。
   const nLiFirst = Math.min(30, Math.max(0, li.length - used.size));
-  takeUnique(li, nLiFirst, rng, used).forEach((s) => shiftAbilityToward(s, 67 + rng() * 4.2, 74));
+  takeUnique(li, nLiFirst, rng, used).forEach((s) => {
+    shiftAbilityToward(s, 68.2 + rng() * 3.6, 75);
+    firmStability(s, 74, 86, rng);
+  });
+
+  // 长低分尾巴：310–379 一带有多人，并有极少数 150–300 的特别低分。分班时最好班也会分到一部分。
+  if (li.length >= 80) {
+    const nMidLow = Math.min(56, Math.max(0, li.length - used.size));
+    takeUnique(li, nMidLow, rng, used).forEach((s) => shiftAbilityToward(s, 30 + rng() * 9, 42, 16));
+    const nFloor = Math.min(rng() < 0.5 ? 8 : 10, Math.max(0, li.length - used.size));
+    takeUnique(li, nFloor, rng, used).forEach((s, i) => {
+      const target = i === 0 ? 4 + rng() * 8 : 12 + rng() * 16;
+      shiftAbilityToward(s, target, 28, 3);
+    });
+  }
+  // 加宽标准差后，未点名的理科生若随机摸到一本，拉回二本附近，避免一本膨胀。
+  for (const s of li) {
+    if (used.has(s.id)) continue;
+    if (examAbilityMean(s) > 63.5) shiftAbilityToward(s, 55 + rng() * 6, 63);
+  }
 
   const wenFirst = rng() < 0.58 ? 96.0 + rng() * 2.2 : 91.0 + rng() * 3.0;
   const wenSecond = rng() < 0.55 ? 92.0 + rng() * 2.2 : 87.0 + rng() * 3.0;
   takeUnique(wen, 2, rng, used).forEach((s, i) => shiftAbilityToward(s, i === 0 ? wenFirst : wenSecond, i === 0 ? 99 : 96));
   const nWenFirst = Math.min(10, Math.max(0, wen.length - used.size));
   takeUnique(wen, nWenFirst, rng, used).forEach((s) => shiftAbilityToward(s, 70 + rng() * 4, 78));
+  // 文科只作轻度保护，免得加宽补习班标准差后一本膨胀；顶端仍由上面两点出。
+  for (const s of wen) {
+    if (used.has(s.id)) continue;
+    if (examAbilityMean(s) > 66) shiftAbilityToward(s, 58 + rng() * 6, 66);
+  }
 }
 
-/** 高三复读生：能力按补习班层次生成，略强于普通卓行、远低于凌霄，不是按重点/凌霄再改标签。 */
+/** 高三复读生：能力按补习班层次生成，主体略强于普通卓行、远低于凌霄，并带长低分尾巴，不是按重点/凌霄再改标签。 */
 export function generateRepeaters(forSeniorEntryYear, seed, usedNames, quality = 0, { regulars = [] } = {}) {
   // 高三补习班：文科 31–36、理科 37–42，每班 70 人。先按补习班画像生成再分班，班内按上次高考总分排座。
   const rng = rngFrom(seed, "repeaters", forSeniorEntryYear);

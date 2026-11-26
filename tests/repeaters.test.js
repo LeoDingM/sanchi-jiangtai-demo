@@ -252,6 +252,19 @@ test("晋升后新一届高三同样按上次高考总分排座，失常的原0/
 
 const PROFILE_SEEDS = [20170901, 7, 99, 2020, 42, 11];
 
+function pctile(arr, p) {
+  if (!arr.length) return null;
+  const a = arr.slice().sort((x, y) => x - y);
+  const i = (a.length - 1) * p;
+  const lo = Math.floor(i), hi = Math.ceil(i);
+  if (lo === hi) return a[lo];
+  return a[lo] + (a[hi] - a[lo]) * (i - lo);
+}
+
+function meanOf(arr) {
+  return arr.reduce((s, x) => s + x, 0) / arr.length;
+}
+
 function tutoringGaokao(entryYear, seed) {
   const c = generateCohort(entryYear, seed, {
     alreadySplit: true, withRepeat: true, quality: eraQuality(entryYear),
@@ -265,11 +278,22 @@ function tutoringGaokao(entryYear, seed) {
   const pack = (nos, track) => {
     const rows = nos.map((no) => {
       const list = ads.filter((a) => byId[a.studentId]?.repeat && byId[a.studentId]?.classNo === no);
+      const totals = list.map((a) => a.total);
+      const lasts = list.map((a) => Number(byId[a.studentId]?.lastGaokao?.total)).filter(Number.isFinite);
       return {
         no,
         n: list.length,
         first: list.filter((a) => a.batch === "一批").length,
         second: list.filter((a) => a.batch === "一批" || a.batch === "二批").length,
+        avg: meanOf(totals),
+        med: pctile(totals, 0.5),
+        p10: pctile(totals, 0.1),
+        min: Math.min(...totals),
+        max: Math.max(...totals),
+        lastAvg: lasts.length ? meanOf(lasts) : null,
+        lastMed: lasts.length ? pctile(lasts, 0.5) : null,
+        lastP10: lasts.length ? pctile(lasts, 0.1) : null,
+        lastMin: lasts.length ? Math.min(...lasts) : null,
       };
     });
     const tops = ads.filter((a) => {
@@ -282,11 +306,14 @@ function tutoringGaokao(entryYear, seed) {
   return { year, li: pack(REPEAT_LI_NOS, "li"), wen: pack(REPEAT_WEN_NOS, "wen") };
 }
 
-test("补习班层次用于生成能力，略强于普通卓行、远低于凌霄", () => {
+test("补习班层次用于生成能力，主体略强于普通卓行、远低于凌霄，分布须够宽以留下低分尾巴", () => {
   assert.equal(TIER.fuzhuo.name, "补习班");
   assert.ok(TIER.fuzhuo.abilityMean > TIER.zhuoxing.abilityMean);
   assert.ok(TIER.fuzhuo.abilityMean < TIER.lingxiao.abilityMean - 8);
-  assert.ok(TIER.fuzhuo.abilitySd < TIER.zhuoxing.abilitySd);
+  // 旧断言要求补习班 abilitySd 小于卓行（当时只有 4.8），会把最低分抬到 390–410、平均抬到 480 附近。
+  // 按 2020 最好理科复读班量级，平均在二本线附近但有很长低分尾巴，标准差必须加宽；一本高尾仍单独点出。
+  assert.ok(TIER.fuzhuo.abilitySd >= 8, `补习班能力分布要够宽才能出现长低分尾巴，实际 ${TIER.fuzhuo.abilitySd}`);
+  assert.ok(TIER.fuzhuo.abilitySd <= 13, `补习班也不应宽到凌霄/重点上沿，实际 ${TIER.fuzhuo.abilitySd}`);
 });
 
 test("补习班分班不把尖子全部塞进37班，第一进最好的班，第二第三进其他班", () => {
@@ -357,14 +384,32 @@ test("开局理科补习班一本/二本与高尾按 2020 年量级，文科顶�
           assert.ok(r.first <= maxF, `${label} 种子${seed} ${r.no}班一本不应超过最好的班`);
         }
       }
-      assert.ok(li.best.second >= 38 && li.best.second <= 56, `${label} 种子${seed} 最好的班二本以上应约 47，实际 ${li.best.no}班 ${li.best.second}`);
+      assert.ok(li.best.second >= 36 && li.best.second <= 47, `${label} 种子${seed} 最好的班二本以上应约 38–47（70 人编制不按 47/78 去死守），实际 ${li.best.no}班 ${li.best.second}`);
+      const below = li.best.n - li.best.second;
+      assert.ok(below >= 23 && below <= 35, `${label} 种子${seed} 最好的班约四成在二本以下，实际未上本科 ${below}`);
+      assert.ok(li.best.avg >= 445 && li.best.avg <= 475, `${label} 种子${seed} 最好的理科补习班平均应约 460（二本线附近），实际 ${li.best.no}班 ${li.best.avg.toFixed(1)}`);
+      if (year === 2020) {
+        assert.ok(li.best.med >= 465 && li.best.med <= 485, `${label} 种子${seed} 最好的班中位数应约 470 多分，实际 ${li.best.med.toFixed(1)}`);
+      } else {
+        // 2018 等年份试卷年因子略低，中位数可低于 2020 的 470 多分，但仍应落在二本线附近以上。
+        assert.ok(li.best.med >= 440 && li.best.med <= 485, `${label} 种子${seed} 最好的班中位数过低或过高，实际 ${li.best.med.toFixed(1)}`);
+      }
+      assert.ok(li.best.p10 >= 360 && li.best.p10 <= 400, `${label} 种子${seed} 最好的班 p10 应约 360–400，实际 ${li.best.p10.toFixed(1)}`);
+      assert.ok(li.best.min < 360, `${label} 种子${seed} 最好的班最低分应明显低于 360，以保留长低分尾巴，实际 ${li.best.min}`);
+      const otherAvgs = li.rows.filter((r) => r.no !== li.best.no).map((r) => r.avg);
+      assert.ok(li.best.avg > meanOf(otherAvgs), `${label} 种子${seed} 其余理科补习班平均应低于最好班 ${li.best.avg.toFixed(1)}，实际 ${otherAvgs.map((v) => v.toFixed(1)).join(",")}`);
+      const avgSpread = Math.max(...li.rows.map((r) => r.avg)) - Math.min(...li.rows.map((r) => r.avg));
+      assert.ok(avgSpread >= 7, `${label} 种子${seed} 六个理科补习班平均不应挤在一起，分差 ${avgSpread.toFixed(1)}`);
+      // 开局「上次高考」也要有低分尾巴，不能只压本届、上次平均仍虚高。
+      assert.ok(li.best.lastAvg != null && li.best.lastAvg <= 470, `${label} 种子${seed} 最好班上次高考平均不应仍虚高到 480 附近，实际 ${li.best.lastAvg.toFixed(1)}`);
+      assert.ok(li.best.lastMin < 360 || li.best.lastP10 <= 410, `${label} 种子${seed} 上次高考也应有低分尾巴，最低 ${li.best.lastMin} p10 ${li.best.lastP10?.toFixed(1)}`);
       assert.ok(li.firstSum >= 22 && li.firstSum <= 45, `${label} 种子${seed} 理科补习班合计一本应约 33，实际 ${li.firstSum}`);
       const t1 = li.tops[0], t2 = li.tops[1], t3 = li.tops[2];
       assert.ok(t1 && t2 && t3);
-      assert.ok(t1.total >= 598 && t1.total < 660, `${label} 种子${seed} 理科第一应在 630–640 量级且不到 660，实际 ${t1.total} ${t1.university}`);
+      assert.ok(t1.total >= 610 && t1.total < 655, `${label} 种子${seed} 理科第一应在 630–640 量级且不到 660，实际 ${t1.total} ${t1.university}`);
       assert.ok(t1.total < 660, `${label} 种子${seed} 理科补习班第一不应常到 660+，实际 ${t1.total}`);
-      assert.ok(t2.total >= 570 && t2.total <= 625, `${label} 种子${seed} 理科第二应在 600 上下，实际 ${t2.total} ${t2.university}`);
-      assert.ok(t3.total >= 555 && t3.total <= 615, `${label} 种子${seed} 理科第三应在 590 上下，实际 ${t3.total} ${t3.university}`);
+      assert.ok(t2.total >= 575 && t2.total <= 615, `${label} 种子${seed} 理科第二应在 590–610 上下，实际 ${t2.total} ${t2.university}`);
+      assert.ok(t3.total >= 555 && t3.total <= 605, `${label} 种子${seed} 理科第三应在 555–590 上下，实际 ${t3.total} ${t3.university}`);
       if (t1.total >= 625 && t1.total <= 645) sawXiamenBand = true;
       bestNos.push(li.best.no);
       liFirsts.push(maxF);

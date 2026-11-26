@@ -15,27 +15,27 @@ import {
   attendClassMeeting, hostClassMeeting, playerClassCommittee, playerClassBrief,
   playerDutyToday, playerWeekDuty, isHomeroomMeetingSlot, upcomingClassMeeting,
   committeeTitleOf, formatStudentShort,
-} from "../domain/simulation.js?v=t43u1";
-import { addDays } from "../domain/calendar.js?v=t43u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t43u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t43u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t43u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t43u1";
-import { rankRows } from "../domain/scores.js?v=t43u1";
-import { filterRows, sameTierCompare, classStandings, classCompareRows, examReportKey, pickExamReport } from "../domain/examService.js?v=t43u1";
-import { hydrateReport } from "../domain/simulation.js?v=t43u1";
-import { renderSeating } from "./classroom.js?v=t43u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t43u1";
-import { formatAdmissionBatch, formatAdmissionDest } from "../domain/admission.js?v=t43u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t43u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t43u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t43u1";
+} from "../domain/simulation.js?v=t44u1";
+import { addDays } from "../domain/calendar.js?v=t44u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t44u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t44u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t44u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t44u1";
+import { rankRows } from "../domain/scores.js?v=t44u1";
+import { filterRows, sameTierCompare, classStandings, classCompareRows, examReportKey, pickExamReport } from "../domain/examService.js?v=t44u1";
+import { hydrateReport } from "../domain/simulation.js?v=t44u1";
+import { renderSeating } from "./classroom.js?v=t44u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t44u1";
+import { formatAdmissionBatch, formatAdmissionDest } from "../domain/admission.js?v=t44u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t44u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t44u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t44u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
-} from "../domain/examAi.js?v=t43u1";
+} from "../domain/examAi.js?v=t44u1";
 
 let state = null;
 let view = "classroom";
