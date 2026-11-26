@@ -29,32 +29,35 @@ import {
   handleCoaching, suggestRemedial, suggestEnrichment, isCoachingOpen, isCoachingWindow,
   coachingUnavailableReason, ensureCoachingState, isCoachingTimeSlot, kindLabel,
   COACH_DAY_CAP, COACH_TERM_CAP, COACH_SESSION_MIN, COACH_SESSION_MAX, COACH_ACTIONS, COACH_SOURCE_NOTE,
-} from "../domain/simulation.js?v=t59u1";
-import { addDays, weekday } from "../domain/calendar.js?v=t59u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t59u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t59u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t59u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t59u1";
-import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t59u1";
-import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t59u1";
-import { hydrateReport } from "../domain/simulation.js?v=t59u1";
-import { renderSeating } from "./classroom.js?v=t59u1";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t59u1";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t59u1";
-import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t59u1";
-import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t59u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t59u1";
-import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t59u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t59u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t59u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t59u1";
+  handleTermComment, suggestTermComments, isCommentOpen, isCommentWindow,
+  commentUnavailableReason, ensureCommentState, currentCommentExam, isCommentTimeSlot,
+  COMMENT_DAY_CAP, COMMENT_BATCH_MIN, COMMENT_BATCH_MAX, COMMENT_TONES, COMMENT_SOURCE_NOTE,
+} from "../domain/simulation.js?v=t60u1";
+import { addDays, weekday } from "../domain/calendar.js?v=t60u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t60u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t60u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t60u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t60u1";
+import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t60u1";
+import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t60u1";
+import { hydrateReport } from "../domain/simulation.js?v=t60u1";
+import { renderSeating } from "./classroom.js?v=t60u1";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t60u1";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t60u1";
+import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t60u1";
+import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t60u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t60u1";
+import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t60u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t60u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t60u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t60u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
   parseAiCommentary, emptyAiCommentary,
-} from "../domain/examAi.js?v=t59u1";
+} from "../domain/examAi.js?v=t60u1";
 
 let state = null;
 let view = "classroom";
@@ -762,6 +765,42 @@ function bindCoachingActions(host) {
   });
 }
 
+function commentPanelHtml() {
+  if (!state) return "";
+  ensureCommentState(state);
+  const exam = currentCommentExam(state);
+  const rec = state.termComments || {};
+  const today = rec.date === state.date ? (rec.todayCount || 0) : 0;
+  const examLine = exam ? `当前对应已公布的「${exam.examName}」。` : "";
+  if (!isCommentOpen(state)) {
+    return `<div class="paper visit-panel comment-panel" data-comment-panel="1">
+      <h3>数学学期评语</h3>
+      <p class="muted">${commentUnavailableReason(state)}</p>
+    </div>`;
+  }
+  const rows = suggestTermComments(state).map((v) => {
+    const btns = (v.options || COMMENT_TONES).map((o) => `<button type="button" data-term-comment="${v.studentId}" data-comment-tone="${o.id}">${o.label}</button>`).join("");
+    const leave = v.onLeave ? "　（请假不在校，评语仍可写入档案）" : "";
+    return `<p><b>${v.name}</b>　${v.reason}${leave}</p><div class="row-actions">${btns}</div>`;
+  }).join("");
+  return `<div class="paper visit-panel comment-panel" data-comment-panel="1">
+      <h3>数学学期评语</h3>
+      <p class="muted">本校期中或期末成绩公布后，办公室坐班时可以为本班写数学学期/学段评语，按宁川中学校内安排写入档案。每天最多一批，每批约 ${COMMENT_BATCH_MIN}–${COMMENT_BATCH_MAX} 人，今天已写 ${today} / ${COMMENT_DAY_CAP} 人。${examLine}${COMMENT_SOURCE_NOTE}</p>
+      ${rows || `<p class="muted">眼下没有待写的本班评语。</p>`}
+    </div>`;
+}
+
+function bindCommentActions(host) {
+  host.querySelectorAll("[data-term-comment]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const r = handleTermComment(state, b.dataset.termComment, b.dataset.commentTone);
+      toast(r.ok ? r.text : r.reason);
+      persist(); render();
+    };
+  });
+}
+
 function deskPanelHtml(student, slot, scene) {
   const tutorBtns = slot?.isTutoring
     ? `<div class="row-actions">
@@ -1020,6 +1059,7 @@ function viewProfile(host) {
         ${(s.parentMeetings || []).length ? `<p><b>家长会面谈</b></p>${(s.parentMeetings||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : ""}
         ${(s.homeVisits || []).length ? `<p><b>家访记录</b></p>${(s.homeVisits||[]).map((r)=>`<p class="muted">${r.date}　${r.kind === "door" ? "上门家访" : "电话家访"}　${r.text}</p>`).join("")}` : (s.lastHomeVisit ? `<p><b>家访记录</b></p><p class="muted">${s.lastHomeVisit.date}　${s.lastHomeVisit.text}</p>` : "")}
         ${(s.coachings || []).length ? `<p><b>培优补差记录</b></p>${(s.coachings||[]).map((r)=>`<p class="muted">${r.date}　${r.kind === "enrich" ? "培优" : "补差"}　${r.text}</p>`).join("")}` : (s.lastCoaching ? `<p><b>培优补差记录</b></p><p class="muted">${s.lastCoaching.date}　${s.lastCoaching.kind === "enrich" ? "培优" : "补差"}　${s.lastCoaching.text}</p>` : "")}
+        ${(s.termComments || []).length ? `<p><b>数学学期评语记录</b></p>${(s.termComments||[]).map((r)=>`<p class="muted">${r.date}　${r.examName || "期中/期末"}　${r.tone === "encourage" ? "鼓励" : r.tone === "remind" ? "提醒" : "如实"}　${r.text}</p>`).join("")}` : (s.lastTermComment ? `<p><b>数学学期评语记录</b></p><p class="muted">${s.lastTermComment.date}　${s.lastTermComment.examName || ""}　${s.lastTermComment.text}</p>` : "")}
         ${(s.activityNotes || []).length ? `<p><b>学校活动</b></p>${(s.activityNotes||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : ""}
         <p class="muted">学科能力（潜能为个人上限，不是当场分数；括号里是距上限的余地，不是又一张分数表）</p>
         <p>${ab || "—"}</p>
@@ -1655,6 +1695,7 @@ function officeCollabHtml() {
     ${markingPanelHtml()}
     ${phoneVisitPanelHtml()}
     ${coachingPanelHtml({ always: true })}
+    ${commentPanelHtml()}
     ${tiaokePanelHtml()}`;
 }
 
@@ -1668,6 +1709,7 @@ function bindOfficeActions(host) {
   bindVisitActions(host);
   bindHomeVisitActions(host);
   bindCoachingActions(host);
+  bindCommentActions(host);
   bindObserveActions(host);
   bindProctorActions(host);
   bindMarkingActions(host);

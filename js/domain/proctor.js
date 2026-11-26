@@ -3,15 +3,15 @@
  * 考场安排、偶发情况和阅卷摘记用确定性 PRNG 从已有事实长出，不用 LLM，不改能力、分数、排名或省控。
  * 这不是某所实校或教育行政部门公告的考场编排、官方考务文件或真实考点。
  */
-import { pick, rngFrom, shuffle } from "./prng.js?v=t59u1";
-import { SCHOOL_CALENDAR, eventsOn, weekday } from "./calendar.js?v=t59u1";
+import { pick, rngFrom, shuffle } from "./prng.js?v=t60u1";
+import { SCHOOL_CALENDAR, eventsOn, weekday } from "./calendar.js?v=t60u1";
 import {
   activityEventOn, currentSlot, isEveningPeriodId, majorEventOn,
-} from "./timetable.js?v=t59u1";
-import { isOfficeSittingSlot } from "./homeVisit.js?v=t59u1";
-import { isParentsMeetingOpen } from "./parents.js?v=t59u1";
-import { playerClassStudents } from "./visits.js?v=t59u1";
-import { seatLabel } from "./school.js?v=t59u1";
+} from "./timetable.js?v=t60u1";
+import { isOfficeSittingSlot } from "./homeVisit.js?v=t60u1";
+import { isParentsMeetingOpen } from "./parents.js?v=t60u1";
+import { playerClassStudents } from "./visits.js?v=t60u1";
+import { seatLabel } from "./school.js?v=t60u1";
 
 export const PROCTOR_SOURCE_NOTE = "这是宁川中学校内考务安排，不是某所实校或教育行政部门公告的考场编排，也不是官方考务文件或真实考点公告。";
 

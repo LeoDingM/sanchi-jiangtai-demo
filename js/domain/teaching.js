@@ -2,11 +2,11 @@
  * 日常教学：备课、上课、作业登记、课后面批。
  * 效果写入备课充分度与数学教学积累，并确定性影响任教班学生状态；不用 LLM 编课堂。
  */
-import { clamp, hash01, rngFrom, round1 } from "./prng.js?v=t59u1";
-import { seatLabel } from "./school.js?v=t59u1";
-import { deskChatPairs, deskMateOf, missingDeskPairs, peerStatusLine } from "./peers.js?v=t59u1";
-import { isAwayFromClass, classAbsences, healthStatusLine } from "./health.js?v=t59u1";
-import { lessonPotentialNote } from "./potential.js?v=t59u1";
+import { clamp, hash01, rngFrom, round1 } from "./prng.js?v=t60u1";
+import { seatLabel } from "./school.js?v=t60u1";
+import { deskChatPairs, deskMateOf, missingDeskPairs, peerStatusLine } from "./peers.js?v=t60u1";
+import { isAwayFromClass, classAbsences, healthStatusLine } from "./health.js?v=t60u1";
+import { lessonPotentialNote } from "./potential.js?v=t60u1";
 
 export const LESSON_TOPICS = {
   1: [
@@ -241,6 +241,9 @@ export function studentRecentStatus(student, state, { placed = false } = {}) {
   if (student.lastCoaching) {
     const lab = student.lastCoaching.kind === "enrich" ? "培优" : "补差";
     bits.push(student.lastCoaching.statusLine || `${student.lastCoaching.date}${lab}：数学老师做了课余辅导`);
+  }
+  if (student.lastTermComment) {
+    bits.push(student.lastTermComment.statusLine || `${student.lastTermComment.date}数学学期评语：已就「${student.lastTermComment.examName || "期中或期末"}」写入档案`);
   }
   if (student.lastClassLate?.date) {
     bits.push(`${student.lastClassLate.date}正课迟到，上课铃后才进教室`);

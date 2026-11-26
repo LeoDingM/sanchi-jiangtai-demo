@@ -1,12 +1,12 @@
 /** 组织一次考试：出分、文理分列排名、分数线、层次筛选、单科第一。 */
-import { CUTOFF_FIRST_RANK, CUTOFF_SECOND_RANK } from "./config.js?v=t59u1";
+import { CUTOFF_FIRST_RANK, CUTOFF_SECOND_RANK } from "./config.js?v=t60u1";
 import {
   attachStudentMeta, cutoffRanks, cutoffsFromRanked, gradeStudent, rankRows,
   scaleOf, subjectRanks, summarizeClass, subjectsFor,
-} from "./scores.js?v=t59u1";
-import { provincialLines } from "./jiangxi.js?v=t59u1";
-import { attachJointExam, JOINT_SOURCE_NOTE } from "./jointExam.js?v=t59u1";
-import { fallbackSchoolQuota, classProvincialCounts, provincialCompareYear } from "./schoolLines.js?v=t59u1";
+} from "./scores.js?v=t60u1";
+import { provincialLines } from "./jiangxi.js?v=t60u1";
+import { attachJointExam, JOINT_SOURCE_NOTE } from "./jointExam.js?v=t60u1";
+import { fallbackSchoolQuota, classProvincialCounts, provincialCompareYear } from "./schoolLines.js?v=t60u1";
 
 export function studentTrackForExam(student, split) {
   if (!split || student.track === "mixed" || !student.track) return "mixed";
