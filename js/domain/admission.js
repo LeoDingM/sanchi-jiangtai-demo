@@ -81,6 +81,13 @@ export function admitStudent(student, total, year) {
     qingbei: QINGBEI.has(uniName) || /^清华大学$|^北京大学$/.test(uniName),
     firstLine: lines.first,
     secondLine: lines.second,
+    art: !!student.art,
+    rankSource: year === 2020
+      ? "2020年江西一分一段（公开）"
+      : "非2020年：按当年与2020年一本省控分差平移后再查2020一分一段，非正式当年一分一段",
+    uniSource: year === 2020
+      ? "2020年江西公开投档或录取最低分整理"
+      : "院校线按当年省控相对2020年的分差平移2020投档结构，不是当年完整投档表",
   };
 }
 

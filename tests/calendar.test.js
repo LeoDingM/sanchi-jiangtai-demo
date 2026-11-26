@@ -16,6 +16,10 @@ test("校历从 2017 年 9 月起，含月考/期中/期末/联考/模拟/高考
   assert.ok(ev.some((e) => e.kind === "placement1"));
   assert.ok(ev.some((e) => e.kind === "placement2"));
   assert.ok(ev.some((e) => e.examKind === "gaokao" && e.date.startsWith("2020-06")));
+  const hk = ev.find((e) => e.examKind === "huikao" && e.date.startsWith("2018-06"));
+  assert.ok(hk, "高二应有学业水平考试（会考）薄层");
+  assert.deepEqual(hk.grades, [2]);
+  assert.ok(hk.sourceNote && hk.sourceNote.includes("校内"));
 });
 
 test("不同场次难度不同，一本/二本线随难度明显波动，分差为数十分而非几分", () => {

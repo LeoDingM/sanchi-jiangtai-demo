@@ -2,6 +2,7 @@ import {
   createGame, playerStudents, skipToNextStage, skipToGaokaoOf, skipToNextCohort,
   advanceDay, prepareLesson, teach, talkTo, reviewHomework, listExamReports, formatDateCn,
   applyEvent, SCHOOL_CALENDAR, gradeOf, topicsForGrade, LESSON_STYLES,
+  suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext,
 } from "../domain/simulation.js";
 import { saveSlot, loadSlot, listSlots, toJSON, fromJSON } from "../domain/save.js";
 import { subjectById, SUBJECTS_G1 } from "../domain/config.js";
@@ -97,6 +98,29 @@ function render() {
 
 function clsStudents() { return playerStudents(state); }
 
+
+function teachingStatus(s) {
+  const ctx = studentTeachingContext(s, state);
+  if (!ctx || (!ctx.flag && !ctx.hw && !ctx.quiz)) return "还没有本班课堂或作业记录。";
+  const bits = [];
+  if (ctx.flag && ctx.topic) bits.push(`最近「${ctx.topic}」课堂上${ctx.flag}`);
+  else if (ctx.flag) bits.push(`最近课堂上${ctx.flag}`);
+  if (ctx.hw) bits.push(ctx.hw.status === "缺交" ? "这趟作业缺交" : `作业${ctx.hw.quality}${ctx.hw.reviewed ? "（已面批）" : ""}`);
+  if (ctx.quiz) bits.push(`随堂小测 ${ctx.quiz.score} 分`);
+  return "带班近况：" + bits.join("；") + "。";
+}
+
+function examSourceNotice(report) {
+  if (!report) return "";
+  if (report.examKind === "huikao") {
+    return report.sourceNote || "此为高二学业水平考试的校内合格记载：单科达到卷面满分 60% 记为合格。日期为校历示意，未按某年省教育考试院公告逐条核对；未收录公开会考合格线，不以校内一本/二本线作为本场主要结果。文理交叉科目尚未单独建模。";
+  }
+  if (report.examKind === "city" || report.examKind === "province") {
+    return report.sourceNote || "市/省联考目前只在宁川中学校内考生中计分排名。没有可靠的全市或全省样本前，不生成虚构考生池，也不展示虚构的市位次或省位次。";
+  }
+  return report.sourceNote || "";
+}
+
 function viewClassroom(host) {
   host.innerHTML = `<h3>教室座位表</h3><p class="notice">点击头像查看档案并谈话。任教班为 2017 年起的卓行16班，约 73 人，不是云岫 0/1 的 30—35 人编制。</p><canvas id="classroom"></canvas>`;
   const c = host.querySelector("#classroom");
@@ -189,6 +213,7 @@ function viewProfile(host) {
         <p><b>家庭</b> ${family}</p>
         <p><b>文理意向</b> ${trackLabel}　<b>专业倾向</b> ${s.majorPref||"—"}</p>
         <p><b>心情</b> ${s.mood ?? "—"}　<b>压力</b> ${s.stress ?? "—"}　<b>精力</b> ${s.energy ?? "—"}　<b>师生关系</b> ${s.relation||0}</p>
+        <p class="muted">${teachingStatus(s)}</p>
         <p class="muted">学科能力（潜能为个人上限，不是当场分数）</p>
         <p>${ab || "—"}</p>
       </div>
@@ -375,21 +400,32 @@ function viewTeach(host) {
   const lessons = state.player.lessons || [];
   const last = lessons[0];
   const sts = clsStudents().slice().sort((a, b) => a.seq - b.seq);
+  const prog = topicProgress(state, grade);
+  const suggest = suggestedTopic(state, grade);
+  const hw = state.homework;
+  const watch = homeworkWatchlist(hw);
   const planBlock = plan ? `<p><b>课题</b> ${plan.topic}　<b>例题深度</b> ${plan.depth}　<b>作业</b> ${plan.homework}</p>
       <p>${plan.goals || ""}</p>
       <p class="muted">${plan.examples || ""} ${plan.homeworkNote || ""}</p>` : `<p class="muted">还没有教案。先选课题备一节课，再进教室。</p>`;
+  const quizLow = (last?.quizAll || last?.quiz || []).slice().sort((a, b) => a.score - b.score).slice(0, 5);
+  const hwRows = (hw?.rows || []).slice().sort((a, b) => {
+    const rank = (r) => (r.status === "缺交" ? 0 : r.quality === "错题较多" ? 1 : r.quality === "未订正" ? 2 : r.flag === "走神" ? 3 : r.reviewed ? 9 : 5);
+    return rank(a) - rank(b) || (a.seq ?? 0) - (b.seq ?? 0);
+  });
   host.innerHTML = `<h3>日常教学 · 数学课</h3>
-    <p class="notice">备课要先写教案（课题、例题深度、作业量），上课可选课型、点名叫人，课后还可以面批。备课充分度和教学积累会进入下一次考试的数学成绩，不是点一下就算上过课。</p>
+    <p class="notice">先写教案，再上课，课后看作业登记，当面批改或个别谈话。备课充分度和教学积累会进入下一次考试的数学成绩。课题按本学期进度推进，课堂纪要、作业和小测都会写到学生档案里，不是几个空按钮。</p>
     <div class="kpi">
       <div><span>备课充分度</span><b>${state.player.prep || 0} / 3</b></div>
       <div><span>数学教学积累</span><b>${Number(state.player.mathTeaching || 0).toFixed(1)}</b></div>
+      <div><span>本学期进度</span><b>${prog.done} / ${prog.total}</b></div>
       <div><span>今日面批</span><b>${state.reviewsToday || 0} / 6</b></div>
     </div>
     <div class="profile-grid">
       <div class="paper lesson-card">
         <h3>备课</h3>
+        <p class="muted">下一课建议：${suggest}</p>
         <div class="form-grid">
-          <label>课题 <select id="topic">${topics.map((x) => `<option ${plan && plan.topic===x?"selected":""}>${x}</option>`).join("")}</select></label>
+          <label>课题 <select id="topic">${topics.map((x) => `<option ${((plan && plan.topic===x) || (!plan && x===suggest))?"selected":""}>${x}</option>`).join("")}</select></label>
           <label>例题深度 <select id="depth">${[1,2,3].map((d)=>`<option value="${d}" ${(!plan && d===2) || plan?.depth===d?"selected":""}>${d===1?"基本例题":d===2?"例题+变式":"例题+变式+综合"}</option>`).join("")}</select></label>
           <label>作业量 <select id="hw">${["轻","中","重"].map((h)=>`<option ${(!plan && h==="中") || plan?.homework===h?"selected":""}>${h}</option>`).join("")}</select></label>
         </div>
@@ -400,20 +436,22 @@ function viewTeach(host) {
         <h3>上课</h3>
         <div class="form-grid">
           <label>课型 <select id="style">${Object.keys(LESSON_STYLES).map((s)=>`<option>${s}</option>`).join("")}</select></label>
-          <label>提问/板演 <select id="call"><option value="">（不点名）</option>${sts.map((s)=>`<option value="${s.id}" ${s.id===selectedId?"selected":""}>${s.seq}号 ${s.name}</option>`).join("")}</select></label>
+          <label>提问/板演 <select id="call"><option value="">（不点名）</option>${sts.map((s)=>`<option value="${s.id}" ${s.id===selectedId?"selected":""}>${s.seq}号 ${s.name}${s.lastClassFlag==="走神"?" · 上次走神":""}</option>`).join("")}</select></label>
         </div>
         <div class="row-actions"><button type="button" class="accent" id="do-teach">开始上课</button></div>
-        ${last ? `<p class="muted">${last.date}　${last.topic} · ${last.style}</p><ol class="notes-list">${(last.notes||[]).map((n)=>`<li>${n}</li>`).join("")}</ol>${last.quiz?`<p class="muted">小测均分 ${last.quizAvg}。前列：${last.quiz.slice(0,5).map((q)=>`${q.name}${q.score}`).join("、")}</p>`:""}` : `<p class="muted">今天还没上课。</p>`}
+        ${last ? `<p class="muted">${last.date}　${last.topic} · ${last.style}</p><ol class="notes-list">${(last.notes||[]).map((n)=>`<li>${n}</li>`).join("")}</ol>${last.quiz?`<p class="muted">小测均分 ${last.quizAvg}。前列：${last.quiz.slice(0,5).map((q)=>`${q.name}${q.score}`).join("、")}${quizLow.length?`。偏低：${quizLow.map((q)=>`${q.name}${q.score}`).join("、")}`:""}</p>`:""}` : `<p class="muted">今天还没上课。</p>`}
       </div>
     </div>
     <div class="paper lesson-card">
-      <h3>课后面批</h3>
-      <p class="muted">每天最多当面批 6 本。点名册里的学生，把作业问题落实到个人。</p>
-      <div class="row-actions">${sts.slice(0, 16).map((s)=>`<button type="button" data-rv="${s.id}">${s.name}</button>`).join("")}</div>
+      <h3>作业登记与面批</h3>
+      ${hw ? `<p>「${hw.topic}」· ${hw.date}　缺交 ${hw.rows.filter((r)=>r.status==="缺交").length} 本，需盯 ${watch.length} 人。每天最多当面批 6 本，建议先看缺交和错题。</p>` : `<p class="muted">上完一节课之后，这里会登记全班作业情况，再决定先面批谁。</p>`}
+      ${watch.length ? `<p>建议先面批：</p><div class="row-actions">${watch.slice(0, 12).map((s)=>`<button type="button" data-rv="${s.id}">${s.name}${s.status==="缺交"?"（缺交）":s.quality==="错题较多"?"（错题）":""}</button>`).join("")}</div>` : ""}
+      ${hwRows.length ? `<div class="scroll-table"><table class="hw-table"><thead><tr><th>座号</th><th>姓名</th><th>课堂</th><th>交作业</th><th>质量</th><th>面批</th></tr></thead>
+        <tbody>${hwRows.map((r)=>`<tr data-id="${r.id}" class="${r.status==="缺交"||r.quality==="错题较多"?"hw-bad":""}"><td>${r.seq??""}</td><td>${r.name}</td><td>${r.flag||""}</td><td>${r.status}</td><td>${r.quality}</td><td>${r.reviewed?"已面批":`<button type="button" data-rv="${r.id}">面批</button>`}</td></tr>`).join("")}</tbody></table></div>` : `<div class="row-actions">${sts.slice(0, 16).map((s)=>`<button type="button" data-rv="${s.id}">${s.name}</button>`).join("")}</div>`}
     </div>
     ${lessons.length ? `<h3>最近课堂记录</h3>
-      <div class="paper scroll-table"><table><thead><tr><th>日期</th><th>课题</th><th>课型</th><th>备课</th><th>纪要</th></tr></thead>
-      <tbody>${lessons.slice(0, 10).map((l)=>`<tr><td>${l.date}</td><td>${l.topic}</td><td>${l.style}</td><td>${l.prepUsed?"有":"不足"}</td><td>${(l.notes||[])[0]||""}</td></tr>`).join("")}</tbody></table></div>` : ""}`;
+      <div class="paper scroll-table"><table><thead><tr><th>日期</th><th>课题</th><th>课型</th><th>备课</th><th>缺交</th><th>纪要</th></tr></thead>
+      <tbody>${lessons.slice(0, 10).map((l)=>`<tr><td>${l.date}</td><td>${l.topic}</td><td>${l.style}</td><td>${l.prepUsed?"有":"不足"}</td><td>${l.homeworkMissing??"—"}</td><td>${(l.notes||[])[0]||""}</td></tr>`).join("")}</tbody></table></div>` : ""}`;
   host.querySelector("#do-prep").onclick = () => {
     const r = prepareLesson(state, {
       topic: host.querySelector("#topic").value,
@@ -431,12 +469,16 @@ function viewTeach(host) {
     persist(); render();
   };
   host.querySelectorAll("[data-rv]").forEach((b) => {
-    b.onclick = () => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
       selectedId = b.dataset.rv;
       const r = reviewHomework(state, b.dataset.rv);
       toast(r.ok ? r.text : r.reason);
       persist(); render();
     };
+  });
+  host.querySelectorAll("tr[data-id]").forEach((tr) => {
+    tr.onclick = () => { selectedId = tr.dataset.id; view = "profile"; render(); };
   });
 }
 
@@ -512,18 +554,22 @@ function viewGrades(host) {
     .sort((a,b)=> (a.rank||0)-(b.rank||0) || b.total-a.total);
   const cut = report.split ? report.cutoffs.li : report.cutoffs.mixed;
   const cutW = report.split ? report.cutoffs.wen : null;
+  const note = examSourceNotice(report);
+  const isHk = report.examKind === "huikao";
+  const passN = isHk ? mine.filter((r)=>r.huikaoPass).length : null;
   host.innerHTML = `<h3>考试成绩 · 任教班</h3>
     <div class="filters"><label>场次 <select id="exsel">${examOptions()}</select></label></div>
+    ${note?`<p class="notice">${note}</p>`:""}
     <div class="kpi">
       <div><span>试卷难度</span><b>${(report.difficulty||1).toFixed(3)}</b></div>
-      <div><span>${report.split?"理科":""}一本线（第${cut?.firstN}名）</span><b>${cut?.firstLine ?? "—"}</b></div>
+      ${isHk?`<div><span>班内校内合格</span><b>${passN} / ${mine.length}</b></div><div><span>合格标准</span><b>卷面 60%</b></div>`:`<div><span>${report.split?"理科":""}一本线（第${cut?.firstN}名）</span><b>${cut?.firstLine ?? "—"}</b></div>
       <div><span>二本线（第${cut?.secondN}名）</span><b>${cut?.secondLine ?? "—"}</b></div>
       <div><span>线差分</span><b>${cut && cut.firstLine-cut.secondLine}</b></div>
-      <div><span>年级第一/第二差</span><b>${cut?.topGap ?? "—"}</b></div>
+      <div><span>年级第一/第二差</span><b>${cut?.topGap ?? "—"}</b></div>`}
     </div>
-    ${cutW?`<p class="notice">文科一本线 ${cutW.firstLine}（第${cutW.firstN}名），二本线 ${cutW.secondLine}，分差 ${cutW.firstLine-cutW.secondLine}。分数线由当次个人成绩排序得出，难度变化时会明显波动。</p>`:""}
-    <div class="paper"><table><thead><tr><th>班名次</th><th>姓名</th><th>总分</th><th>年级名次</th><th>上线</th></tr></thead>
-    <tbody>${mine.map((r,i)=>`<tr data-id="${r.studentId}"><td>${i+1}</td><td>${r.name}</td><td>${r.total}</td><td>${r.rank||"—"}</td><td>${r.line||""}</td></tr>`).join("")}</tbody></table></div>`;
+    ${!isHk && cutW?`<p class="notice">文科一本线 ${cutW.firstLine}（第${cutW.firstN}名），二本线 ${cutW.secondLine}，分差 ${cutW.firstLine-cutW.secondLine}。分数线由当次个人成绩排序得出，难度变化时会明显波动。</p>`:""}
+    <div class="paper"><table><thead><tr><th>班名次</th><th>姓名</th><th>总分</th><th>年级名次</th><th>${isHk?"校内合格":"上线"}</th></tr></thead>
+    <tbody>${mine.map((r,i)=>`<tr data-id="${r.studentId}"><td>${i+1}</td><td>${r.name}</td><td>${r.total}</td><td>${r.rank||"—"}</td><td>${isHk?(r.huikaoPass?"合格":"不合格"):(r.line||"")}</td></tr>`).join("")}</tbody></table></div>`;
   host.querySelector("#exsel").onchange = (e) => { examPick = e.target.value; render(); };
   host.querySelectorAll("tr[data-id]").forEach((tr)=>tr.onclick=()=>{selectedId=tr.dataset.id; view="profile"; render();});
 }
@@ -574,8 +620,8 @@ function viewOffice(host) {
     }).filter(Boolean).join("　");
     const classTable = (live.classes||[]).filter((c)=> (tier==="all"||c.tier===tier) && !c.repeat);
     body.innerHTML = `
-      <p class="notice">难度 ${(live.difficulty||1).toFixed(3)}　离散 ${(live.dispersion||1).toFixed(3)}。${live.split?"文理分列划线。":"分科前按全年级第400/1000名划线。"}班级汇总全部由个人成绩加总，不另造统计。</p>
-      <div class="kpi"><div><span>一本线</span><b>${cut?.firstLine??"—"}</b></div><div><span>二本线</span><b>${cut?.secondLine??"—"}</b></div><div><span>分差</span><b>${cut?cut.firstLine-cut.secondLine:"—"}</b></div><div><span>第一名</span><b>${cut?.top??"—"}</b></div></div>
+      <p class="notice">难度 ${(live.difficulty||1).toFixed(3)}　离散 ${(live.dispersion||1).toFixed(3)}。${live.split?"文理分列划线。":"分科前按全年级第400/1000名划线。"}班级汇总全部由个人成绩加总，不另造统计。${examSourceNotice(live)?" "+examSourceNotice(live):""}</p>
+      ${live.examKind==="huikao"?`<div class="kpi"><div><span>校内合格标准</span><b>卷面 60%</b></div><div><span>合格人数</span><b>${(live.rows||[]).filter((r)=>!r.repeat && r.huikaoPass).length}</b></div><div><span>第一名</span><b>${cut?.top??"—"}</b></div></div>`:`<div class="kpi"><div><span>一本线</span><b>${cut?.firstLine??"—"}</b></div><div><span>二本线</span><b>${cut?.secondLine??"—"}</b></div><div><span>分差</span><b>${cut?cut.firstLine-cut.secondLine:"—"}</b></div><div><span>第一名</span><b>${cut?.top??"—"}</b></div></div>`}
       <p class="notice">${topLine}</p>
       <h3>各班对照</h3>
       <div class="paper"><table><thead><tr><th>班</th><th>层次</th><th>人数</th><th>均分</th><th>最高</th><th>一本</th><th>一本率</th><th>二本累计</th></tr></thead>
@@ -602,7 +648,7 @@ function viewAdmission(host) {
   const qb = list.filter((x)=>x.qingbei);
   const first = list.filter((x)=>x.batch==="一批");
   host.innerHTML = `<h3>${pack.year}年高考录取</h3>
-    <p class="notice">对照江西${pack.year}年省控线与 2020 年公开投档结构（其他年份按省控线分差平移，并在备注中标明）。不随机派校名，也不为喜报虚造清北。</p>
+    <p class="notice">对照江西${pack.year}年公开省控线。院校投档与省位次以 2020 年公开投档线和一分一段为底；其他年份按当年与 2020 年省控分差平移，表格中会标明，不是当年完整投档表或一分一段。艺体生目前只对照文化课成绩，尚未收录术科专业分，不编造术科分。师范意向只影响在已有院校池中的匹配偏好，没有单独的师范提前批投档表。不随机派校名，也不为喜报虚造清北。</p>
     <div class="kpi"><div><span>清北</span><b>${qb.length}</b></div><div><span>一批</span><b>${first.length}</b></div><div><span>公布人数</span><b>${list.length}</b></div></div>
     <div class="filters"><input id="q" placeholder="搜索姓名或大学" /></div>
     <div class="paper" id="adm-table"></div>`;
@@ -610,7 +656,7 @@ function viewAdmission(host) {
     const q = (host.querySelector("#q").value||"").trim();
     const rows = list.filter((a)=>!q || a.name.includes(q) || (a.university||"").includes(q));
     host.querySelector("#adm-table").innerHTML = `<table><thead><tr><th>姓名</th><th>班</th><th>科类</th><th>总分</th><th>省位次</th><th>批次</th><th>去向</th></tr></thead>
-      <tbody>${rows.slice(0,250).map((a)=>`<tr><td>${a.name}</td><td>${a.classNo}</td><td>${a.track==="wen"?"文":"理"}</td><td>${a.total}</td><td>${a.provinceRank??"—"}</td><td>${a.batch}</td><td>${a.university}${a.shifted?"（按省控平移）":""}</td></tr>`).join("")}</tbody></table>`;
+      <tbody>${rows.slice(0,250).map((a)=>`<tr><td>${a.name}</td><td>${a.classNo}</td><td>${a.track==="wen"?"文":"理"}</td><td>${a.total}</td><td>${a.provinceRank??"—"}</td><td>${a.batch}</td><td>${a.university}${a.shifted?"（按省控平移）":""}${a.art?"（文化课对照，无术科分）":""}</td></tr>`).join("")}</tbody></table>`;
   };
   host.querySelector("#q").oninput = draw; draw();
 }

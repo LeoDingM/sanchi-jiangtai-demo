@@ -73,6 +73,7 @@ const KIND_DIFF = {
   mock3: 1.01,
   gaokao: 1.0,
   quiz: 1.02,
+  huikao: 1.0,
 };
 
 const KIND_DISP = {
@@ -86,6 +87,7 @@ const KIND_DISP = {
   mock3: 0.98,
   gaokao: 1.0,
   quiz: 0.95,
+  huikao: 1.0,
 };
 
 export function examParams(exam) {
@@ -166,6 +168,11 @@ export function buildCalendar(fromYear = 2017, toYear = 2030) {
     events.push(ev({
       id: `gaokao-${y2}`, date: ymd(y2, 6, 7), name: `${y2}年普通高考`, kind: "exam", examKind: "gaokao",
       year: y2, grades: [3], cohortYear: gaokaoCohort, days: 3,
+    }));
+    events.push(ev({
+      id: `exam-${sy}-huikao`, date: ymd(y2, 6, 18), name: "高二年级学业水平考试（会考）",
+      kind: "exam", examKind: "huikao", year: sy, grades: [2],
+      sourceNote: "校历示意日期，未按某年省教育考试院公告逐条核对。成绩按校内学业合格记载，不使用未收录的省会考合格线。",
     }));
     events.push(ev({
       id: `exam-${sy}-summer-final`, date: ymd(y2, 6, 25), name: "下学期期末", kind: "exam", examKind: "final", year: sy, grades: [1, 2],

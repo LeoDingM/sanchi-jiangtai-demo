@@ -58,6 +58,32 @@ export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0
       r.line = r.total >= c.firstLine ? "一本" : r.total >= c.secondLine ? "二本" : "未达二本";
     }
   }
+  let huikao = null;
+  let sourceNote = exam.sourceNote || null;
+  if (exam.examKind === "huikao") {
+    huikao = {
+      standard: "校内：单科达到卷面满分的 60% 记为合格",
+      officialLine: null,
+      source: "未收录江西省教育考试院会考合格线，故不公布所谓省会考线。文理交叉科目尚未单独建模。",
+    };
+    sourceNote = sourceNote || exam.sourceNote || "会考为校内学业合格记载，日期为校历示意。";
+    for (const r of rows) {
+      const subs = subjectsFor(scale, r.track === "wen" ? "wen" : "li");
+      const detail = {};
+      let all = true;
+      for (const sub of subs) {
+        const ok = (r[sub.id] ?? 0) >= Math.round(sub.max * 0.6);
+        detail[sub.id] = ok;
+        if (!ok) all = false;
+      }
+      r.huikaoPass = all;
+      r.huikaoSubjects = detail;
+    }
+  }
+  if (exam.examKind === "city" || exam.examKind === "province") {
+    sourceNote = sourceNote || "目前只在宁川中学校内考生中计分排名。没有可靠的全市或全省样本前，不生成虚构考生池，也不展示虚构的市位次或省位次。";
+  }
+
   const scoreMap = Object.fromEntries(rows.map((r) => [r.studentId, r]));
 
   const classes = summarizeAllClasses(cohort, scoreMap, cut, reallySplit);
@@ -78,6 +104,8 @@ export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0
     scoreMap,
     rows,
     cutoffs: cut,
+    huikao,
+    sourceNote,
     classes,
     subjectIds,
     toppers,

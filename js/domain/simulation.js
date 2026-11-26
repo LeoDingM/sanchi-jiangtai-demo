@@ -8,7 +8,7 @@ import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js"
 import { runExam } from "./examService.js";
 import { admitCohort } from "./admission.js";
 import { rngFrom, clamp } from "./prng.js";
-import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES } from "./teaching.js";
+import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext } from "./teaching.js";
 
 export const SAVE_VERSION = 1;
 
@@ -103,6 +103,7 @@ function compactReport(report, entryYear) {
     track: r.track, repeat: !!r.repeat, total: r.total, maxTotal: r.maxTotal,
     scale: r.scale, subjects: r.subjects, line: r.line, rank: r.rank,
     ...Object.fromEntries((r.subjects || []).map((id) => [id, r[id]])),
+    huikaoPass: r.huikaoPass, huikaoSubjects: r.huikaoSubjects,
   }));
   const cut = { ...report.cutoffs, ranked: undefined };
   return {
@@ -110,7 +111,7 @@ function compactReport(report, entryYear) {
     date: report.date, difficulty: report.difficulty, dispersion: report.dispersion,
     scale: report.scale, grade: report.grade, split: report.split, entryYear,
     rows, classes: report.classes, subjectIds: report.subjectIds, toppers: report.toppers,
-    cutoffs: cut,
+    cutoffs: cut, huikao: report.huikao || null, sourceNote: report.sourceNote || null,
   };
 }
 
@@ -134,7 +135,7 @@ export function hydrateReport(report) {
 function storeExam(state, entryYear, report) {
   const key = `${entryYear}|${report.examId}`;
   state.exams[key] = compactReport(report, entryYear);
-  const keepKinds = new Set(["gaokao", "final", "midterm", "province", "mock1", "mock2", "mock3"]);
+  const keepKinds = new Set(["gaokao", "final", "midterm", "province", "city", "huikao", "mock1", "mock2", "mock3"]);
   const keys = Object.keys(state.exams).sort((a, b) => (state.exams[a].date < state.exams[b].date ? 1 : -1));
   const recent = keys.slice(0, 24);
   for (const k of keys) {
@@ -401,7 +402,8 @@ export function prepareLesson(state, opts = {}) {
 export function teach(state, style = "精讲例题", callId = null) {
   const grade = gradeOf(state.player.cohortYear, state.date);
   const cls = snapshotPlayerClass(state);
-  const r = teachLesson(state, cls, { style, callId, grade });
+  const lastExam = listExamReports(state, { entryYear: state.player.cohortYear })[0] || null;
+  const r = teachLesson(state, cls, { style, callId, grade, lastExam });
   addLog(state, r.text);
   return r;
 }
@@ -414,7 +416,49 @@ export function reviewHomework(state, studentId) {
   return r;
 }
 
-export { topicsForGrade, LESSON_STYLES };
+export { topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext };
+
+function latestMathExam(state, studentId) {
+  const reports = listExamReports(state, { entryYear: state.player.cohortYear });
+  for (const r of reports) {
+    if (r.pruned) continue;
+    const row = r.scoreMap?.[studentId] || (r.rows || []).find((x) => x.studentId === studentId);
+    if (row && row.math != null) {
+      return { examName: r.examName, date: r.date, math: row.math, total: row.total, rank: row.rank, line: row.line };
+    }
+  }
+  return null;
+}
+
+function talkText(topic, s, ctx, exam) {
+  const n = s.name;
+  if (topic === "询问学习") {
+    const bits = [];
+    if (ctx?.hw) {
+      if (ctx.hw.status === "缺交") bits.push(`「${ctx.topic}」这趟作业还没交`);
+      else if (ctx.hw.quality === "错题较多") bits.push(`「${ctx.topic}」作业错题还比较多`);
+      else if (ctx.hw.quality === "未订正") bits.push(`「${ctx.topic}」错题还没订正好`);
+      else if (ctx.topic) bits.push(`对了一下「${ctx.topic}」作业`);
+    } else if (ctx?.topic) bits.push(`问起最近「${ctx.topic}」的掌握`);
+    if (ctx?.quiz) bits.push(`上次小测 ${ctx.quiz.score} 分`);
+    if (exam) bits.push(`最近「${exam.examName}」数学 ${exam.math} 分`);
+    if (!bits.length) return `你和${n}对了一下近期作业，记下了薄弱科目。`;
+    return `你和${n}${bits[0].startsWith("对了") ? bits[0] : "谈了" + bits[0]}` + (bits.length > 1 ? `，也提到${bits.slice(1).join("，")}。` : "，并嘱咐把漏洞补上。");
+  }
+  if (topic === "鼓励") {
+    if (exam?.line === "一本") return `你鼓励${n}稳住「${exam.examName}」已经摸到的一本线，注意方法，别只盯着一次分数。`;
+    if (ctx?.flag === "表现突出") return `你鼓励${n}把这堂课的状态保持下去，注意方法，别只盯着一次分数。`;
+    if (ctx?.hw?.quality === "错题较多" || ctx?.quiz) return `你鼓励${n}再坚持一阵，作业和小测里的漏洞可以慢慢补，别只盯着一次分数。`;
+    return `你鼓励${n}再坚持一阵，注意方法，别只盯着一次分数。`;
+  }
+  if (topic === "关注状态") {
+    if (ctx?.flag === "走神") return `你提起${n}这堂课有些走神，关心最近休息和心情，提醒劳逸结合。`;
+    if ((s.energy ?? 70) < 50 || (s.stress ?? 40) > 70) return `你看${n}最近精力或压力不太对，关心休息和心情，提醒劳逸结合。`;
+    return `你关心${n}最近的休息和心情，提醒劳逸结合。`;
+  }
+  if (ctx?.topic) return `你和${n}谈了家里和将来的打算，也顺口问起「${ctx.topic}」跟得是否吃力，师生关系近了一些。`;
+  return `你和${n}谈了家里和将来的打算，师生关系近了一些。`;
+}
 
 export function talkTo(state, studentId, topic = "鼓励") {
   const c = state.cohorts[state.player.cohortYear];
@@ -422,16 +466,18 @@ export function talkTo(state, studentId, topic = "鼓励") {
   if (!s) return { ok: false, reason: "找不到这名学生" };
   if (state.talksToday >= 5) return { ok: false, reason: "今天谈话已经不少，改日再谈。" };
   const table = {
-    鼓励: { relation: 2, mood: 4, stress: -2, text: (n) => `你鼓励${n}再坚持一阵，注意方法，别只盯着一次分数。` },
-    询问学习: { relation: 1, mood: 1, stress: 0, text: (n) => `你和${n}对了一下近期作业，记下了薄弱科目。` },
-    关注状态: { relation: 2, mood: 2, stress: -4, text: (n) => `你关心${n}最近的休息和心情，提醒劳逸结合。` },
-    谈心: { relation: 3, mood: 3, stress: -3, text: (n) => `你和${n}谈了家里和将来的打算，师生关系近了一些。` },
+    鼓励: { relation: 2, mood: 4, stress: -2 },
+    询问学习: { relation: 1, mood: 1, stress: 0 },
+    关注状态: { relation: 2, mood: 2, stress: -4 },
+    谈心: { relation: 3, mood: 3, stress: -3 },
   };
   const a = table[topic] || table.鼓励;
   s.relation = clamp((s.relation || 0) + a.relation, 0, 100);
   s.mood = clamp((s.mood || 60) + a.mood, 0, 100);
   s.stress = clamp((s.stress || 40) + a.stress, 0, 100);
-  const text = a.text(s.name);
+  const ctx = studentTeachingContext(s, state);
+  const exam = latestMathExam(state, s.id);
+  const text = talkText(topic, s, ctx, exam);
   s.talks = [...(s.talks || []), { date: state.date, topic, text }];
   state.talksToday += 1;
   addLog(state, text);

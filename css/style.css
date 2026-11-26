@@ -130,3 +130,6 @@ a { color: var(--gold); }
 .form-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--ink-soft); }
 .notes-list { margin: 0; padding-left: 18px; }
 .notes-list li { margin: 0 0 4px; }
+
+.hw-table .hw-bad td { background: color-mix(in srgb, var(--gold, #c45c4a) 10%, transparent); }
+.hw-table button { padding: 2px 8px; font-size: 12px; }
