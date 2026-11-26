@@ -37,6 +37,8 @@ function setup(canvas, cssH) {
   const h = cssH || 220;
   canvas.width = Math.floor(cssW * dpr);
   canvas.height = Math.floor(h * dpr);
+  canvas.style.width = "100%";
+  canvas.style.maxWidth = "100%";
   canvas.style.height = h + "px";
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = COLORS.bg;
@@ -248,11 +250,13 @@ const LINE_PALETTE = ["#c45c4a", "#3d6b5a", "#3d5c6b", "#8b5e3c", "#6b4a5d", "#b
 function sizePaperCanvas(canvas, cssH) {
   const ctx = canvas.getContext("2d");
   const dpr = window.devicePixelRatio || 1;
-  const cssW = Math.max(280, canvas.clientWidth || canvas.parentElement?.clientWidth || 640);
+  const raw = canvas.clientWidth || canvas.parentElement?.clientWidth || 0;
+  const cssW = Math.max(160, raw || 640);
   const h = cssH || 220;
   canvas.width = Math.floor(cssW * dpr);
   canvas.height = Math.floor(h * dpr);
-  canvas.style.width = cssW + "px";
+  canvas.style.width = "100%";
+  canvas.style.maxWidth = "100%";
   canvas.style.height = h + "px";
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   return { ctx, w: cssW, h };

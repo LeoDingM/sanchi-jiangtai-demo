@@ -43,7 +43,14 @@ function persist() {
   if (state) saveSlot(state, "auto");
 }
 
+function syncChrome() {
+  const bar = $("#topbar");
+  if (bar) document.documentElement.style.setProperty("--topbar-h", `${bar.offsetHeight}px`);
+}
+
 export function boot() {
+  syncChrome();
+  window.addEventListener("resize", syncChrome);
   $("#btn-new").onclick = () => {
     const name = $("#pname").value.trim() || "林知秋";
     state = createGame(20170901, name);
@@ -98,6 +105,7 @@ function handleAct(act) {
 
 function render() {
   if (!state) return;
+  syncChrome();
   $("#clock").textContent = formatDateCn(state.date);
   const slot = currentSlot(state);
   const periodEl = $("#periodline");
