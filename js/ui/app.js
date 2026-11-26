@@ -37,32 +37,36 @@ import {
   isTeachersDayTimeSlot, isTeachersDayPlayDate, teachersDayPlayDate, teachersDayNominalDate,
   TEACHERS_DAY_CARD_MIN, TEACHERS_DAY_CARD_MAX, TEACHERS_DAY_CARD_CAP,
   TEACHERS_DAY_SOURCE_NOTE, CARD_REPLIES, COLLEAGUE_ACTIONS,
-} from "../domain/simulation.js?v=t61u1";
-import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t61u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t61u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t61u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t61u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t61u1";
-import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t61u1";
-import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t61u1";
-import { hydrateReport } from "../domain/simulation.js?v=t61u1";
-import { renderSeating } from "./classroom.js?v=t61u1";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t61u1";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t61u1";
-import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t61u1";
-import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t61u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t61u1";
-import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t61u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t61u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t61u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t61u1";
+  handleQualityMeet, composeQualityMeetBrief, qualityMeetOptionsFor,
+  isQualityMeetOpen, isQualityMeetWindow, qualityMeetUnavailableReason,
+  currentQualityMeetExam, ensureQualityMeetState, hasQualityMeet,
+  QUALITY_MEET_ACTIONS, QUALITY_MEET_SOURCE_NOTE,
+} from "../domain/simulation.js?v=t62u1";
+import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t62u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t62u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t62u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t62u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t62u1";
+import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t62u1";
+import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t62u1";
+import { hydrateReport } from "../domain/simulation.js?v=t62u1";
+import { renderSeating } from "./classroom.js?v=t62u1";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t62u1";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t62u1";
+import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t62u1";
+import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t62u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t62u1";
+import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t62u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t62u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t62u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t62u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
   parseAiCommentary, emptyAiCommentary,
-} from "../domain/examAi.js?v=t61u1";
+} from "../domain/examAi.js?v=t62u1";
 
 let state = null;
 let view = "classroom";
@@ -1750,6 +1754,50 @@ function officeLeaveLine() {
   return `今日请假：${away.slice(0, 4).map((s) => `${s.name}（${s.health?.kind || s.health?.status || "假"}）`).join("、")}${away.length > 4 ? "等" : ""}。假条已由班主任登记。`;
 }
 
+function qualityMeetPanelHtml() {
+  if (!state) return "";
+  if (!isQualityMeetWindow(state)) return "";
+  ensureQualityMeetState(state);
+  const exam = currentQualityMeetExam(state);
+  const rec = state.qualityMeet || {};
+  const done = exam && hasQualityMeet(state, exam);
+  if (!isQualityMeetOpen(state) && !done) {
+    return `<div class="paper visit-panel quality-meet-panel" data-quality-meet-panel="1">
+      <h3>备课组质量分析会</h3>
+      <p class="muted">${qualityMeetUnavailableReason(state)} ${QUALITY_MEET_SOURCE_NOTE}</p>
+    </div>`;
+  }
+  if (done) {
+    const minutes = rec.lastMinutes?.minutes || (state.qualityMeetings || [])[0]?.minutes || "";
+    return `<div class="paper visit-panel quality-meet-panel" data-quality-meet-panel="1">
+      <h3>备课组质量分析会</h3>
+      <p class="muted">本场「${exam?.examName || "这场考试"}」的校内质量分析会已经开过。下面是会议纪要，也可在学校日志里查阅。${QUALITY_MEET_SOURCE_NOTE}</p>
+      <p>${minutes}</p>
+    </div>`;
+  }
+  const brief = composeQualityMeetBrief(state, exam);
+  const options = qualityMeetOptionsFor(state, exam);
+  const btns = (options.length ? options : QUALITY_MEET_ACTIONS).map((o) => `<button type="button" data-quality-meet="${o.id}">${o.label}</button>`).join("");
+  return `<div class="paper visit-panel quality-meet-panel" data-quality-meet-panel="1">
+      <h3>备课组质量分析会</h3>
+      <p class="muted">本校月考、期中、期末或模拟成绩公布后，办公室坐班可以参加一场数学备课组的校内质量分析会。每一场对应考试全组只开一次。由备课组长主持，你以任课老师身份参加。${QUALITY_MEET_SOURCE_NOTE}</p>
+      <p><b>本场考试</b>　${exam?.examName || ""}</p>
+      <p>${brief?.shortPoints || "结合已公布的本班数学均分和典型问题开会。"}</p>
+      <div class="row-actions">${btns}</div>
+    </div>`;
+}
+
+function bindQualityMeetActions(host) {
+  host.querySelectorAll("[data-quality-meet]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const r = handleQualityMeet(state, b.dataset.qualityMeet);
+      toast(r.ok ? r.text : r.reason);
+      persist(); render();
+    };
+  });
+}
+
 function officeCollabHtml() {
 
   const watch = homeworkWatchlist(state.homework, state);
@@ -1774,6 +1822,7 @@ function officeCollabHtml() {
     ${coachingPanelHtml({ always: true })}
     ${commentPanelHtml()}
     ${teachersDayPanelHtml({ place: "office" })}
+    ${qualityMeetPanelHtml()}
     ${tiaokePanelHtml()}`;
 }
 
@@ -1789,6 +1838,7 @@ function bindOfficeActions(host) {
   bindCoachingActions(host);
   bindCommentActions(host);
   bindTeachersDayActions(host);
+  bindQualityMeetActions(host);
   bindObserveActions(host);
   bindProctorActions(host);
   bindMarkingActions(host);
@@ -2863,7 +2913,9 @@ function viewLog(host) {
     const tag = e.kind === "openClass" ? "（校内公开课）" : (e.kind === "exam" ? "（校内考务安排）" : (e.kind === "activity" ? "（学校活动，校内安排）" : (e.kind === "parents" ? "（校内安排）" : "")));
     return `<div class="log-item"><b>${e.date}</b> ${e.name}${tag}</div>`;
   }).join("");
+  const minutes = (state.qualityMeetings || []).map((m) => `<div class="log-item"><b>${m.date}</b> ${m.examName || "质量分析会"}　${m.minutes}</div>`).join("");
   host.innerHTML = `<h3>近期校历</h3>${cal || "<p class=\"muted\">暂无后续安排</p>"}
+    ${minutes ? `<h3>备课组会议纪要</h3>${minutes}` : ""}
     <h3>日志</h3>${(state.log||[]).slice(0,40).map((l)=>`<div class="log-item"><b>${l.date}</b> ${l.text}</div>`).join("")}`;
 }
 
