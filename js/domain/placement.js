@@ -6,6 +6,7 @@
 import { FIRST_PLACEMENT_TARGETS, CLASS_BLUEPRINT } from "./config.js";
 import { compareScoreRows } from "./scores.js";
 import { rngFrom, shuffle } from "./prng.js";
+import { reseatClasses, syncSeatsToSeq, seatFromSeq } from "./school.js";
 
 export function firstPlacement(students, scoreMap, { overrides = {}, seed = 1 } = {}) {
   const movable = [];
@@ -80,7 +81,7 @@ export function firstPlacement(students, scoreMap, { overrides = {}, seed = 1 } 
       placement1: { from: s.classNo, to: a.classNo, track: a.track },
     };
   });
-  return { students: next, assignments: assign, type: "first" };
+  return { students: reseatClasses(next, { seed, tag: "place1-seats" }), assignments: assign, type: "first" };
 }
 
 
@@ -154,16 +155,23 @@ export function secondPlacement(students, scoreMap, { seed = 1 } = {}) {
       const rng = rngFrom(seed, "place2", key, no);
       const seats = shuffle(rng, buckets[no]);
       seats.forEach((s, idx) => {
+        const seq = idx + 1;
         next.push({
           ...s,
           classNo: no,
-          seq: idx + 1,
+          seq,
+          seat: seatFromSeq(no, seq, seats.length),
           placement2: { from: s.classNo, to: no, track: s.track, tier: s.tier },
         });
       });
     }
   }
-  return { students: next, type: "second" };
+  // 0/1、艺体、复读未参与重组：不打乱座次，只按已有座号同步坐标（缺座号则补编）。
+  const keptIds = new Set(kept.map((s) => s.id));
+  const keptNos = [...new Set(kept.map((s) => s.classNo))];
+  const reshuffled = next.filter((s) => !keptIds.has(s.id));
+  const syncedKept = syncSeatsToSeq(next.filter((s) => keptIds.has(s.id)), { classNos: keptNos });
+  return { students: [...syncedKept, ...reshuffled], type: "second" };
 }
 
 export function rebuildClasses(students) {

@@ -485,9 +485,31 @@ export function consultHomeroom(state, students, student = null) {
   for (const s of students) {
     if (watch.some((r) => r.id === s.id)) s.homeroomWatch = true;
   }
+  const isEve = String(state.periodId || "").startsWith("evening");
   const text = names.length
-    ? `你把${names.slice(0, 5).join("、")}${names.length > 5 ? "等" : ""}的缺交或课堂情况告诉了班主任${home}。她记下了，晚自习先点这几个人。`
+    ? (isEve
+      ? `你把${names.slice(0, 5).join("、")}${names.length > 5 ? "等" : ""}的缺交或课堂情况告诉了班主任${home}。她把人写进今晚的点名名单，过一会点名时先叫。`
+      : `你把${names.slice(0, 5).join("、")}${names.length > 5 ? "等" : ""}的缺交或课堂情况告诉了班主任${home}。她记下了，晚自习点名会先点这几个人。`)
     : `你和班主任${home}对了一下班里近况。眼下没有特别要盯的人，她嘱咐把作业订正按名单落实。`;
+  if (isEve && names.length) {
+    const slotKey = `${state.date}|${state.periodId}`;
+    const prev = state.eveningRoll?.slotKey === slotKey ? (state.eveningRoll.items || []) : [];
+    const extra = compileEveningRoll(state, students);
+    const byId = new Map(prev.map((x) => [x.id, { ...x, reasons: [...(x.reasons || [])] }]));
+    for (const it of extra) {
+      if (!byId.has(it.id)) byId.set(it.id, it);
+      else for (const r of it.reasons) if (!byId.get(it.id).reasons.includes(r)) byId.get(it.id).reasons.push(r);
+    }
+    state.eveningRoll = {
+      slotKey,
+      date: state.date,
+      periodId: state.periodId,
+      items: [...byId.values()],
+      handed: true,
+      called: state.eveningRoll?.slotKey === slotKey && state.eveningRoll?.called,
+      patrolled: state.eveningRoll?.patrolled || false,
+    };
+  }
   return { ok: true, text, names };
 }
 
@@ -508,6 +530,40 @@ export function consultMentor(state, grade = 1) {
   return { ok: true, text, prep: state.player.prep, topic };
 }
 
+
+
+/** 晚自习尚未回到座位的人（确定性、少数，不是正式考勤册）。 */
+export function eveningLatecomers(state, students) {
+  const out = [];
+  for (const s of students || []) {
+    if (hash01(s.id, state.date, state.periodId, "late") < 0.045) out.push(s);
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
+/** 汇总晚自习点名名单：晚归、举手、缺交/订正、白天已通报的人。 */
+export function compileEveningRoll(state, students) {
+  const list = students || [];
+  const byId = new Map();
+  const add = (s, reason) => {
+    if (!s) return;
+    if (!byId.has(s.id)) byId.set(s.id, { id: s.id, name: s.name, seat: seatLabel(s), reasons: [] });
+    const it = byId.get(s.id);
+    if (reason && !it.reasons.includes(reason)) it.reasons.push(reason);
+  };
+  for (const s of eveningLatecomers(state, list)) add(s, "还没回到座位");
+  for (const s of raisedHands(state, list)) add(s, "举手");
+  for (const r of homeworkWatchlist(state.homework, state)) {
+    const s = list.find((x) => x.id === r.id);
+    add(s, r.correction === "待补交" || r.status === "缺交" ? "作业缺交" : "订正未了");
+  }
+  for (const s of list) {
+    if ((s.energy ?? 70) < 50 || s.lastClassFlag === "走神") add(s, "状态不佳");
+    if (s.homeroomWatch) add(s, "白天已通报");
+  }
+  return [...byId.values()];
+}
 
 export const TUTOR_MODES = ["巡视", "答疑", "小组", "收订正"];
 
@@ -555,34 +611,35 @@ export function tutorEvening(state, students, { mode = "巡视", studentId = nul
   const list = students || [];
 
   if (mode === "巡视") {
-    if (state.eveningPatrolledKey === slotKey) return { ok: false, reason: "这节晚自习已经巡视过一轮，接下来到座位上答疑或收订正就行。" };
+    if (state.eveningPatrolledKey === slotKey) return { ok: false, reason: "这节晚自习已经巡视过一轮，接下来到座位上答疑、收订正，或请班主任按名单点名。" };
     state.eveningPatrolledKey = slotKey;
-    const hands = raisedHands(state, list);
-    const watch = homeworkWatchlist(state.homework, state);
     const sleepy = list.filter((s) => (s.energy ?? 70) < 50 || s.lastClassFlag === "走神");
-    const seen = [];
-    const used = new Set();
-    const push = (s, note) => {
-      if (!s || used.has(s.id)) return;
-      used.add(s.id);
-      seen.push({ id: s.id, name: s.name, seat: seatLabel(s), note });
-    };
-    for (const s of hands) push(s, "举手");
-    for (const r of watch) {
-      const s = list.find((x) => x.id === r.id);
-      push(s, r.correction === "待补交" || r.status === "缺交" ? "本子还空着" : "还在改订正");
-    }
-    for (const s of sleepy) push(s, "有些疲惫");
-    const shots = seen.slice(0, 4);
     for (const s of sleepy.slice(0, 3)) {
       s.energy = clamp((s.energy || 70) + 2, 20, 98);
       s.stress = clamp((s.stress || 40) - 1, 0, 95);
     }
+    const items = compileEveningRoll(state, list);
+    const late = items.filter((x) => x.reasons.includes("还没回到座位"));
+    const shots = items.slice(0, 5);
     const detail = shots.length
-      ? shots.map((x) => `${x.seat}${x.name}${x.note === "举手" ? "举着手" : "，" + x.note}`).join("；") + "。"
+      ? shots.map((x) => `${x.seat}${x.name}（${x.reasons.join("、")}）`).join("；") + (items.length > 5 ? `。此外还有 ${items.length - 5} 人要盯` : "") + "。"
       : "教室里比较安静，没有特别要停下的座位。";
-    const text = `${when}，你从前面慢慢走到后排。${detail}`;
-    return { ok: true, mode, text, noticed: shots };
+    const home = state.player?.homeroom || "班主任";
+    const handoff = items.length
+      ? `你把 ${items.length} 人的点名名单递给班主任${home}，让她晚自习点名时先点这几个人。`
+      : `你跟班主任${home}说了声，这节可以按常规点名。`;
+    const existing = (state.eveningRoll?.slotKey === slotKey && !state.eveningRoll?.called) ? state.eveningRoll : null;
+    state.eveningRoll = {
+      slotKey,
+      date: state.date,
+      periodId: state.periodId,
+      items,
+      handed: true,
+      called: existing?.called || false,
+      patrolled: true,
+    };
+    const text = `${when}，你从第1排慢慢走到后排。${detail}${handoff}`;
+    return { ok: true, mode, text, noticed: shots, roll: items, late: late.length };
   }
 
   if (mode === "收订正") {
@@ -683,3 +740,54 @@ export function tutorEvening(state, students, { mode = "巡视", studentId = nul
   student.talks = [...(student.talks || []), { date: state.date, topic: "晚自习答疑", text, periodId: state.periodId }];
   return { ok: true, mode: "答疑", text, student, helped };
 }
+
+/** 请班主任按巡视或通报留下的名单做晚自习点名。 */
+export function homeroomEveningRoll(state, students) {
+  const home = state.player.homeroom || "班主任";
+  const list = students || [];
+  const slotKey = `${state.date}|${state.periodId}`;
+  if (state.eveningRoll?.called && state.eveningRoll.slotKey === slotKey) {
+    return { ok: false, reason: "这节晚自习班主任已经点过名了。" };
+  }
+  const items = (state.eveningRoll?.slotKey === slotKey && state.eveningRoll.items?.length)
+    ? state.eveningRoll.items
+    : compileEveningRoll(state, list);
+  const lateIds = new Set(items.filter((x) => x.reasons.includes("还没回到座位")).map((x) => x.id));
+  const missIds = new Set(items.filter((x) => x.reasons.includes("作业缺交")).map((x) => x.id));
+  for (const s of list) {
+    if (!items.some((x) => x.id === s.id)) continue;
+    s.homeroomWatch = true;
+    s.stress = clamp((s.stress || 40) + (lateIds.has(s.id) ? 1 : 0) - 1, 0, 95);
+    if (lateIds.has(s.id)) s.energy = clamp((s.energy || 70) + 3, 20, 98);
+  }
+  for (const row of allHomeworkRows(state)) {
+    if (missIds.has(row.id) && row.correction === "待补交") {
+      row.urged = true;
+      syncStudentHomework(state, row);
+    }
+  }
+  const usedPatrol = state.eveningRoll?.slotKey === slotKey && state.eveningRoll?.handed;
+  state.eveningRoll = {
+    slotKey,
+    date: state.date,
+    periodId: state.periodId,
+    items,
+    handed: true,
+    called: true,
+    patrolled: state.eveningRoll?.slotKey === slotKey && !!state.eveningRoll?.patrolled,
+  };
+  let text;
+  if (!items.length) {
+    text = `班主任${home}晚自习点了全班人数，人都在座位上，没有要单独留下的。`;
+  } else {
+    const late = items.filter((x) => x.reasons.includes("还没回到座位"));
+    const miss = items.filter((x) => x.reasons.includes("作业缺交"));
+    const parts = [`班主任${home}${usedPatrol ? "按你交的名单" : "按需要盯的人"}点名：${items.slice(0, 5).map((x) => x.name).join("、")}${items.length > 5 ? "等" + items.length + "人" : ""}。`];
+    if (late.length) parts.push(`还没回座位的${late.map((x) => x.name).join("、")}应了到，从门口走进来。`);
+    if (miss.length) parts.push(`她让${miss.slice(0, 3).map((x) => x.name).join("、")}${miss.length > 3 ? "等" : ""}把缺交的本子先拿出来。`);
+    if (items.some((x) => x.reasons.includes("白天已通报"))) parts.push("白天通报过的人今晚也点到了。");
+    text = parts.join("");
+  }
+  return { ok: true, text, items, called: items.length };
+}
+

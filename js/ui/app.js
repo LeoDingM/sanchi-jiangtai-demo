@@ -6,6 +6,7 @@ import {
   urgeHomework, checkCorrection, officeMarking, consultHomeroom, consultMentor,
   daySchedule, currentSlot, formatSlotLabel, upcomingMath, upcomingTutoring,
   tutorEvening, raisedHands, seatLabel, periodTalkScene, isTutoringSlot,
+  homeroomEveningRoll,
 } from "../domain/simulation.js";
 import { saveSlot, loadSlot, listSlots, toJSON, fromJSON } from "../domain/save.js";
 import { subjectById, SUBJECTS_G1 } from "../domain/config.js";
@@ -192,13 +193,28 @@ function seatMarks(students) {
   return marks;
 }
 
+function eveningRollPanel() {
+  const roll = state.eveningRoll;
+  const slotKey = `${state.date}|${state.periodId}`;
+  const live = roll?.slotKey === slotKey ? roll : null;
+  const btn = `<div class="row-actions"><button type="button" class="accent" data-roll="1">请班主任点名</button></div>`;
+  if (!live) return `${btn}`;
+  const items = live.items || [];
+  const status = live.called ? "已点过名" : (live.handed ? "名单已交给班主任，待点名" : "待点名");
+  const lines = items.slice(0, 8).map((x) => `${x.seat}${x.name}（${(x.reasons||[]).join("、")}）`).join("、");
+  return `<p>晚自习点名名单 · ${status}${items.length ? ` · ${items.length} 人` : ""}</p>
+    ${items.length ? `<p class="muted">${lines}${items.length > 8 ? " 等" : ""}。</p>` : `<p class="muted">名单上暂时没有要单独点的人。</p>`}
+    ${live.called ? "" : btn}`;
+}
+
 function deskPanelHtml(student, slot, scene) {
   const tutorBtns = slot?.isTutoring
     ? `<div class="row-actions">
         <button type="button" class="accent" data-tutor="巡视">巡视</button>
         <button type="button" data-tutor="小组">小组答疑</button>
         <button type="button" data-tutor="收订正">收订正</button>
-      </div>`
+      </div>
+      ${eveningRollPanel()}`
     : "";
   if (!student) {
     return `<h3>座位</h3>
@@ -239,6 +255,14 @@ function bindDeskAndTutor(host) {
       persist(); render();
     };
   });
+  host.querySelectorAll("[data-roll]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const r = homeroomEveningRoll(state);
+      toast(r.ok ? r.text : r.reason);
+      persist(); render();
+    };
+  });
   host.querySelectorAll("[data-talk]").forEach((b) => {
     b.onclick = (ev) => {
       ev.stopPropagation();
@@ -269,7 +293,7 @@ function viewClassroom(host) {
   const sel = sts.find((s) => s.id === selectedId) || null;
   const nxtT = upcomingTutoring(state);
   let slotLine = slot ? formatSlotLabel(slot) : formatDateCn(state.date);
-  if (slot?.isTutoring) slotLine += "。可以巡视、到座位旁答疑或收订正";
+  if (slot?.isTutoring) slotLine += "。可以巡视、到座位旁答疑、收订正，或请班主任点名";
   else if (slot?.isMath) slotLine += "（本节可上课，也可在座位边提醒）";
   else if (slot?.isExamDay) slotLine += "（今日停课）";
   else if (slot && !slot.isMath && slot.kind !== "break" && slot.id !== "rest") slotLine += "。这节不是数学课，谈话请到走廊门口简短说";
@@ -609,16 +633,18 @@ function eveningTutorHtml() {
   const sts = clsStudents();
   const hands = slot?.isTutoring ? raisedHands(state, sts) : [];
   const hint = slot?.isTutoring
-    ? `现在是${formatSlotLabel(slot)}，可以巡视、到座位旁答疑、做小组讲题或沿过道收订正。这不是新开一节正课，不另算课题进度。`
+    ? `现在是${formatSlotLabel(slot)}，可以巡视、到座位旁答疑、做小组讲题、沿过道收订正，或把名单交给班主任点名。这不是新开一节正课，不另算课题进度。`
     : `现在还不是数学晚自习或答疑。${nxt ? `下一节可答疑：${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}，请用「下一节」走到那时。` : "这几天课表里没有数学晚自习或答疑。"}`;
   return `<div class="paper lesson-card">
-      <h3>晚自习答疑</h3>
+      <h3>晚自习答疑与点名</h3>
       <p class="muted">${hint}</p>
       <div class="row-actions">
         <button type="button" class="accent" data-tutor="巡视">巡视</button>
         <button type="button" data-tutor="小组">小组答疑</button>
         <button type="button" data-tutor="收订正">收订正</button>
+        <button type="button" data-roll="1">请班主任点名</button>
       </div>
+      ${slot?.isTutoring ? eveningRollPanel() : ""}
       ${hands.length && slot?.isTutoring ? `<p>举手或需要盯的座位：</p><div class="row-actions">${hands.map((s)=>`<button type="button" data-tutor="答疑" data-sid="${s.id}">${s.name}（${seatLabel(s)}）</button>`).join("")}</div>` : ""}
     </div>`;
 }

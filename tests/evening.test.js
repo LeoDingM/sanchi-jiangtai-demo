@@ -5,7 +5,7 @@ import { daySchedule, weekMathCount, currentSlot, isTutoringSlot } from "../js/d
 import { seatLabel } from "../js/domain/school.js";
 import {
   createGame, prepareLesson, teach, talkTo, tutorEvening, reviewHomework,
-  urgeHomework, playerStudents, periodTalkScene, advancePeriod,
+  urgeHomework, playerStudents, periodTalkScene, advancePeriod, homeroomEveningRoll,
 } from "../js/domain/simulation.js";
 
 test("周一晚自习和周二答疑是辅导时段，不占用数学正课课题", () => {
@@ -100,4 +100,38 @@ test("本时段谈话次数用尽后须等下一节", () => {
   assert.equal(moved.ok, true);
   const r4 = talkTo(s, sts[2].id, "鼓励");
   assert.equal(r4.ok, true);
+});
+
+test("晚自习巡视把名单交给班主任，点名按名单执行且可复现", () => {
+  function play() {
+    const s = createGame(20170901);
+    prepareLesson(s, { topic: "集合与逻辑用语", depth: 2, homework: "中" });
+    teach(s, "精讲例题");
+    const miss = s.homework.rows.find((r) => r.correction === "待补交");
+    const weak = s.homework.rows.find((r) => r.quality === "错题较多" || r.quality === "未订正");
+    if (miss) urgeHomework(s, miss.id);
+    if (weak) reviewHomework(s, weak.id);
+    const early = homeroomEveningRoll(s);
+    assert.equal(early.ok, false);
+    s.date = "2017-09-04";
+    s.periodId = "evening-1";
+    s.tutorSlotKey = null;
+    const patrol = tutorEvening(s, "巡视");
+    assert.equal(patrol.ok, true);
+    assert.ok(patrol.roll?.length > 0);
+    assert.ok(patrol.text.includes("点名名单") && patrol.text.includes("赵映秋"));
+    assert.equal(s.eveningRoll.handed, true);
+    const roll = homeroomEveningRoll(s);
+    assert.equal(roll.ok, true);
+    assert.ok(roll.text.includes("点名"));
+    assert.ok(roll.text.includes("赵映秋"));
+    assert.ok(roll.text.includes("按你交的名单"));
+    assert.equal(s.eveningRoll.called, true);
+    const again = homeroomEveningRoll(s);
+    assert.equal(again.ok, false);
+    return { patrol: patrol.text, roll: roll.text, n: patrol.roll.length };
+  }
+  const a = play();
+  const b = play();
+  assert.deepEqual(a, b);
 });

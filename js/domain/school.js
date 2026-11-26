@@ -77,9 +77,7 @@ export function makeStudent({ rng, usedNames, entryYear, classNo, seq, tier, hin
   const family = pick(rng, FAMILY_TYPES);
   const personality = pick(rng, PERSONALITIES);
   const stability = clamp(38 + base * 0.45 + gauss(rng, 0, 6) + (tier === "yunxiu_exp" ? 8 : 0), 28, 97);
-  const seatsPerRow = classNo === 0 || classNo === 1 ? 6 : 7;
-  const seatIndex = seq - 1;
-  const seat = { row: Math.floor(seatIndex / seatsPerRow) + 1, col: (seatIndex % seatsPerRow) + 1 };
+  const seat = seatFromSeq(classNo, seq, 0);
   return {
     id, name, gender, entryYear, classNo, seq,
     originClassNo: classNo,
@@ -190,16 +188,77 @@ export function studentsOfCohort(cohort) {
 }
 
 
+export function columnsForClass(classNo, classSize = 0) {
+  return (classNo === 0 || classNo === 1 || (classSize && classSize <= 35)) ? 6 : 7;
+}
+
+export function seatFromSeq(classNo, seq, classSize = 0) {
+  const cols = columnsForClass(classNo, classSize);
+  const idx = Math.max(0, (seq || 1) - 1);
+  return { row: Math.floor(idx / cols) + 1, col: (idx % cols) + 1 };
+}
+
 export function seatOf(student, classSize = 0) {
   if (student?.seat?.row && student?.seat?.col) return student.seat;
-  const cols = (student?.classNo === 0 || student?.classNo === 1 || (classSize && classSize <= 35)) ? 6 : 7;
-  const idx = Math.max(0, (student?.seq || 1) - 1);
-  return { row: Math.floor(idx / cols) + 1, col: (idx % cols) + 1 };
+  return seatFromSeq(student?.classNo, student?.seq, classSize);
 }
 
 export function seatLabel(student, classSize = 0) {
   const s = seatOf(student, classSize);
   return `第${s.row}排第${s.col}座`;
+}
+
+/** 按当前名单顺序写入连续座号与座位坐标。 */
+export function numberClassSeats(members) {
+  const size = members.length;
+  return members.map((s, i) => {
+    const seq = i + 1;
+    return { ...s, seq, seat: seatFromSeq(s.classNo, seq, size) };
+  });
+}
+
+/**
+ * 按班级重排座号。给 seed 则用确定性洗牌作为新座次；
+ * 不给 seed 则保留原名单顺序，只把座号写成 1..n 并同步座位坐标。
+ */
+export function reseatClasses(students, { seed = null, tag = "reseat", classNos = null } = {}) {
+  const allow = classNos ? new Set(classNos) : null;
+  const groups = new Map();
+  for (const s of students) {
+    if (allow && !allow.has(s.classNo)) continue;
+    if (!groups.has(s.classNo)) groups.set(s.classNo, []);
+    groups.get(s.classNo).push(s);
+  }
+  const byId = new Map();
+  for (const [no, list] of groups) {
+    const ordered = seed != null ? shuffle(rngFrom(seed, tag, no), list) : list.slice();
+    numberClassSeats(ordered).forEach((s) => byId.set(s.id, s));
+  }
+  return students.map((s) => byId.get(s.id) || s);
+}
+
+/** 座号已齐时只按座号回写坐标；座号有缺口或重复则按原座号/学号排后重编。 */
+export function syncSeatsToSeq(students, { classNos = null } = {}) {
+  const allow = classNos ? new Set(classNos) : null;
+  const groups = new Map();
+  for (const s of students) {
+    if (allow && !allow.has(s.classNo)) continue;
+    if (!groups.has(s.classNo)) groups.set(s.classNo, []);
+    groups.get(s.classNo).push(s);
+  }
+  const byId = new Map();
+  for (const [, list] of groups) {
+    const size = list.length;
+    const seqs = list.map((s) => s.seq);
+    const ok = new Set(seqs).size === size && seqs.every((n) => n >= 1 && n <= size);
+    if (ok) {
+      for (const s of list) byId.set(s.id, { ...s, seat: seatFromSeq(s.classNo, s.seq, size) });
+    } else {
+      const ordered = list.slice().sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0) || String(a.id).localeCompare(String(b.id)));
+      numberClassSeats(ordered).forEach((s) => byId.set(s.id, s));
+    }
+  }
+  return students.map((s) => byId.get(s.id) || s);
 }
 
 export function classStudents(cohort, classNo) {

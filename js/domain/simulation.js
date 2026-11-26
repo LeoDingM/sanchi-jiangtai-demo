@@ -3,12 +3,12 @@ import {
   PLAYER_CLASS_NO, PLAYER_DEFAULT_NAME, PLAYER_ROLE, START_DATE, GRADE_YEAR, HOMEROOM_NAME, MENTOR_NAME,
 } from "./config.js";
 import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById } from "./calendar.js";
-import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf } from "./school.js";
+import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf, reseatClasses } from "./school.js";
 import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js";
 import { runExam } from "./examService.js";
 import { admitCohort } from "./admission.js";
 import { rngFrom, clamp } from "./prng.js";
-import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands } from "./teaching.js";
+import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands, homeroomEveningRoll as homeroomEveningRollCore, compileEveningRoll } from "./teaching.js";
 import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, upcomingTutoring, formatSlotLabel, isTutoringSlot } from "./timetable.js";
 
 export const SAVE_VERSION = 1;
@@ -292,6 +292,7 @@ export function doPromote(state, ev) {
     };
     assignNos(wen, wenNos);
     assignNos(liS, liNos);
+    staying.splice(0, staying.length, ...reseatClasses(staying, { seed: state.seed + newEntry, tag: "repeat-seats" }));
     delete state.cohorts[graduatedCohort];
     // 复读生挂到“下一届高三”所属：他们与新高三同一学年上课，单独保留在 repeatPool 直到合并
     state.pendingRepeat = staying;
@@ -308,7 +309,9 @@ export function doPromote(state, ev) {
   const seniorYear = newEntry - 2;
   if (state.pendingRepeat?.length && state.cohorts[seniorYear]) {
     const sen = state.cohorts[seniorYear];
+    const repeatNos = [...new Set(state.pendingRepeat.map((x) => x.classNo))];
     sen.students = sen.students.concat(state.pendingRepeat);
+    sen.students = reseatClasses(sen.students, { seed: state.seed + newEntry, tag: "repeat-merge-seats", classNos: repeatNos });
     sen.classes = rebuildClasses(sen.students);
     state.pendingRepeat = [];
   }
@@ -536,7 +539,7 @@ export function reviewHomework(state, studentId) {
   return r;
 }
 
-export { topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, daySchedule, currentSlot, formatSlotLabel, upcomingMath, upcomingTutoring, majorEventOn, pendingMajorEvent, isTutoringSlot, raisedHands, seatLabel, seatOf };
+export { topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, daySchedule, currentSlot, formatSlotLabel, upcomingMath, upcomingTutoring, majorEventOn, pendingMajorEvent, isTutoringSlot, raisedHands, seatLabel, seatOf, compileEveningRoll };
 
 function latestMathExam(state, studentId) {
   const reports = listExamReports(state, { entryYear: state.player.cohortYear });
@@ -651,6 +654,24 @@ export function tutorEvening(state, mode = "巡视", studentId = null) {
   }
   const cls = snapshotPlayerClass(state);
   const r = tutorEveningCore(state, cls, { mode, studentId, slot });
+  if (r.ok) addLog(state, r.text);
+  return r;
+}
+
+export function homeroomEveningRoll(state) {
+  const slot = currentSlot(state);
+  const pending = pendingMajorEvent(state);
+  if (pending) return { ok: false, reason: `今日${pending.name}，停课，晚自习点名也先不做。` };
+  if (slot?.isExamDay) return { ok: false, reason: `今日${slot.eventName}，全天停课，没有晚自习点名。` };
+  if (!isTutoringSlot(slot)) {
+    const nxt = upcomingTutoring(state);
+    const hint = nxt
+      ? `下一节可点名的是${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}。请用「下一节」走到那时。`
+      : "这几天没有排数学晚自习或数学答疑。";
+    return { ok: false, reason: `现在是${slot ? formatSlotLabel(slot) : "未排课"}，还不是晚自习。${hint}` };
+  }
+  const cls = snapshotPlayerClass(state);
+  const r = homeroomEveningRollCore(state, cls);
   if (r.ok) addLog(state, r.text);
   return r;
 }
