@@ -1,6 +1,6 @@
 /** 事件驱动校历：2017 年起可多年循环，考试难度按场次与年份变化。 */
-import { hash01, clamp } from "./prng.js?v=t52u1";
-import { WEEKDAY_NAMES, PERIODS } from "./config.js?v=t52u1";
+import { hash01, clamp } from "./prng.js?v=t53u1";
+import { WEEKDAY_NAMES, PERIODS } from "./config.js?v=t53u1";
 
 const WEEKDAY = { 0: "日", 1: "一", 2: "二", 3: "三", 4: "四", 5: "五", 6: "六" };
 

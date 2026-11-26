@@ -5,9 +5,9 @@
 import {
   SUBJECTS_G1, SUBJECT_IDS, SUBJECT_MAX, G1_TOTAL, CUTOFF_FIRST_RANK, CUTOFF_SECOND_RANK,
   LI_SUBJECTS, WEN_SUBJECTS, TIER, examById,
-} from "./config.js?v=t52u1";
-import { clamp, gauss, hash01, rngFrom, round1, round2 } from "./prng.js?v=t52u1";
-import { resolveSchoolQuota } from "./schoolLines.js?v=t52u1";
+} from "./config.js?v=t53u1";
+import { clamp, gauss, hash01, rngFrom, round1, round2 } from "./prng.js?v=t53u1";
+import { resolveSchoolQuota } from "./schoolLines.js?v=t53u1";
 
 export const SCALE_G1 = "g1-950";
 export const SCALE_G2 = "g2-750";
@@ -299,8 +299,10 @@ export function studentFormBundle(student, examId, difficultyKey = "", examKind 
     const dir = hash01(student.id, examId, "outlier-dir") < 0.48 ? -1 : 1;
     form += dir * (0.02 + rng() * 0.045);
   }
-  // 期中发挥波动略大于高考，用于拉开同层次班第一的校排；不改高考抽签，以免省控标定漂移。
+  // 平时月考/模拟/联考发挥波动略大于高考，让同一学生各次成绩有可见起伏。
+  // 不改高考，也不改用于分班的期末，以免省控标定和梯队交叠漂移。
   if (examKind === "midterm") form *= 1.32;
+  else if (examKind === "monthly" || examKind === "mock1" || examKind === "mock2" || examKind === "city" || examKind === "province") form *= 1.18;
   const fit = (hash01(student.id, examId, "fit") - 0.5) * 0.02 * (1.15 - stab / 200);
   const cond = ((student.energy ?? 70) - 70) * 0.00012 - ((student.stress ?? 40) - 40) * 0.00014;
   return { form, fit, condition: cond };

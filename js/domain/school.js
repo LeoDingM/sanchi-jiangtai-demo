@@ -3,13 +3,13 @@ import {
   CLASS_BLUEPRINT, TIER, SUBJECT_IDS, PERSONALITIES, FAMILY_TYPES,
   PLAYER_CLASS_NO, GRADE_YEAR, LI_SUBJECTS, WEN_SUBJECTS,
   REPEAT_CLASS_SIZE, REPEAT_WEN_NOS, REPEAT_LI_NOS, INSERT_REPEAT_CLASS_NOS,
-} from "./config.js?v=t52u1";
-import { clamp, gauss, hash01, pick, rngFrom, shuffle } from "./prng.js?v=t52u1";
-import { generateName } from "./names.js?v=t52u1";
-import { gradeStudent, scaleOf, packLastGaokao } from "./scores.js?v=t52u1";
-import { provincialLines } from "./jiangxi.js?v=t52u1";
-import { admitStudent, canInsertRepeat, packLastAdmission } from "./admission.js?v=t52u1";
-import { examParams } from "./calendar.js?v=t52u1";
+} from "./config.js?v=t53u1";
+import { clamp, gauss, hash01, pick, rngFrom, shuffle } from "./prng.js?v=t53u1";
+import { generateName } from "./names.js?v=t53u1";
+import { gradeStudent, scaleOf, packLastGaokao } from "./scores.js?v=t53u1";
+import { provincialLines } from "./jiangxi.js?v=t53u1";
+import { admitStudent, canInsertRepeat, packLastAdmission } from "./admission.js?v=t53u1";
+import { examParams } from "./calendar.js?v=t53u1";
 
 export const ALL_SUBJECTS = [...SUBJECT_IDS, "biology"];
 
@@ -143,6 +143,36 @@ export function makeStudent({ rng, usedNames, entryYear, classNo, seq, tier, hin
       ? ["师范", "文史", "财经", "综合", "法学"]
       : ["理工", "综合", "财经", "医学", "师范"]),
   };
+}
+
+
+/**
+ * 理科卓行各班点出一名稳定高于省控一本的头部，避免整班都挤在线边几分、一次考试一起过或一起不过。
+ * 只抬已在班内最靠前的人，不抬整班均值，也不给笃学留苗。
+ */
+export function ensureZhuoxingClassSpread(students, seed = "zx-spread") {
+  if (!students?.length) return students;
+  const rng = rngFrom(seed, "zhuoxing-spread");
+  const groups = new Map();
+  for (const s of students) {
+    if (s.repeat || s.tier !== "zhuoxing") continue;
+    if ((s.track || s.trackPref) === "wen") continue;
+    const no = s.classNo;
+    if (!groups.has(no)) groups.set(no, []);
+    groups.get(no).push(s);
+  }
+  for (const list of groups.values()) {
+    if (!list.length) continue;
+    const ordered = list.slice().sort((a, b) => examAbilityMean(b) - examAbilityMean(a) || String(a.id).localeCompare(String(b.id)));
+    const best = ordered[0];
+    const cur = examAbilityMean(best);
+    if (cur < 73.5) {
+      const target = 74 + rng() * 3; // 74–77，对应高考约高出理科一本十余到二十多分
+      shiftAbilityToward(best, Math.min(77.5, target), 82, 16);
+    }
+    if ((best.stability ?? 60) < 70) firmStability(best, 72, 84, rng);
+  }
+  return students;
 }
 
 export function generateCohort(entryYear, seed, { quality = 0, alreadySplit = false, withRepeat = false } = {}) {

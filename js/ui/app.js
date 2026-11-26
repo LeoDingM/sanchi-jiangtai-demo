@@ -15,32 +15,32 @@ import {
   attendClassMeeting, hostClassMeeting, playerClassCommittee, playerClassBrief,
   playerDutyToday, playerWeekDuty, isHomeroomMeetingSlot, upcomingClassMeeting,
   committeeTitleOf, formatStudentShort,
-} from "../domain/simulation.js?v=t52u1";
-import { addDays } from "../domain/calendar.js?v=t52u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t52u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t52u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t52u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t52u1";
-import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t52u1";
-import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t52u1";
-import { hydrateReport } from "../domain/simulation.js?v=t52u1";
-import { renderSeating } from "./classroom.js?v=t52u1";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t52u1";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t52u1";
-import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t52u1";
-import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t52u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t52u1";
-import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel } from "../domain/admission.js?v=t52u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t52u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t52u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t52u1";
+} from "../domain/simulation.js?v=t53u1";
+import { addDays } from "../domain/calendar.js?v=t53u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t53u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t53u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t53u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t53u1";
+import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t53u1";
+import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t53u1";
+import { hydrateReport } from "../domain/simulation.js?v=t53u1";
+import { renderSeating } from "./classroom.js?v=t53u1";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t53u1";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t53u1";
+import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t53u1";
+import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t53u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t53u1";
+import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel } from "../domain/admission.js?v=t53u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t53u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t53u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t53u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
   parseAiCommentary, emptyAiCommentary,
-} from "../domain/examAi.js?v=t52u1";
+} from "../domain/examAi.js?v=t53u1";
 
 let state = null;
 let view = "classroom";
