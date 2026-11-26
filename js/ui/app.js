@@ -22,7 +22,7 @@ import { hydrateReport } from "../domain/simulation.js";
 import { renderSeating } from "./classroom.js";
 import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js";
 import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js";
-import { studentExamHistory, tierName, findStudentInState } from "../domain/studentHistory.js";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js";
 import { drawLineChart, drawBarChart } from "./charts.js";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
@@ -174,7 +174,12 @@ function render() {
   const host = $("#view");
   const map = { classroom: viewClassroom, roster: viewRoster, profile: viewProfile, teach: viewTeach, placement: viewPlacement, grades: viewGrades, office: viewOffice, admission: viewAdmission, auto: viewAuto, log: viewLog, save: viewSave, settings: viewSettings };
   host.innerHTML = "";
-  (map[view] || viewClassroom)(host);
+  try {
+    (map[view] || viewClassroom)(host);
+  } catch (err) {
+    console.error(err);
+    host.innerHTML = "<p class=\"notice\">这一页打开失败，请刷新后再试。如果还是空白，把现象发我即可。</p>";
+  }
   renderAgenda();
   syncSidenavHint();
 }

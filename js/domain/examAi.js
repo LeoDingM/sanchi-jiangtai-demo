@@ -767,10 +767,10 @@ export function formatAiError(err, status, bodyText) {
   }
   if (status >= 500) return "分析服务暂时不可用，请稍后再试。";
   if (/failed to fetch|networkerror|load failed|econnrefused|enotfound|fetch/.test(low)) {
-    return "无法连接到分析服务，请检查网络或接口地址。";
+    return "无法连接到分析服务。请确认设置里的接口地址是 https://api.deepseek.com，手机能访问该地址；若开着 VPN，可先关掉再试。";
   }
   if (status) return `分析请求失败（${status}）${apiMsg ? "：" + apiMsg : "。请稍后再试。"}`;
-  if (/failed to fetch|network|econn|enotfound/i.test(msg)) return "无法连接到分析服务，请检查网络或接口地址。";
+  if (/failed to fetch|network|econn|enotfound/i.test(msg)) return "无法连接到分析服务。请确认设置里的接口地址是 https://api.deepseek.com，手机能访问该地址；若开着 VPN，可先关掉再试。";
   return "分析请求失败，请稍后再试。";
 }
 
@@ -785,23 +785,37 @@ export async function requestExamAnalysis(payload, { fetchImpl, settings, signal
   const fetchFn = fetchImpl || (typeof fetch === "function" ? fetch : null);
   if (!fetchFn) return { ok: false, reason: "当前环境无法发起网络请求。" };
   let res;
+  let timedOut = false;
   try {
-    res = await fetchFn(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature: 0.3,
-        max_tokens: 2200,
-
-      }),
-      signal,
-    });
+    const ctrl = new AbortController();
+    const onAbort = () => ctrl.abort();
+    if (signal) {
+      if (signal.aborted) ctrl.abort();
+      else signal.addEventListener("abort", onAbort, { once: true });
+    }
+    const timer = setTimeout(() => { timedOut = true; ctrl.abort(); }, 90000);
+    try {
+      res = await fetchFn(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature: 0.3,
+          max_tokens: 2200,
+          thinking: { type: "disabled" },
+        }),
+        signal: ctrl.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener("abort", onAbort);
+    }
   } catch (err) {
+    if (timedOut) return { ok: false, reason: "分析请求超时，请稍后再试。" };
     return { ok: false, reason: formatAiError(err) };
   }
   const text = await res.text().catch(() => "");
