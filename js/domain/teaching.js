@@ -2,10 +2,11 @@
  * 日常教学：备课、上课、作业登记、课后面批。
  * 效果写入备课充分度与数学教学积累，并确定性影响任教班学生状态；不用 LLM 编课堂。
  */
-import { clamp, hash01, rngFrom, round1 } from "./prng.js?v=t48u2";
-import { seatLabel } from "./school.js?v=t48u2";
-import { deskChatPairs, deskMateOf, missingDeskPairs, peerStatusLine } from "./peers.js?v=t48u2";
-import { isAwayFromClass, classAbsences, healthStatusLine } from "./health.js?v=t48u2";
+import { clamp, hash01, rngFrom, round1 } from "./prng.js?v=t49u1";
+import { seatLabel } from "./school.js?v=t49u1";
+import { deskChatPairs, deskMateOf, missingDeskPairs, peerStatusLine } from "./peers.js?v=t49u1";
+import { isAwayFromClass, classAbsences, healthStatusLine } from "./health.js?v=t49u1";
+import { lessonPotentialNote } from "./potential.js?v=t49u1";
 
 export const LESSON_TOPICS = {
   1: [
@@ -387,6 +388,8 @@ export function teachLesson(state, students, { style = "精讲例题", callId = 
   if (away.length) {
     notes.push(`${away.slice(0, 4).map((x) => x.name).join("、")}${away.length > 4 ? "等" : ""}今天请假，座位空着，这趟作业先不布置。`);
   }
+  const potNote = lessonPotentialNote(present, key);
+  if (potNote) notes.push(potNote);
   if (weakHw.length) {
     notes.push(`订正或错题需要盯的有${weakHw.slice(0, 4).map((x) => x.name).join("、")}${weakHw.length > 4 ? "等" : ""}，适合课后面批。`);
   }

@@ -2,9 +2,9 @@
  * 家长会：班主任主持，玩家以本班数学任课老师身份与家长面谈。
  * 只谈近期考试、作业订正和课堂表现；不改能力分布，也不编造校外公告日期。
  */
-import { clamp } from "./prng.js?v=t48u2";
-import { isOpenHomework, studentTeachingContext } from "./teaching.js?v=t48u2";
-import { seatLabel } from "./school.js?v=t48u2";
+import { clamp } from "./prng.js?v=t49u1";
+import { isOpenHomework, studentTeachingContext } from "./teaching.js?v=t49u1";
+import { seatLabel } from "./school.js?v=t49u1";
 
 export const PARENT_TALK_CAP = 6;
 

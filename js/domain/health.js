@@ -2,8 +2,8 @@
  * 健康心理：按种子确定的短期病假/事假。只影响日常出勤与作业，
  * 不编造严重病症，也不改学科能力。考试、分班、家长会和全日活动日仍到校。
  */
-import { hash01, clamp } from "./prng.js?v=t48u2";
-import { addDays, weekday, SCHOOL_CALENDAR } from "./calendar.js?v=t48u2";
+import { hash01, clamp } from "./prng.js?v=t49u1";
+import { addDays, weekday, SCHOOL_CALENDAR } from "./calendar.js?v=t49u1";
 
 const LEAVE_CHANCE = 0.008;
 const MAX_LEAVE_DAYS = 2;
