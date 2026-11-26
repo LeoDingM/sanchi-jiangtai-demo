@@ -26,32 +26,35 @@ import {
   proctorAssignment, ensureProctorState, isMarkingOpen, markingUnavailableReason, markingPapers,
   pendingGradeableExam, latestPlayerExam, isCalendarExamDay, isNonSchoolMarkKind,
   examEventOn, examSessionOf, sessionLabel, PROCTOR_SOURCE_NOTE, PROCTOR_SESSION_CAP,
-} from "../domain/simulation.js?v=t58u1";
-import { addDays, weekday } from "../domain/calendar.js?v=t58u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t58u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t58u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t58u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t58u1";
-import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t58u1";
-import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t58u1";
-import { hydrateReport } from "../domain/simulation.js?v=t58u1";
-import { renderSeating } from "./classroom.js?v=t58u1";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t58u1";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t58u1";
-import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t58u1";
-import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t58u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t58u1";
-import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t58u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t58u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t58u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t58u1";
+  handleCoaching, suggestRemedial, suggestEnrichment, isCoachingOpen, isCoachingWindow,
+  coachingUnavailableReason, ensureCoachingState, isCoachingTimeSlot, kindLabel,
+  COACH_DAY_CAP, COACH_TERM_CAP, COACH_SESSION_MIN, COACH_SESSION_MAX, COACH_ACTIONS, COACH_SOURCE_NOTE,
+} from "../domain/simulation.js?v=t59u1";
+import { addDays, weekday } from "../domain/calendar.js?v=t59u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t59u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t59u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t59u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t59u1";
+import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t59u1";
+import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t59u1";
+import { hydrateReport } from "../domain/simulation.js?v=t59u1";
+import { renderSeating } from "./classroom.js?v=t59u1";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t59u1";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t59u1";
+import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t59u1";
+import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t59u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t59u1";
+import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t59u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t59u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t59u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t59u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
   parseAiCommentary, emptyAiCommentary,
-} from "../domain/examAi.js?v=t58u1";
+} from "../domain/examAi.js?v=t59u1";
 
 let state = null;
 let view = "classroom";
@@ -714,6 +717,51 @@ function bindHomeVisitActions(host) {
   });
 }
 
+function coachingListHtml(kind, list) {
+  const label = kind === "enrich" ? "培优" : "补差";
+  if (!list.length) return `<p class="muted">眼下没有特别适合先留下做${label}的人。</p>`;
+  const names = list.map((v) => `<p><b>${v.name}</b>　${v.reason}</p>`).join("");
+  const btns = (list[0].options || COACH_ACTIONS).map((o) => `<button type="button" data-coach-kind="${kind}" data-coach-act="${o.id}">${o.label}</button>`).join("");
+  return `${names}<p class="muted">确认这 ${list.length} 人后开一场${label}：</p><div class="row-actions">${btns}</div>`;
+}
+
+function coachingPanelHtml({ always = false } = {}) {
+  if (!state) return "";
+  ensureCoachingState(state);
+  const slot = currentSlot(state);
+  const windowOpen = isCoachingWindow(state);
+  if (!always && !windowOpen && !isCoachingTimeSlot(slot, state.date) && !isCoachingOpen(state)) return "";
+  const rec = state.coaching || {};
+  const term = rec.count || 0;
+  if (!isCoachingOpen(state)) {
+    return `<div class="paper visit-panel coaching-panel" data-coach-panel="1">
+      <h3>培优补差</h3>
+      <p class="muted">${coachingUnavailableReason(state)}</p>
+    </div>`;
+  }
+  const rem = suggestRemedial(state);
+  const enr = suggestEnrichment(state);
+  return `<div class="paper visit-panel coaching-panel" data-coach-panel="1">
+      <h3>培优补差</h3>
+      <p class="muted">辅导时段或办公室坐班时，可以留下几名本班学生做一场数学补差或培优。每天最多 1 场，每场 ${COACH_SESSION_MIN}–${COACH_SESSION_MAX} 人，本学期已做 ${term} / ${COACH_TERM_CAP} 场。${COACH_SOURCE_NOTE}</p>
+      <p><b>补差建议</b></p>
+      ${coachingListHtml("remedial", rem)}
+      <p><b>培优建议</b></p>
+      ${coachingListHtml("enrich", enr)}
+    </div>`;
+}
+
+function bindCoachingActions(host) {
+  host.querySelectorAll("[data-coach-kind]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const r = handleCoaching(state, b.dataset.coachKind, null, b.dataset.coachAct);
+      toast(r.ok ? r.text : r.reason);
+      persist(); render();
+    };
+  });
+}
+
 function deskPanelHtml(student, slot, scene) {
   const tutorBtns = slot?.isTutoring
     ? `<div class="row-actions">
@@ -826,6 +874,7 @@ function viewClassroom(host) {
     <p class="notice">现在是${slotLine}${absenceNotice(sts)}。金圈是举手，红点是作业还要盯，颜色偏暗的是走神或精力不足，橙点是这节正课迟到，空灰位是今天请假。点开座位后，浅金圈是同桌，淡绿圈是要好的同学。点击座位按当前课时处理，不必先跳到档案。任教班为卓行16班，74 人。</p>
     ${visitPanelHtml()}
     ${doorVisitPanelHtml()}
+    ${coachingPanelHtml()}
     ${isOpenClassDay(state.date) ? openClassPanelHtml() : ""}
     ${proctorPanelHtml()}
     <div class="classroom-layout">
@@ -838,6 +887,7 @@ function viewClassroom(host) {
   bindDeskAndTutor(host);
   bindVisitActions(host);
   bindHomeVisitActions(host);
+  bindCoachingActions(host);
   bindParentActions(host);
   bindActivityActions(host);
   bindProctorActions(host);
@@ -969,6 +1019,7 @@ function viewProfile(host) {
         ${(s.rollCalls || []).length ? `<p><b>晚自习点名记录</b></p>${(s.rollCalls||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : ""}
         ${(s.parentMeetings || []).length ? `<p><b>家长会面谈</b></p>${(s.parentMeetings||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : ""}
         ${(s.homeVisits || []).length ? `<p><b>家访记录</b></p>${(s.homeVisits||[]).map((r)=>`<p class="muted">${r.date}　${r.kind === "door" ? "上门家访" : "电话家访"}　${r.text}</p>`).join("")}` : (s.lastHomeVisit ? `<p><b>家访记录</b></p><p class="muted">${s.lastHomeVisit.date}　${s.lastHomeVisit.text}</p>` : "")}
+        ${(s.coachings || []).length ? `<p><b>培优补差记录</b></p>${(s.coachings||[]).map((r)=>`<p class="muted">${r.date}　${r.kind === "enrich" ? "培优" : "补差"}　${r.text}</p>`).join("")}` : (s.lastCoaching ? `<p><b>培优补差记录</b></p><p class="muted">${s.lastCoaching.date}　${s.lastCoaching.kind === "enrich" ? "培优" : "补差"}　${s.lastCoaching.text}</p>` : "")}
         ${(s.activityNotes || []).length ? `<p><b>学校活动</b></p>${(s.activityNotes||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : ""}
         <p class="muted">学科能力（潜能为个人上限，不是当场分数；括号里是距上限的余地，不是又一张分数表）</p>
         <p>${ab || "—"}</p>
@@ -1603,6 +1654,7 @@ function officeCollabHtml() {
     ${observePanelHtml()}
     ${markingPanelHtml()}
     ${phoneVisitPanelHtml()}
+    ${coachingPanelHtml({ always: true })}
     ${tiaokePanelHtml()}`;
 }
 
@@ -1615,6 +1667,7 @@ function bindOfficeActions(host) {
   if (mentor) mentor.onclick = () => { const r = consultMentor(state); toast(r.ok ? r.text : r.reason); persist(); render(); };
   bindVisitActions(host);
   bindHomeVisitActions(host);
+  bindCoachingActions(host);
   bindObserveActions(host);
   bindProctorActions(host);
   bindMarkingActions(host);
