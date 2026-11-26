@@ -12,26 +12,27 @@ import {
   doActivityAction, isSchoolActivityOpen, upcomingSchoolActivity, ACTIVITY_SOURCE_NOTE,
   weekSchedule, weekStart, weekMathCount, swapPeriods, borrowIn, respondTimetableRequest,
   ensureIncomingRequest, pendingTimetableRequest, weekTiaokeSummary, classLatecomers,
-} from "../domain/simulation.js?v=t41u1";
-import { addDays } from "../domain/calendar.js?v=t41u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t41u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t41u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t41u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t41u1";
-import { rankRows } from "../domain/scores.js?v=t41u1";
-import { filterRows, sameTierCompare, classStandings, classCompareRows, examReportKey, pickExamReport } from "../domain/examService.js?v=t41u1";
-import { hydrateReport } from "../domain/simulation.js?v=t41u1";
-import { renderSeating } from "./classroom.js?v=t41u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t41u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t41u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t41u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t41u1";
+} from "../domain/simulation.js?v=t42u1";
+import { addDays } from "../domain/calendar.js?v=t42u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t42u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t42u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t42u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t42u1";
+import { rankRows } from "../domain/scores.js?v=t42u1";
+import { filterRows, sameTierCompare, classStandings, classCompareRows, examReportKey, pickExamReport } from "../domain/examService.js?v=t42u1";
+import { hydrateReport } from "../domain/simulation.js?v=t42u1";
+import { renderSeating } from "./classroom.js?v=t42u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t42u1";
+import { formatAdmissionBatch, formatAdmissionDest } from "../domain/admission.js?v=t42u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t42u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t42u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t42u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
-} from "../domain/examAi.js?v=t41u1";
+} from "../domain/examAi.js?v=t42u1";
 
 let state = null;
 let view = "classroom";
@@ -540,6 +541,25 @@ function findStudent(id) {
   return findStudentInState(state, id) || clsStudents().find((x) => x.id === id) || null;
 }
 
+
+function findStudentAdmission(studentId) {
+  const keys = Object.keys(state.admissions || {}).sort().reverse();
+  for (const k of keys) {
+    const pack = state.admissions[k];
+    const hit = (pack.results || []).find((r) => r.studentId === studentId);
+    if (hit) return { pack, adm: hit };
+  }
+  return null;
+}
+
+function admissionProfileHtml(studentId) {
+  const hit = findStudentAdmission(studentId);
+  if (!hit) return "";
+  const a = hit.adm;
+  const extra = a.supplement ? `　<span class="muted">未达省控一本 ${a.firstLine}，不计入省控一本上线人数</span>` : "";
+  return `<p><b>录取去向</b> ${formatAdmissionDest(a)}　<b>批次</b> ${formatAdmissionBatch(a)}　<b>总分</b> ${a.total}${extra}</p>`;
+}
+
 function viewProfile(host) {
   const roster = clsStudents();
   const s = findStudent(selectedId) || roster[0];
@@ -608,6 +628,7 @@ function viewProfile(host) {
         <p><b>学号</b> ${s.id}　<b>性别</b> ${s.gender==="F"?"女":"男"}　<b>性格</b> ${s.personality || "—"}　<b>班级</b> ${tierLabel(s.tier)}${s.classNo ?? ""}班</p>
         <p><b>家庭</b> ${family}</p>
         <p><b>文理意向</b> ${trackLabel}　<b>专业倾向</b> ${s.majorPref||"—"}</p>
+        ${admissionProfileHtml(s.id)}
         <p><b>心情</b> ${s.mood ?? "—"}　<b>压力</b> ${s.stress ?? "—"}　<b>精力</b> ${s.energy ?? "—"}　<b>师生关系</b> ${s.relation||0}</p>
         <p class="muted">${teachingStatus(s)}</p>
         ${(s.rollCalls || []).length ? `<p><b>晚自习点名记录</b></p>${(s.rollCalls||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : ""}
@@ -1680,6 +1701,7 @@ function viewAdmission(host) {
   const qb = list.filter((x)=>x.qingbei);
   const first = list.filter((x)=>x.batch==="一批");
   const second = list.filter((x)=>x.batch==="一批" || x.batch==="二批");
+  const supp = list.filter((x)=>x.supplement);
   const opts = keys.map((k) => {
     const p = state.admissions[k];
     const mine = p.entryYear === state.player.cohortYear ? "（你带的这届）" : "";
@@ -1697,17 +1719,17 @@ function viewAdmission(host) {
       <div><span>理科国家线分差</span><b>${officialProvincialPack(pack.year).li.gap}</b></div>
       ${officialProvincialPack(pack.year).li.ranks ? `<div><span>理科一本全省位次</span><b>前 ${officialProvincialPack(pack.year).li.ranks.firstN}</b></div>` : ""}
     </div>
-    <div class="kpi"><div><span>清北</span><b>${qb.length}</b></div><div><span>一批（省控）</span><b>${first.length}</b></div><div><span>二本以上（省控）</span><b>${second.length}</b></div><div><span>公布人数</span><b>${list.length}</b></div></div>
-    <p class="notice">公布人数是本届应届与复读全员（含专科及未达专科线），不是二本以上人数。一批、二本以上按江西${pack.year}年公开省控（国家线）统计，不是校内线。</p>
-    <div class="filters"><input id="q" placeholder="搜索姓名或大学" /></div>
+    <div class="kpi"><div><span>清北</span><b>${qb.length}</b></div><div><span>一批（省控）</span><b>${first.length}</b></div><div><span>一本补录</span><b>${supp.length}</b></div><div><span>二本以上（省控）</span><b>${second.length}</b></div><div><span>公布人数</span><b>${list.length}</b></div></div>
+    <p class="notice">公布人数是本届应届与复读全员（含专科及未达专科线），不是二本以上人数。一批、二本以上按江西${pack.year}年公开省控（国家线）统计，不是校内线。「一批（省控）」只计分数达到官方一本省控的人；「一本补录」是离一本线很近的二本可能被弱一本院校的冷门专业征集，属于校内规则示意，不是官方征集名单，也不计入省控一本上线人数。</p>
+    <div class="filters"><input id="q" placeholder="搜索姓名、大学或专业" /></div>
     <div class="paper" id="adm-table"></div>`;
   const yearSel = host.querySelector("#adm-year");
   if (yearSel) yearSel.onchange = () => { admissionPick = yearSel.value; render(); };
   const draw = () => {
     const q = (host.querySelector("#q").value||"").trim();
-    const rows = list.filter((a)=>!q || a.name.includes(q) || (a.university||"").includes(q));
-    host.querySelector("#adm-table").innerHTML = `<table><thead><tr><th>姓名</th><th>班</th><th>科类</th><th>总分</th><th>省位次</th><th>批次</th><th>去向</th></tr></thead>
-      <tbody>${rows.slice(0,250).map((a)=>`<tr><td>${a.name}</td><td>${a.classNo}</td><td>${a.track==="wen"?"文":"理"}</td><td>${a.total}</td><td>${a.provinceRank??"—"}</td><td>${a.batch}</td><td>${a.university}${a.shifted?"（按省控平移）":""}${a.art?"（文化课对照，无术科分）":""}</td></tr>`).join("")}</tbody></table>`;
+    const rows = list.filter((a)=>!q || a.name.includes(q) || (a.university||"").includes(q) || (a.major||"").includes(q) || (a.supplement && "一本补录".includes(q)));
+    host.querySelector("#adm-table").innerHTML = `<table><thead><tr><th>姓名</th><th>班</th><th>科类</th><th>总分</th><th>省位次</th><th>批次</th><th>专业</th><th>去向</th></tr></thead>
+      <tbody>${rows.slice(0,250).map((a)=>`<tr><td>${a.name}</td><td>${a.classNo}</td><td>${a.track==="wen"?"文":"理"}</td><td>${a.total}</td><td>${a.provinceRank??"—"}</td><td>${formatAdmissionBatch(a)}</td><td>${a.major||"—"}</td><td>${formatAdmissionDest(a)}</td></tr>`).join("")}</tbody></table>`;
   };
   host.querySelector("#q").oninput = draw; draw();
 }
