@@ -2,8 +2,8 @@
  * 任教班课表：一天里哪几节是数学课。编制为宁川中学示意课表，
  * 不照搬某所真实中学的作息；用确定性星期模板，不用随机排课。
  */
-import { PERIODS } from "./config.js";
-import { addDays, weekday, weekdayName, eventsOn, SCHOOL_CALENDAR } from "./calendar.js";
+import { PERIODS } from "./config.js?v=t41u1";
+import { addDays, weekday, weekdayName, eventsOn, SCHOOL_CALENDAR } from "./calendar.js?v=t41u1";
 
 /** 周一至周五全天；周六只上到午休（上午课）；周日休息。 */
 const WEEKDAY_PERIODS = {

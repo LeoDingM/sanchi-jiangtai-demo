@@ -12,26 +12,26 @@ import {
   doActivityAction, isSchoolActivityOpen, upcomingSchoolActivity, ACTIVITY_SOURCE_NOTE,
   weekSchedule, weekStart, weekMathCount, swapPeriods, borrowIn, respondTimetableRequest,
   ensureIncomingRequest, pendingTimetableRequest, weekTiaokeSummary, classLatecomers,
-} from "../domain/simulation.js";
-import { addDays } from "../domain/calendar.js";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js";
-import { startNewGameSession, continueGameSession } from "../domain/bootFlow.js";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js";
-import { rankRows } from "../domain/scores.js";
-import { filterRows, sameTierCompare, classStandings, classCompareRows, examReportKey, pickExamReport } from "../domain/examService.js";
-import { hydrateReport } from "../domain/simulation.js";
-import { renderSeating } from "./classroom.js";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js";
-import { drawLineChart, drawBarChart } from "./charts.js";
+} from "../domain/simulation.js?v=t41u1";
+import { addDays } from "../domain/calendar.js?v=t41u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t41u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t41u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t41u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t41u1";
+import { rankRows } from "../domain/scores.js?v=t41u1";
+import { filterRows, sameTierCompare, classStandings, classCompareRows, examReportKey, pickExamReport } from "../domain/examService.js?v=t41u1";
+import { hydrateReport } from "../domain/simulation.js?v=t41u1";
+import { renderSeating } from "./classroom.js?v=t41u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t41u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t41u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t41u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t41u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
-} from "../domain/examAi.js";
+} from "../domain/examAi.js?v=t41u1";
 
 let state = null;
 let view = "classroom";
@@ -60,6 +60,7 @@ function toast(msg) {
 
 let persistWarned = false;
 let bootBusy = false;
+const bootQueue = createBootQueue();
 
 function persist({ notify = false } = {}) {
   if (!state) return { ok: false, reason: "没有可保存的进度。" };
@@ -107,7 +108,7 @@ function showLoading({ title = "正在开局", label = "正在生成全校名单
   if (bar) bar.setAttribute("aria-valuenow", String(pct));
   if (fill) fill.style.width = `${pct}%`;
   if (hintEl) {
-    hintEl.textContent = hint || "全校约七千名学生，手机上可能需要十几秒。生成时画面可能会短暂停住，请稍候，不是没有反应。";
+    hintEl.textContent = hint || "生成全校名单时进度会更新，请勿关掉页面。";
   }
 }
 
@@ -165,11 +166,9 @@ export function boot() {
     const narrow = window.matchMedia("(max-width: 600px)").matches;
     if (lastNarrowAgenda !== null && narrow !== lastNarrowAgenda) renderAgenda();
   });
-  $("#btn-new").onclick = async () => {
-    if (bootBusy) return;
-    showLoading({ title: "正在开局", label: "正在生成全校名单", progress: 6 });
-    setBootBusy(true);
-    const name = $("#pname").value.trim() || "林知秋";
+  async function startNewFromForm() {
+    showLoading({ title: "正在开局", label: "正在生成全校名单", progress: 6, hint: "生成全校名单时进度会更新，请勿关掉页面。" });
+    const name = $("#pname")?.value.trim() || "林知秋";
     const typed = parseGameSeed($("#pseed")?.value);
     const seed = typed ?? freshGameSeed();
     try {
@@ -185,7 +184,7 @@ export function boot() {
           progress: info.progress,
           hint: info.phase === "save"
             ? "正在写入自动档。若本机空间不足，仍会进入游戏，只是这次可能没有写下存档。"
-            : "",
+            : "生成全校名单时进度会更新，请勿关掉页面。",
         }),
       });
       state = r.state;
@@ -197,18 +196,15 @@ export function boot() {
     } catch (err) {
       hideLoading();
       toast("开局没有完成，请再试一次。");
-    } finally {
-      setBootBusy(false);
     }
-  };
-  $("#btn-cont").onclick = async () => {
-    if (bootBusy) return;
-    setBootBusy(true);
-    showLoading({ title: "正在读档", label: "正在读取存档", progress: 20, hint: "正在读取自动档，请稍候。" });
+  }
+
+  async function continueFromStorage() {
+    showLoading({ title: "正在读档", label: "正在读取存档", progress: 20, hint: "正在读取自动档，请稍候，请勿关掉页面。" });
     try {
       const r = await continueGameSession({
         loadAuto: () => loadSlotResult("auto"),
-        paint: (info) => showLoading({ title: "正在读档", label: info.label, progress: info.progress, hint: "正在读取自动档，请稍候。" }),
+        paint: (info) => showLoading({ title: "正在读档", label: info.label, progress: info.progress, hint: "正在读取自动档，请稍候，请勿关掉页面。" }),
       });
       if (!r.ok) {
         hideLoading();
@@ -222,10 +218,35 @@ export function boot() {
     } catch (err) {
       hideLoading();
       toast("存档读取失败，请再试一次。");
+    }
+  }
+
+  async function runBoot(action) {
+    const pending = (typeof window !== "undefined" && window.__sanchiPendingBoot)
+      ? window.__sanchiPendingBoot.action
+      : null;
+    if (typeof window !== "undefined") window.__sanchiPendingBoot = null;
+    if (pending) bootQueue.record(pending);
+    const started = bootQueue.begin(action);
+    if (!started) return;
+    setBootBusy(true);
+    try {
+      if (started === "continue") await continueFromStorage();
+      else await startNewFromForm();
     } finally {
+      bootQueue.end();
       setBootBusy(false);
     }
-  };
+  }
+
+  const newBtn = $("#btn-new");
+  const contBtn = $("#btn-cont");
+  if (newBtn) newBtn.onclick = () => { runBoot("new"); };
+  if (contBtn) contBtn.onclick = () => { runBoot("continue"); };
+  if (typeof window !== "undefined") {
+    window.__sanchiRunBoot = runBoot;
+    if (window.__sanchiPendingBoot?.action) runBoot(window.__sanchiPendingBoot.action);
+  }
   document.querySelectorAll("#sidenav [data-view]").forEach((btn) => {
     btn.onclick = () => { view = btn.dataset.view; render(); };
   });

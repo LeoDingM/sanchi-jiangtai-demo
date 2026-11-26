@@ -1,7 +1,7 @@
 /** 按江西公开投档线/位次将高考分数对应到真实大学，文理、年份、批次分开。 */
-import { provincialLines, provincialRank, universities, uniTier, QINGBEI } from "./jiangxi.js";
-import { INSERT_REPEAT_CLASS_NOS } from "./config.js";
-import { hash01 } from "./prng.js";
+import { provincialLines, provincialRank, universities, uniTier, QINGBEI } from "./jiangxi.js?v=t41u1";
+import { INSERT_REPEAT_CLASS_NOS } from "./config.js?v=t41u1";
+import { hash01 } from "./prng.js?v=t41u1";
 
 export function lineShift(year, track, batch) {
   if (year === 2020) return 0;

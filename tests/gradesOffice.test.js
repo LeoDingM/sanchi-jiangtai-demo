@@ -33,9 +33,9 @@ test("档案页已导入 drawLineChart、drawBarChart，不再调用未导入的
   assert.equal(typeof drawLineChart, "function");
   assert.equal(typeof drawBarChart, "function");
   const src = readFileSync(new URL("../js/ui/app.js", import.meta.url), "utf8");
-  assert.match(src, /import\s*\{[^}]*drawLineChart[^}]*drawBarChart[^}]*\}\s*from\s*["']\.\/charts\.js["']/);
+  assert.match(src, /import\s*\{[^}]*drawLineChart[^}]*drawBarChart[^}]*\}\s*from\s*["']\.\/charts\.js(?:\?[^"']*)?["']/);
   assert.doesNotMatch(src, /import\s*\{[^}]*drawScoreChart/);
-  const body = src.replace(/import\s*\{[^}]*\}\s*from\s*["']\.\/charts\.js["'];/, "");
+  const body = src.replace(/import\s*\{[^}]*\}\s*from\s*["']\.\/charts\.js(?:\?[^"']*)?["'];/, "");
   assert.match(body, /drawLineChart\(/);
   assert.match(body, /drawBarChart\(/);
   const css = readFileSync(new URL("../css/style.css", import.meta.url), "utf8");

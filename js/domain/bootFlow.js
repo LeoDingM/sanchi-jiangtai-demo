@@ -89,3 +89,66 @@ export async function continueGameSession({
   report(paint, { phase: "enter", label: "正在进入教室", progress: 100 });
   return { ok: true, entered: true, state: result.state };
 }
+
+/** 开档点击队列：记录意图、消费意图；已在跑则忽略重复开档。 */
+export function emptyBootQueue() {
+  return { pending: null, busy: false };
+}
+
+export function normalizeBootAction(action) {
+  return action === "new" || action === "continue" ? action : null;
+}
+
+export function recordBootIntent(queue, action) {
+  const q = queue || emptyBootQueue();
+  const act = normalizeBootAction(action);
+  if (!act) return { pending: q.pending || null, busy: !!q.busy };
+  return { pending: { action: act }, busy: !!q.busy };
+}
+
+export function consumeBootIntent(queue) {
+  const q = queue || emptyBootQueue();
+  return {
+    queue: { pending: null, busy: !!q.busy },
+    intent: q.pending || null,
+  };
+}
+
+/** 开始一次开档。已在跑时返回 null 并保持忙碌；否则消费 pending 或采用显式 action。 */
+export function beginBoot(queue, action) {
+  const q = queue || emptyBootQueue();
+  if (q.busy) return { queue: { pending: q.pending || null, busy: true }, action: null };
+  const act = normalizeBootAction(action) || q.pending?.action || null;
+  if (!act) return { queue: { pending: q.pending || null, busy: false }, action: null };
+  return { queue: { pending: null, busy: true }, action: act };
+}
+
+export function endBoot(queue) {
+  const q = queue || emptyBootQueue();
+  return { pending: q.pending || null, busy: false };
+}
+
+export function createBootQueue() {
+  let queue = emptyBootQueue();
+  return {
+    get pending() { return queue.pending; },
+    get busy() { return queue.busy; },
+    record(action) {
+      queue = recordBootIntent(queue, action);
+      return queue.pending;
+    },
+    consume() {
+      const r = consumeBootIntent(queue);
+      queue = r.queue;
+      return r.intent;
+    },
+    begin(action) {
+      const r = beginBoot(queue, action);
+      queue = r.queue;
+      return r.action;
+    },
+    end() {
+      queue = endBoot(queue);
+    },
+  };
+}

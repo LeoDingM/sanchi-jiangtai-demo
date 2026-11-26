@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#1a281f" />
   <title>三尺讲台 · 江西省宁川中学</title>
-  <link rel="stylesheet" href="css/style.css?v=t40u1" />
+  <link rel="stylesheet" href="css/style.css?v=t41u1" />
   <style>
     #loading-mask {
       position: fixed; inset: 0; z-index: 9999;
@@ -110,7 +110,7 @@
       <div class="loading-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="loading-bar">
         <div id="loading-bar-fill" class="loading-bar-fill"></div>
       </div>
-      <p id="loading-hint" class="loading-hint">全校约七千名学生，手机上可能需要十几秒。生成时画面可能会短暂停住，请稍候，不是没有反应。</p>
+      <p id="loading-hint" class="loading-hint">生成全校名单时进度会更新，请勿关掉页面。</p>
     </div>
   </div>
   <script>
@@ -119,6 +119,10 @@
     var boot = document.getElementById("boot");
     var newBtn = document.getElementById("btn-new");
     var contBtn = document.getElementById("btn-cont");
+    var waitTimer = 0;
+    var moduleFailed = false;
+    var GENERATE_HINT = "生成全校名单时进度会更新，请勿关掉页面。";
+    var LOAD_HINT = "正在读取自动档，请稍候，请勿关掉页面。";
     function show(title, step, hint) {
       if (!mask) return;
       mask.hidden = false;
@@ -127,6 +131,7 @@
       mask.style.position = "fixed";
       mask.style.inset = "0";
       mask.style.zIndex = "9999";
+      mask.setAttribute("aria-busy", "true");
       var t = document.getElementById("loading-title");
       var s = document.getElementById("loading-step");
       var h = document.getElementById("loading-hint");
@@ -140,16 +145,39 @@
       mask.classList.add("hidden");
       mask.hidden = true;
       mask.style.display = "none";
+      mask.setAttribute("aria-busy", "false");
     }
+    function armModuleWait() {
+      if (window.__sanchiRunBoot || moduleFailed) return;
+      clearTimeout(waitTimer);
+      waitTimer = setTimeout(function () {
+        if (window.__sanchiRunBoot || moduleFailed) return;
+        show("正在加载", "脚本还在加载", "脚本还在加载，请保持页面打开。若一直没有变化，请检查网络后刷新页面。");
+      }, 14000);
+    }
+    function onIntent(action, title, step, hint) {
+      if (moduleFailed) {
+        show("开局失败", "脚本没有加载成功", "游戏脚本没有加载成功，请检查网络后刷新页面再试。");
+        return;
+      }
+      window.__sanchiPendingBoot = { action: action };
+      show(title, step, hint);
+      if (typeof window.__sanchiRunBoot === "function") {
+        window.__sanchiRunBoot(action);
+      } else {
+        armModuleWait();
+      }
+    }
+    window.__sanchiOnModuleError = function () {
+      moduleFailed = true;
+      clearTimeout(waitTimer);
+      show("开局失败", "脚本没有加载成功", "游戏脚本没有加载成功，请检查网络后刷新页面再试。");
+    };
     if (newBtn) newBtn.addEventListener("click", function () {
-      show("正在开局", "正在生成全校名单", "全校约七千名学生，手机上可能需要十几秒。生成时画面可能会短暂停住，请稍候，不是没有反应。");
-      newBtn.disabled = true;
-      if (contBtn) contBtn.disabled = true;
+      onIntent("new", "正在开局", "正在生成全校名单", GENERATE_HINT);
     }, true);
     if (contBtn) contBtn.addEventListener("click", function () {
-      show("正在读档", "正在读取存档", "正在读取自动档，请稍候。");
-      contBtn.disabled = true;
-      if (newBtn) newBtn.disabled = true;
+      onIntent("continue", "正在读档", "正在读取存档", LOAD_HINT);
     }, true);
     if (boot && typeof MutationObserver === "function") {
       new MutationObserver(function () {
@@ -158,6 +186,6 @@
     }
   })();
   </script>
-  <script type="module" src="js/main.js?v=t40u1"></script>
+  <script type="module" src="js/main.js?v=t41u1" onerror="window.__sanchiOnModuleError && window.__sanchiOnModuleError()"></script>
 </body>
 </html>
