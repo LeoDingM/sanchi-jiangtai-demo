@@ -6,26 +6,26 @@
  * 玩家不是班主任，不能发放学校正式成绩单、通知书或操行评语表，也不能主持班会。
  * 这不是家长会当场面谈，也不是电话家访或上门家访，更不是再写一遍数学学期评语。
  */
-import { hash01 } from "./prng.js?v=t71u1";
-import { addDays, SCHOOL_CALENDAR, weekday } from "./calendar.js?v=t71u1";
+import { hash01 } from "./prng.js?v=t65u1";
+import { addDays, SCHOOL_CALENDAR, weekday } from "./calendar.js?v=t65u1";
 import {
   activityEventOn, currentSlot, isEveningPeriodId, majorEventOn,
-} from "./timetable.js?v=t71u1";
-import { isOpenHomework, studentTeachingContext } from "./teaching.js?v=t71u1";
-import { isParentsMeetingOpen } from "./parents.js?v=t71u1";
-import { isOfficeSittingSlot } from "./homeVisit.js?v=t71u1";
-import { isTeachersDayPlayDate } from "./teachersDay.js?v=t71u1";
-import { isAwayFromClass, leaveCovering } from "./health.js?v=t71u1";
-import { isOpeningDayPlayDate } from "./openingDay.js?v=t71u1";
-import { isStudyHallSubject } from "./studyHall.js?v=t71u1";
-import { playerClassStudents } from "./visits.js?v=t71u1";
-import { HOMEROOM_NAME } from "./config.js?v=t71u1";
-import { seatLabel } from "./school.js?v=t71u1";
+} from "./timetable.js?v=t65u1";
+import { isOpenHomework, studentTeachingContext } from "./teaching.js?v=t65u1";
+import { isParentsMeetingOpen } from "./parents.js?v=t65u1";
+import { isOfficeSittingSlot } from "./homeVisit.js?v=t65u1";
+import { isTeachersDayPlayDate } from "./teachersDay.js?v=t65u1";
+import { isAwayFromClass, leaveCovering } from "./health.js?v=t65u1";
+import { isOpeningDayPlayDate } from "./openingDay.js?v=t65u1";
+import { isStudyHallSubject } from "./studyHall.js?v=t65u1";
+import { playerClassStudents } from "./visits.js?v=t65u1";
+import { HOMEROOM_NAME } from "./config.js?v=t65u1";
+import { seatLabel } from "./school.js?v=t65u1";
 import {
   currentQualityMeetExam, isQualityMeetExamKind, qualityMeetExamKey,
   qualityMeetPublishDate, qualityMeetWindowEnd, settledQualityMeetExams,
   examEventCovering,
-} from "./qualityMeet.js?v=t71u1";
+} from "./qualityMeet.js?v=t65u1";
 
 export const PAPER_SIGN_BATCH_MIN = 6;
 export const PAPER_SIGN_BATCH_MAX = 10;

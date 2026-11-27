@@ -1,7 +1,7 @@
 /** 从各次真实考试成绩汇总一名学生的分数与排名轨迹。不另造统计。 */
-import { TIER } from "./config.js?v=t71u1";
-import { listExamReports } from "./simulation.js?v=t71u1";
-import { subjectsFor, usesComprehensive, comprehensiveMeta, comprehensiveScore } from "./scores.js?v=t71u1";
+import { TIER } from "./config.js?v=t65u1";
+import { listExamReports } from "./simulation.js?v=t65u1";
+import { subjectsFor, usesComprehensive, comprehensiveMeta, comprehensiveScore } from "./scores.js?v=t65u1";
 
 export const TIER_ORDER = ["yunxiu_exp", "yunxiu_key", "lingxiao", "zhuoxing", "duxue", "yiti", "fuzhuo"];
 
@@ -256,6 +256,11 @@ export function buildStudentExamSnapshot(studentId, report) {
     cross,
     subjects,
     subjectIds,
+    cheat: me.cheat || null,
+    scoreStatus: me.scoreStatus || "",
+    rawTotal: me.rawTotal ?? me.cheat?.rawTotal,
+    discipline: me.discipline || me.cheat?.discipline || "",
+    absentSubjects: me.absentSubjects || [],
   };
 }
 

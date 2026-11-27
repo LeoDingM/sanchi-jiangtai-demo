@@ -1,8 +1,8 @@
 /**
  * 同层次第一、各班第一解析：用已有考试成绩算分差、名次进退和稳定性，不改分数或划线。
  */
-import { rankRows } from "./scores.js?v=t71u1";
-import { tierName } from "./studentHistory.js?v=t71u1";
+import { rankRows } from "./scores.js?v=t65u1";
+import { tierName } from "./studentHistory.js?v=t65u1";
 
 function examLabel(r) {
   return `${r.date || ""} ${r.examName || r.name || ""}`.trim();

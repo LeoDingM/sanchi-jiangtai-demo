@@ -78,30 +78,32 @@ import {
   suggestPaperSignIssue, suggestPaperSignRegister, suggestPaperSignInform,
   PAPER_SIGN_ACTIONS, PAPER_SIGN_SOURCE_NOTE, PAPER_SIGN_BATCH_MIN, PAPER_SIGN_BATCH_MAX,
   PAPER_SIGN_DAY_CAP,
-} from "../domain/simulation.js?v=t71u1";
-import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t71u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t71u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t71u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t71u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t71u1";
-import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t71u1";
-import { cohortIsNewGaokao, classTrackLabel, formatElectives } from "../domain/newGaokao.js?v=t71u1";
-import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t71u1";
-import { hydrateReport } from "../domain/simulation.js?v=t71u1";
-import { renderSeating } from "./classroom.js?v=t71u1";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t71u1";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t71u1";
-import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t71u1";
-import { buildStudentResume, resumeAiPayload, formatResumeLocal } from "../domain/resume.js?v=t71u1";
-import { sameTierFirstBoard, classFirstBoard, formatStability } from "../domain/toppers.js?v=t71u1";
-import { decorateDisplayRanks, formatRankTriple, reportRankOpts } from "../domain/displayRanks.js?v=t71u1";
-import { classOfficesFor, officeTitlesOf, selectClassOffices } from "../domain/classManage.js?v=t71u1";
-import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t71u1";
-import { provincialLines, officialProvincialPack, provincialTrackLabel, provincialFirstShortLabel, provincialSecondShortLabel, provincialFirstLabel, provincialSecondLabel } from "../domain/jiangxi.js?v=t71u1";
-import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t71u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t71u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t71u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t71u1";
+} from "../domain/simulation.js?v=t65u1";
+import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t65u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t65u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t65u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t65u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t65u1";
+import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t65u1";
+import { cohortIsNewGaokao, classTrackLabel, formatElectives } from "../domain/newGaokao.js?v=t65u1";
+import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t65u1";
+import { hydrateReport } from "../domain/simulation.js?v=t65u1";
+import { renderSeating } from "./classroom.js?v=t65u1";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t65u1";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t65u1";
+import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t65u1";
+import { buildStudentResume, resumeAiPayload, formatResumeLocal } from "../domain/resume.js?v=t65u1";
+import { buildAlumniBoostBoard, alumniBoostAiPayload, validateAlumniBoostText, ALUMNI_BOOST_TITLE, ALUMNI_BOOST_SOURCE_NOTE } from "../domain/alumniBoost.js?v=t65u1";
+import { explainScoreDrop, scoreDropAiPayload, validateScoreDropText } from "../domain/scoreDrop.js?v=t65u1";
+import { sameTierFirstBoard, classFirstBoard, formatStability } from "../domain/toppers.js?v=t65u1";
+import { decorateDisplayRanks, formatRankTriple, reportRankOpts } from "../domain/displayRanks.js?v=t65u1";
+import { classOfficesFor, officeTitlesOf, selectClassOffices } from "../domain/classManage.js?v=t65u1";
+import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t65u1";
+import { provincialLines, officialProvincialPack, provincialTrackLabel, provincialFirstShortLabel, provincialSecondShortLabel, provincialFirstLabel, provincialSecondLabel } from "../domain/jiangxi.js?v=t65u1";
+import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t65u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t65u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t65u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t65u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
@@ -109,7 +111,8 @@ import {
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
   parseAiCommentary, emptyAiCommentary,
   requestTalkAdvice, requestTeachingReflection, requestResumePolish,
-} from "../domain/examAi.js?v=t71u1";
+  requestAlumniBoostPolish, requestScoreDropPolish,
+} from "../domain/examAi.js?v=t65u1";
 
 let state = null;
 let view = "classroom";
@@ -212,12 +215,113 @@ function bindResumeActions(host, student) {
   };
 }
 
+
+function alumniBoostPanelHtml() {
+  const board = buildAlumniBoostBoard(state);
+  if (!board.visible) return "";
+  const items = board.quotes.map((q) => `<li>${escapeHtml(q.text)}</li>`).join("");
+  return `<div class="paper visit-panel alumni-boost-panel" data-alumni-boost-panel="1">
+    <h3>${ALUMNI_BOOST_TITLE}</h3>
+    <p class="muted">${escapeHtml(board.sourceNote)}${board.years?.length ? " 收录 " + board.years.join("、") + " 年毕业届。" : ""}</p>
+    <ul class="alumni-boost-list">${items}</ul>
+    <div class="row-actions"><button type="button" class="talk-btn" data-ai-alumni-boost="1">用 AI 润色语录</button></div>
+    <p class="notice" id="alumni-boost-ai-status" hidden></p>
+    <p class="alumni-boost-ai-text" id="alumni-boost-ai-text" hidden></p>
+  </div>`;
+}
+
+function bindAlumniBoostActions(host) {
+  const btn = host.querySelector("[data-ai-alumni-boost]");
+  if (!btn) return;
+  btn.onclick = async () => {
+    const status = host.querySelector("#alumni-boost-ai-status");
+    const textEl = host.querySelector("#alumni-boost-ai-text");
+    const board = buildAlumniBoostBoard(state);
+    if (!board.visible) {
+      if (status) { status.hidden = false; status.textContent = board.reason || "当前没有可展示的语录。"; }
+      return;
+    }
+    const conf = loadAiSettings();
+    if (status) { status.hidden = false; status.textContent = conf.hasKey ? "正在按已有录取事实润色…" : "尚未保存密钥，先展示本地事实语录。"; }
+    const local = board.localText;
+    const showLocal = (reason) => {
+      if (status) { status.hidden = false; status.textContent = reason ? reason + " 已改用本地事实语录。" : "已使用本地事实语录。"; }
+      if (textEl) { textEl.hidden = false; textEl.textContent = local; }
+    };
+    if (!conf.hasKey) { showLocal(""); return; }
+    try {
+      const r = await requestAlumniBoostPolish(alumniBoostAiPayload(board), { settings: conf });
+      if (!r.ok) { showLocal(r.reason || "润色失败"); return; }
+      const checked = validateAlumniBoostText(r.text, board);
+      if (!checked.ok) { showLocal(checked.reason || "润色稿与档案不符"); return; }
+      if (status) { status.hidden = false; status.textContent = "已按档案核对，未改录取事实。"; }
+      if (textEl) { textEl.hidden = false; textEl.textContent = checked.text; }
+    } catch (err) {
+      showLocal(err?.message || "润色失败");
+    }
+  };
+}
+
+
+function scoreDropPanelHtml(student, { compact = false } = {}) {
+  if (!student) return "";
+  const expl = explainScoreDrop(student, studentExamHistory(state, student.id), { seed: state.seed ?? 1 });
+  if (!expl.dropped) return "";
+  const exam = expl.exam || {};
+  const head = compact
+    ? `<p>${escapeHtml((exam.date || "") + "「" + (exam.examName || "这次考试") + "」班排第 " + (expl.dropRank ?? "—") + " 名，平时大约第 " + Math.round(expl.usualRank) + " 名。")}</p>`
+    : `<p class="muted">${escapeHtml(expl.sourceNote)}</p>`;
+  return `<div class="paper visit-panel score-drop-panel" data-score-drop-panel="${escapeHtml(student.id)}">
+    <h3>${expl.title}</h3>
+    ${head}
+    <p><b>系统说明</b></p>
+    <p>${escapeHtml(expl.systemText)}</p>
+    <p><b>学生自己阐述</b></p>
+    <p>${escapeHtml(expl.studentText)}</p>
+    <div class="row-actions"><button type="button" class="talk-btn" data-ai-score-drop="${escapeHtml(student.id)}">用 AI 润色说明</button></div>
+    <p class="notice" id="score-drop-ai-status" hidden></p>
+    <p class="score-drop-ai-text" id="score-drop-ai-text" hidden></p>
+  </div>`;
+}
+
+function bindScoreDropActions(host) {
+  const btn = host.querySelector("[data-ai-score-drop]");
+  if (!btn) return;
+  btn.onclick = async () => {
+    const status = host.querySelector("#score-drop-ai-status");
+    const textEl = host.querySelector("#score-drop-ai-text");
+    const sid = btn.dataset.aiScoreDrop;
+    const student = findStudent(sid) || findStudentInState(state, sid);
+    if (!student) return;
+    const expl = explainScoreDrop(student, studentExamHistory(state, student.id), { seed: state.seed ?? 1 });
+    const showLocal = (reason) => {
+      if (status) { status.hidden = false; status.textContent = reason ? reason : "已使用本地说明。"; }
+      if (textEl) { textEl.hidden = false; textEl.textContent = expl.localText; }
+    };
+    if (!expl.dropped) { showLocal(expl.reason || "当前没有大幅掉分需要说明。"); return; }
+    const conf = loadAiSettings();
+    if (!conf.hasKey) { showLocal("尚未保存密钥，先展示本地说明。"); return; }
+    if (status) { status.hidden = false; status.textContent = "正在按档案润色说明…"; }
+    try {
+      const r = await requestScoreDropPolish(scoreDropAiPayload(expl), { settings: conf });
+      if (!r.ok) { showLocal((r.reason || "润色失败") + " 已改用本地说明。"); return; }
+      const checked = validateScoreDropText(r.text, expl);
+      if (!checked.ok) { showLocal(checked.reason || "润色稿与档案不符，已改用本地说明。"); return; }
+      if (status) { status.hidden = false; status.textContent = "已按档案核对，未编造作弊或缺考。"; }
+      if (textEl) { textEl.hidden = false; textEl.textContent = checked.text; }
+    } catch (err) {
+      showLocal((err?.message || "润色失败") + " 已改用本地说明。");
+    }
+  };
+}
+
 function talkFactPayload(student, topic) {
   const ctx = studentTeachingContext(student, state) || {};
-  const hist = studentExamHistory(state, student.id).slice(-4);
+  const hist = studentExamHistory(state, student.id);
   const resume = buildStudentResume(state, student, { date: state.date, revealPotential: false });
+  const drop = explainScoreDrop(student, hist, { seed: state.seed ?? 1 });
   return {
-    须知: "只根据下列事实写谈话，不得编造分数、排名、奖项或潜力。",
+    须知: "只根据下列事实写谈话，不得编造分数、排名、奖项、潜力、作弊或缺考。掉分原因须与材料一致，推测须标明不是已查实处分。",
     主题: topic || "谈话",
     学生: student.name,
     班级: student.classNo,
@@ -228,6 +332,7 @@ function talkFactPayload(student, topic) {
     职务: resume.facts?.officeLine,
     比赛: resume.facts?.awardLines,
     所处水平: resume.facts?.standing?.text,
+    掉分说明: drop.dropped ? { 系统说明: drop.systemText, 学生自己阐述: drop.studentText, 须知: drop.sourceNote } : null,
   };
 }
 
@@ -1147,6 +1252,7 @@ function deskPanelHtml(student, slot, scene) {
     ${isAwayFromClass(student, state) ? `<p class="notice">今天不在教室。谈话请用「关注状态」，或改日再谈。</p>` : ""}
     ${tutorBtns}
     <div class="row-actions">${extra.join("")}</div>
+    ${scoreDropPanelHtml(student, { compact: true })}
     <p>谈话（本时段还可 ${leftTalk} 人，本日余 ${dayLeft} 人）</p>
     <div class="row-actions">${talks}</div>
     ${isParentsMeetingOpen(state) ? `<div class="row-actions"><button type="button" class="accent" data-parent="${student.id}" ${student.lastParentMeeting?.date === state.date ? "disabled" : ""}>${student.lastParentMeeting?.date === state.date ? "这场已与家长谈过" : "与家长面谈"}</button></div>` : ""}
@@ -1156,6 +1262,7 @@ function deskPanelHtml(student, slot, scene) {
 }
 
 function bindDeskAndTutor(host) {
+  bindScoreDropActions(host);
   host.querySelectorAll("[data-tutor]").forEach((b) => {
     b.onclick = (ev) => {
       ev.stopPropagation();
@@ -1223,6 +1330,7 @@ function viewClassroom(host) {
     ${seatNote ? `<p class="notice">${seatNote}</p>` : ""}
     <p class="notice">现在是${slotLine}${absenceNotice(sts)}。金圈是举手，红点是作业还要盯，颜色偏暗的是走神或精力不足，橙点是这节正课迟到，空灰位是今天请假。点开座位后，浅金圈是同桌，淡绿圈是要好的同学。点击座位按当前课时处理，不必先跳到档案。任教班为卓行16班，74 人。</p>
     ${visitPanelHtml()}
+    ${alumniBoostPanelHtml()}
     ${doorVisitPanelHtml()}
     ${coachingPanelHtml()}
     ${teachersDayPanelHtml({ place: "classroom" })}
@@ -1238,6 +1346,7 @@ function viewClassroom(host) {
   renderSeating(c, sts, selectedId, (id) => { selectedId = id; render(); }, { boardTitle: board, marks });
   bindDeskAndTutor(host);
   bindVisitActions(host);
+  bindAlumniBoostActions(host);
   bindHomeVisitActions(host);
   bindCoachingActions(host);
   bindTeachersDayActions(host);
@@ -1389,6 +1498,7 @@ function viewProfile(host) {
         <p>${ab || "—"}</p>
       </div>
       <div class="paper">
+        ${scoreDropPanelHtml(s)}
         <p>谈话（${(() => { const sc = periodTalkScene(state); return `本时段还可 ${Math.max(0, sc.cap - (state.talksThisPeriod || 0))} 人，本日余 ${Math.max(0, 5 - (state.talksToday || 0))} 人`; })()}）</p>
         <div class="row-actions">
           ${["鼓励","询问学习","关注状态","谈心"].map((t)=>`<button type="button" class="talk-btn" data-talk="${t}">${t}</button>`).join("")}
@@ -1466,6 +1576,7 @@ function viewProfile(host) {
     };
   });
   bindResumeActions(host, s);
+  bindScoreDropActions(host);
   const aiTalk = host.querySelector("#ai-talk");
   if (aiTalk) {
     aiTalk.onclick = async () => {
@@ -2438,6 +2549,7 @@ function officeCollabHtml() {
   const nxt = upcomingMath(state, { skipTaught: true });
   const slot = currentSlot(state);
   return `${visitPanelHtml()}
+    ${alumniBoostPanelHtml()}
     <div class="paper lesson-card office-actions">
       <h3>办公室与班主任</h3>
       <p class="muted">现在是${slot ? formatSlotLabel(slot) : formatDateCn(state.date)}。${nxt ? `下一节数学：${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}。` : ""}${officeLeaveLine()}不是空菜单：坐班改作业、向班主任通报、向备课组长请教、听课都会留下记录，并且用确定性规则推进作业订正。</p>
@@ -2467,6 +2579,7 @@ function officeCollabHtml() {
 }
 
 function bindOfficeActions(host) {
+  bindAlumniBoostActions(host);
   const mark = host.querySelector("#do-mark");
   if (mark) mark.onclick = () => { const r = officeMarking(state); toast(r.ok ? r.text : r.reason); persist(); render(); };
   const home = host.querySelector("#do-home");
@@ -2655,6 +2768,7 @@ function viewTeach(host) {
     : (isOpenClassPeriod(state) ? "，本节是校内公开课，备课组长等组内老师来听，按平时规则上课即可" : slot?.isTutoring ? "，可以做晚自习答疑" : slot?.isMath ? "，可以进教室上课" : isStudyHallWindow(state) ? (isStudyHallOpen(state) ? "。现在是自习，可以进本班教室看班，不是学校活动停课" : "。现在是自习，这节已经看过班了") : isOpeningDayPlayDate(state.date) ? `。今日是宁川中学校内${openingEventKindName(openingEventForPlayDate(state.date)) || "开学安排"}，可在办公室坐班参加；不是全日停课活动，等到数学课再进教室，或先在办公室处理作业` : "。等到数学课再进教室，或先在办公室处理作业、在座位上谈话");
   host.innerHTML = `<h3>日常教学 · 数学课</h3>
     <p class="notice">现在是${slot ? formatSlotLabel(slot) : formatDateCn(state.date)}${examBit}。${!isCalendarExamDay(state.date) && nxt && !slot?.isMath && !slot?.isTutoring ? `下一节数学：${nxt.sameDay ? "" : nxt.date + " "}${formatSlotLabel(nxt.slot)}。` : ""}先写教案，再上课；晚自习另做答疑，不另开课题。课后从缺交、错题跟到订正和复查。</p>
+    ${alumniBoostPanelHtml()}
     ${openClassPanelHtml()}
     ${proctorPanelHtml()}
     <div class="kpi">

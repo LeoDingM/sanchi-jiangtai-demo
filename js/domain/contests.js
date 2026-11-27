@@ -4,8 +4,9 @@
  * 2018/2019 高考走自主招生，2020 起走强基计划（2017 级高考在 2020，不得再叫自招）。
  * 通过后是降分录取，优惠只用于对照投档线，不写进高考总分。
  */
-import { hash01 } from "./prng.js?v=t71u1";
-import { QINGBEI } from "./jiangxi.js?v=t71u1";
+import { hash01 } from "./prng.js?v=t65u1";
+import { QINGBEI } from "./jiangxi.js?v=t65u1";
+import { formatSchoolName } from "./schoolNames.js?v=t65u1";
 
 export const CONTEST_SUBJECTS = [
   { id: "math", name: "数学竞赛", tracks: ["li", "wen", "mixed"] },
@@ -165,8 +166,8 @@ export function recruitPolicy(gaokaoYear) {
 }
 
 export function isQingbeiName(name) {
-  const n = String(name || "");
-  return QINGBEI.has(n) || /^清华大学$|^北京大学$|^北京大学医学部$/.test(n);
+  const n = String(name || "").replace(/^[★▲]+/, "").trim();
+  return QINGBEI.has(n) || /^(清华大学|北京大学|北京大学医学部|清华|北大)$/.test(n);
 }
 
 export function qingbeiLine(track) {
@@ -256,7 +257,7 @@ export function recruitOutcome(student, total, year, ctx = {}) {
       applied: true,
       passed: false,
       university,
-      reason: `已申请${policy.short}（意向 ${university}），未通过。`,
+      reason: `已申请${policy.short}（意向 ${formatSchoolName(university)}），未通过。`,
     };
   }
 
@@ -279,7 +280,7 @@ export function recruitOutcome(student, total, year, ctx = {}) {
     awardScore,
     awards,
     head,
-    reason: `通过${policy.short}，可对${university}按 ${concession} 分对照投档线降分录取；高考总分与省排不变。`,
+    reason: `通过${policy.short}，可对${formatSchoolName(university)}按 ${concession} 分对照投档线降分录取；高考总分与省排不变。`,
   };
 }
 

@@ -2,16 +2,16 @@
  * 考后 AI 分析：只根据已算好的成绩和排名写评语，不改分、不改排名、不上线人数。
  * API 密钥只放在独立的 localStorage 项里，与游戏存档 JSON 分开。
  */
-import { subjectById, TIER } from "./config.js?v=t71u1";
-import { usesComprehensive, comprehensiveMeta, comprehensiveScore } from "./scores.js?v=t71u1";
-import { subjectRanks } from "./scores.js?v=t71u1";
+import { subjectById, TIER } from "./config.js?v=t65u1";
+import { usesComprehensive, comprehensiveMeta, comprehensiveScore } from "./scores.js?v=t65u1";
+import { subjectRanks } from "./scores.js?v=t65u1";
 import {
   describeSchoolCutoff, describeClassProvincial, describeSchoolProvincial,
   describeZhuoxingPeers, classProvincialCounts, scaledTotal750, provincialCompareYear,
-} from "./schoolLines.js?v=t71u1";
-import { provincialLines } from "./jiangxi.js?v=t71u1";
-import { buildStudentExamSnapshot, strongerTiers, tierName } from "./studentHistory.js?v=t71u1";
-import { sameTierFirstBoard, classFirstBoard, formatStability } from "./toppers.js?v=t71u1";
+} from "./schoolLines.js?v=t65u1";
+import { provincialLines } from "./jiangxi.js?v=t65u1";
+import { buildStudentExamSnapshot, strongerTiers, tierName } from "./studentHistory.js?v=t65u1";
+import { sameTierFirstBoard, classFirstBoard, formatStability } from "./toppers.js?v=t65u1";
 
 export const AI_SETTINGS_KEY = "sanchi-jiangtai-ai-settings-v1";
 export const AI_KEY_KEY = "sanchi-jiangtai-ai-key-v1";
@@ -1099,7 +1099,7 @@ export async function requestChatCompletion(messages, { fetchImpl, settings, sig
 function parseShortText(content) {
   const obj = extractJsonObject(content);
   if (obj) {
-    const text = String(obj.短评 || obj.履历 || obj.谈话 || obj.反思 || obj.text || "").trim();
+    const text = String(obj.短评 || obj.履历 || obj.谈话 || obj.反思 || obj.语录 || obj.说明 || obj.text || "").trim();
     if (text) return { text, fromJson: true };
   }
   const plain = String(content || "").replace(/```[\s\S]*?```/g, (m) => {
@@ -1174,6 +1174,68 @@ export async function requestResumePolish(payload, opts = {}) {
   const parsed = parseShortText(r.text);
   if (!parsed.text) return { ok: false, reason: formatAiError(new Error("EMPTY")) };
   return { ok: true, text: parsed.text, model: r.model };
+}
+
+export function buildAlumniBoostMessages(payload) {
+  return [
+    {
+      role: "system",
+      content: [
+        "你把高中「学长学姐助力高考」板块里已有的事实语录润色成通顺短文或条目。",
+        "必须保留材料中的学生姓名与录取院校对应关系，不得编造或替换院校，不得虚构清华大学、北京大学或其他名校。",
+        "必须保留院校名上的层次标记：★表示985，▲表示非985的211，不要改成双一流，也不要同时写★▲。",
+        "不要写 markdown。只输出一个 JSON 对象：{\"语录\":\"文本\"}。",
+      ].join(""),
+    },
+    { role: "user", content: JSON.stringify(payload) },
+  ];
+}
+
+export async function requestAlumniBoostPolish(payload, opts = {}) {
+  if (opts.autoMode) return { ok: false, reason: "自动模式不发起在线调用。", fallback: true };
+  if (!payload?.ok) return { ok: false, reason: payload?.reason || "没有可润色的语录。", fallback: true };
+  const r = await requestChatCompletion(buildAlumniBoostMessages(payload), { ...opts, temperature: 0.4, maxTokens: 900 });
+  if (!r.ok) return { ...r, fallback: true };
+  const obj = extractJsonObject(r.text);
+  let text = "";
+  if (obj) text = String(obj.语录 || obj.短评 || obj.text || "").trim();
+  if (!text) {
+    const parsed = parseShortText(r.text);
+    text = parsed.text;
+  }
+  if (!text) return { ok: false, reason: formatAiError(new Error("EMPTY")), fallback: true };
+  return { ok: true, text, model: r.model };
+}
+
+export function buildScoreDropMessages(payload) {
+  return [
+    {
+      role: "system",
+      content: [
+        "你把高中教师谈话用的「掉分原因」整理成通顺的两段，分别标明「系统说明」和「学生自己阐述」。",
+        "必须保留材料里的已有事实：查实作弊、未查实举报、缺考、病假或单科成绩。",
+        "不得编造作弊、缺考、处分或病假，不得把推测写成已查实的记过。不要写 markdown。",
+        "只输出一个 JSON 对象：{\"说明\":\"文本\"}。",
+      ].join(""),
+    },
+    { role: "user", content: JSON.stringify(payload) },
+  ];
+}
+
+export async function requestScoreDropPolish(payload, opts = {}) {
+  if (opts.autoMode) return { ok: false, reason: "自动模式不发起在线调用。", fallback: true };
+  if (!payload?.ok) return { ok: false, reason: payload?.reason || "没有可润色的掉分说明。", fallback: true };
+  const r = await requestChatCompletion(buildScoreDropMessages(payload), { ...opts, temperature: 0.35, maxTokens: 800 });
+  if (!r.ok) return { ...r, fallback: true };
+  const obj = extractJsonObject(r.text);
+  let text = "";
+  if (obj) text = String(obj.说明 || obj.语录 || obj.短评 || obj.text || "").trim();
+  if (!text) {
+    const parsed = parseShortText(r.text);
+    text = parsed.text;
+  }
+  if (!text) return { ok: false, reason: formatAiError(new Error("EMPTY")), fallback: true };
+  return { ok: true, text, model: r.model, fallback: false };
 }
 
 export async function requestExamAnalysis(payload, { fetchImpl, settings, signal } = {}) {

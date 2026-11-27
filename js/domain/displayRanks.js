@@ -2,7 +2,7 @@
  * 展示用班排 / 同层次排 / 校排。只补展示，不改排名计算口径。
  * 校排、同层次排在分科后按该科类池，与 runExam 已有口径一致。
  */
-import { rankRows } from "./scores.js?v=t71u1";
+import { rankRows } from "./scores.js?v=t65u1";
 
 function schoolPool(rows, row, { split, includeRepeat } = {}) {
   return (rows || []).filter((r) => {

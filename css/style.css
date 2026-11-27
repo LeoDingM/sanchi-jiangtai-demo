@@ -633,3 +633,13 @@ button[data-talk]:disabled {
 @media (max-width: 800px) {
   .toppers-grid { grid-template-columns: 1fr; }
 }
+
+.alumni-boost-panel { border-left-color: var(--ok, #3a7d4a); }
+.alumni-boost-panel h3 { color: var(--ok, #3a7d4a); }
+.alumni-boost-list { margin: 0 0 8px; padding-left: 1.2em; }
+.alumni-boost-list li { margin: 0 0 6px; line-height: 1.55; }
+.alumni-boost-ai-text { white-space: pre-wrap; line-height: 1.65; }
+
+.score-drop-panel { border-left-color: var(--warn, #b36b00); }
+.score-drop-panel h3 { color: var(--warn, #b36b00); }
+.score-drop-ai-text { white-space: pre-wrap; line-height: 1.65; }
