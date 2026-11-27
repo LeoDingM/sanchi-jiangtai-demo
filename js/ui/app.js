@@ -59,32 +59,37 @@ import {
   isWeekendHwOpen, isWeekendHwWindow, weekendHwUnavailableReason,
   ensureWeekendHwState, hasWeekendHwThisWeek, latestWeekendHwThisWeek,
   WEEKEND_HW_ACTIONS, WEEKEND_HW_SOURCE_NOTE, WEEKEND_HW_WEEK_CAP,
-} from "../domain/simulation.js?v=t66u1";
-import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t66u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t66u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t66u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t66u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t66u1";
-import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t66u1";
-import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t66u1";
-import { hydrateReport } from "../domain/simulation.js?v=t66u1";
-import { renderSeating } from "./classroom.js?v=t66u1";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t66u1";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t66u1";
-import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t66u1";
-import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t66u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t66u1";
-import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t66u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t66u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t66u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t66u1";
+  handleDutyWeek, composeDutyWeekBrief, dutyWeekOptionsFor,
+  isDutyWeekOpen, isDutyWeekWindow, dutyWeekUnavailableReason,
+  ensureDutyWeekState, hasDutyWeekToday, latestDutyWeekToday,
+  DUTY_WEEK_ACTIONS, DUTY_WEEK_SOURCE_NOTE, DUTY_WEEKS_PER_TERM, DUTY_WEEK_MARK,
+  DUTY_LEADER_NAME, DUTY_LEADER_TITLE,
+} from "../domain/simulation.js?v=t67u1";
+import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t67u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t67u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t67u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t67u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t67u1";
+import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t67u1";
+import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t67u1";
+import { hydrateReport } from "../domain/simulation.js?v=t67u1";
+import { renderSeating } from "./classroom.js?v=t67u1";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t67u1";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t67u1";
+import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t67u1";
+import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t67u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t67u1";
+import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t67u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t67u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t67u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t67u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
   parseAiCommentary, emptyAiCommentary,
-} from "../domain/examAi.js?v=t66u1";
+} from "../domain/examAi.js?v=t67u1";
 
 let state = null;
 let view = "classroom";
@@ -1166,6 +1171,7 @@ function viewProfile(host) {
         ${(s.activityNotes || []).length ? `<p><b>学校活动</b></p>${(s.activityNotes||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : ""}
         ${(s.studyHallNotes || []).length ? `<p><b>自习看班</b></p>${(s.studyHallNotes||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : (s.lastStudyHall ? `<p><b>自习看班</b></p><p class="muted">${s.lastStudyHall.date}　${s.lastStudyHall.text}</p>` : "")}
         ${(s.weekendHomeworkNotes || []).length ? `<p><b>周末作业</b></p>${(s.weekendHomeworkNotes||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : (s.lastWeekendHomework ? `<p><b>周末作业</b></p><p class="muted">${s.lastWeekendHomework.date}　${s.lastWeekendHomework.text}</p>` : "")}
+        ${(s.dutyWeekNotes || []).length ? `<p><b>值周</b></p>${(s.dutyWeekNotes||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : (s.lastDutyWeek ? `<p><b>值周</b></p><p class="muted">${s.lastDutyWeek.date}　${s.lastDutyWeek.text}</p>` : "")}
         <p class="muted">学科能力（潜能为个人上限，不是当场分数；括号里是距上限的余地，不是又一张分数表）</p>
         <p>${ab || "—"}</p>
       </div>
@@ -2004,6 +2010,49 @@ function bindWeekendHwActions(host) {
   });
 }
 
+function dutyWeekPanelHtml() {
+  if (!state) return "";
+  if (!isDutyWeekWindow(state)) return "";
+  ensureDutyWeekState(state);
+  const rec = state.dutyWeek || {};
+  const done = hasDutyWeekToday(state);
+  if (!isDutyWeekOpen(state) && !done) {
+    return `<div class="paper visit-panel duty-week-panel" data-duty-week-panel="1">
+      <h3>值周</h3>
+      <p class="muted">${dutyWeekUnavailableReason(state)} ${DUTY_WEEK_SOURCE_NOTE}</p>
+    </div>`;
+  }
+  if (done) {
+    const minutes = rec.lastMinutes?.minutes || latestDutyWeekToday(state)?.minutes || (state.dutyWeeks || [])[0]?.minutes || "";
+    const follow = rec.followUp?.text || rec.lastMinutes?.followUp?.text || DUTY_WEEK_MARK;
+    return `<div class="paper visit-panel duty-week-panel" data-duty-week-panel="1">
+      <h3>值周</h3>
+      <p class="muted">今天的值周已经做过。跟进标记：${follow}。下面是纪要，也可在学校日志和相关学生档案近况里查阅。值周周内每个可开工作日最多一次。你是任课数学老师，不是班主任，也不是值班领导。${DUTY_WEEK_SOURCE_NOTE}</p>
+      <p>${minutes}</p>
+    </div>`;
+  }
+  const brief = composeDutyWeekBrief(state);
+  const options = dutyWeekOptionsFor(state);
+  const btns = (options.length ? options : DUTY_WEEK_ACTIONS).map((o) => `<button type="button" data-duty-week="${o.id}">${o.label}</button>`).join("");
+  return `<div class="paper visit-panel duty-week-panel" data-duty-week-panel="1">
+      <h3>值周</h3>
+      <p class="muted">本周是年级值周周（标记：${DUTY_WEEK_MARK}）。办公室坐班可以协助清点迟到、课间巡视走廊，或把见闻写成纪要交给值班领导（${DUTY_LEADER_TITLE}）${DUTY_LEADER_NAME}。每学期约 ${DUTY_WEEKS_PER_TERM} 周，每个可开工作日最多一次。你以任课老师身份协助，不是班主任，也不能主持行政值班。${DUTY_WEEK_SOURCE_NOTE}</p>
+      <p><b>今日可做事项</b>　${brief?.preview || brief?.shortPoints || "协助年级值周。"}</p>
+      <div class="row-actions">${btns}</div>
+    </div>`;
+}
+
+function bindDutyWeekActions(host) {
+  host.querySelectorAll("[data-duty-week]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const r = handleDutyWeek(state, b.dataset.dutyWeek);
+      toast(r.ok ? r.text : r.reason);
+      persist(); render();
+    };
+  });
+}
+
 function officeCollabHtml() {
 
   const watch = homeworkWatchlist(state.homework, state);
@@ -2031,6 +2080,7 @@ function officeCollabHtml() {
     ${qualityMeetPanelHtml()}
     ${groupPrepPanelHtml()}
     ${weekendHwPanelHtml()}
+    ${dutyWeekPanelHtml()}
     ${openingDayPanelHtml()}
     ${tiaokePanelHtml()}`;
 }
@@ -2050,6 +2100,7 @@ function bindOfficeActions(host) {
   bindQualityMeetActions(host);
   bindGroupPrepActions(host);
   bindWeekendHwActions(host);
+  bindDutyWeekActions(host);
   bindOpeningDayActions(host);
   bindObserveActions(host);
   bindProctorActions(host);
@@ -3132,15 +3183,18 @@ function viewLog(host) {
   const openingMinutes = (state.openingDays || []).map((m) => `<div class="log-item"><b>${m.date}</b> ${m.kindName || "开学安排"}　${m.minutes}</div>`);
   const studyHallMinutes = (state.studyHalls || []).map((m) => `<div class="log-item"><b>${m.date}</b> 自习看班${m.slotLabel ? "「" + m.slotLabel + "」" : ""}　${m.minutes}</div>`);
   const weekendHwMinutes = (state.weekendHomeworks || []).map((m) => `<div class="log-item"><b>${m.date}</b> 周末作业${m.topic ? "「" + m.topic + "」" : ""}　${m.minutes}</div>`);
+  const dutyWeekMinutes = (state.dutyWeeks || []).map((m) => `<div class="log-item"><b>${m.date}</b> 值周${m.actionId ? "「" + (DUTY_WEEK_ACTIONS.find((a)=>a.id===m.actionId)?.label || m.actionId) + "」" : ""}　${m.minutes}</div>`);
   const minutes = qualityMinutes.concat(groupMinutes).join("");
   const openingBlock = openingMinutes.join("");
   const studyHallBlock = studyHallMinutes.join("");
   const weekendHwBlock = weekendHwMinutes.join("");
+  const dutyWeekBlock = dutyWeekMinutes.join("");
   host.innerHTML = `<h3>近期校历</h3>${cal || "<p class=\"muted\">暂无后续安排</p>"}
     ${minutes ? `<h3>备课组会议纪要</h3>${minutes}` : ""}
     ${openingBlock ? `<h3>开学纪要</h3>${openingBlock}` : ""}
     ${studyHallBlock ? `<h3>自习看班纪要</h3>${studyHallBlock}` : ""}
     ${weekendHwBlock ? `<h3>周末作业纪要</h3>${weekendHwBlock}` : ""}
+    ${dutyWeekBlock ? `<h3>值周纪要</h3>${dutyWeekBlock}` : ""}
     <h3>日志</h3>${(state.log||[]).slice(0,40).map((l)=>`<div class="log-item"><b>${l.date}</b> ${l.text}</div>`).join("")}`;
 }
 
