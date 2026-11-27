@@ -3,13 +3,14 @@ import {
   CLASS_BLUEPRINT, TIER, SUBJECT_IDS, PERSONALITIES, FAMILY_TYPES,
   PLAYER_CLASS_NO, GRADE_YEAR, LI_SUBJECTS, WEN_SUBJECTS,
   REPEAT_CLASS_SIZE, REPEAT_WEN_NOS, REPEAT_LI_NOS, INSERT_REPEAT_CLASS_NOS,
-} from "./config.js?v=t70u1";
-import { clamp, gauss, hash01, pick, rngFrom, shuffle } from "./prng.js?v=t70u1";
-import { generateName } from "./names.js?v=t70u1";
-import { gradeStudent, scaleOf, packLastGaokao } from "./scores.js?v=t70u1";
-import { provincialLines } from "./jiangxi.js?v=t70u1";
-import { admitStudent, canInsertRepeat, packLastAdmission } from "./admission.js?v=t70u1";
-import { examParams } from "./calendar.js?v=t70u1";
+} from "./config.js?v=t71u1";
+import { clamp, gauss, hash01, pick, rngFrom, shuffle } from "./prng.js?v=t71u1";
+import { generateName } from "./names.js?v=t71u1";
+import { gradeStudent, scaleOf, packLastGaokao } from "./scores.js?v=t71u1";
+import { provincialLines } from "./jiangxi.js?v=t71u1";
+import { admitStudent, canInsertRepeat, packLastAdmission } from "./admission.js?v=t71u1";
+import { examParams } from "./calendar.js?v=t71u1";
+import { cohortIsNewGaokao, ensureCohortElectives, isNewGaokaoYear } from "./newGaokao.js?v=t71u1";
 
 export const ALL_SUBJECTS = [...SUBJECT_IDS, "biology"];
 
@@ -207,8 +208,10 @@ export function generateCohort(entryYear, seed, { quality = 0, alreadySplit = fa
       cls.studentIds.push(st.id);
       cls.size = cls.studentIds.length;
     }
+    if (alreadySplit && cohortIsNewGaokao(entryYear)) ensureCohortElectives(students, seed);
     return { entryYear, students: applyRepeaterSeating(students), classes };
   }
+  if (alreadySplit && cohortIsNewGaokao(entryYear)) ensureCohortElectives(students, seed);
   return { entryYear, students, classes };
 }
 
@@ -249,19 +252,23 @@ function lastGaokaoExam(year) {
 
 /** 为开局合成的复读生补上上次高考各科分数；必要时压到省控一本以下，表示发挥失常。 */
 export function synthesizeLastGaokao(student, gaokaoYear, { forceMissFirst = false, rng = null } = {}) {
+  if (isNewGaokaoYear(gaokaoYear)) ensureCohortElectives([student], 1);
   const track = student.track === "wen" ? "wen" : "li";
-  const lines = provincialLines(gaokaoYear, track) || provincialLines(2020, track);
-  const sc = gradeStudent(student, lastGaokaoExam(gaokaoYear), scaleOf(3, "gaokao"), 0);
+  const lines = provincialLines(gaokaoYear, track);
+  const ev = { ...lastGaokaoExam(gaokaoYear), scheme: isNewGaokaoYear(gaokaoYear) ? "new-3+1+2" : "wenli-batches" };
+  const sc = gradeStudent(student, ev, scaleOf(3, "gaokao"), 0);
   let total = sc.total;
   if (forceMissFirst && lines && total >= lines.first) {
     const gap = rng ? 1 + Math.floor(rng() * 22) : 8;
     total = lines.first - gap;
   }
-  return packLastGaokao({ ...sc, total }, {
+  return packLastGaokao({ ...sc, total, electives: student.electives }, {
     year: gaokaoYear,
-    track,
+    track: student.track === "wen" ? "wen" : "li",
     firstLine: lines?.first ?? null,
     secondLine: lines?.second ?? null,
+    electives: student.electives,
+    scheme: isNewGaokaoYear(gaokaoYear) ? "new-3+1+2" : "wenli-batches",
   });
 }
 

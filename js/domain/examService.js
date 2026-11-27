@@ -1,25 +1,50 @@
 /** 组织一次考试：出分、文理分列排名、分数线、层次筛选、单科第一。 */
-import { CUTOFF_FIRST_RANK, CUTOFF_SECOND_RANK } from "./config.js?v=t70u1";
+import { CUTOFF_FIRST_RANK, CUTOFF_SECOND_RANK } from "./config.js?v=t71u1";
 import {
   attachStudentMeta, cutoffRanks, cutoffsFromRanked, gradeStudent, rankRows,
-  scaleOf, subjectRanks, summarizeClass, subjectsFor,
-} from "./scores.js?v=t70u1";
-import { provincialLines } from "./jiangxi.js?v=t70u1";
-import { attachJointExam, JOINT_SOURCE_NOTE } from "./jointExam.js?v=t70u1";
-import { fallbackSchoolQuota, classProvincialCounts, provincialCompareYear } from "./schoolLines.js?v=t70u1";
+  scaleOf, subjectRanks, summarizeClass, subjectsFor, applyTrackTotalCompression,
+} from "./scores.js?v=t71u1";
+import { provincialLines } from "./jiangxi.js?v=t71u1";
+import { attachJointExam, JOINT_SOURCE_NOTE } from "./jointExam.js?v=t71u1";
+import { fallbackSchoolQuota, classProvincialCounts, provincialCompareYear } from "./schoolLines.js?v=t71u1";
+import { decorateDisplayRanks, reportRankOpts } from "./displayRanks.js?v=t71u1";
+import {
+  examUsesNewGaokaoSubjects, ensureStudentElectives, applyReelectiveAssign,
+  ASSIGN_NOTE, classTrackLabel,
+} from "./newGaokao.js?v=t71u1";
+import {
+  cheatAttempt, investigateCheat, applyBoostToRow, restoreCheatedRow,
+  composeDisciplineNotice, resumeDisciplineLine, isSchoolExamKind,
+} from "./cheating.js?v=t71u1";
 
 export function studentTrackForExam(student, split) {
   if (!split || student.track === "mixed" || !student.track) return "mixed";
   return student.track === "wen" ? "wen" : "li";
 }
 
-export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0, schoolQuota = null } = {}) {
+export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0, schoolQuota = null, seed = 1 } = {}) {
   const scale = scaleOf(grade, exam.examKind);
+  const reallySplitHint = split != null ? !!split : !!cohort.trackSplit;
+  const newScheme = examUsesNewGaokaoSubjects(cohort, exam, { grade, split: reallySplitHint });
+  const scheme = newScheme ? "new-3+1+2" : "wenli-batches";
   const rows = [];
   for (const s of cohort.students) {
+    if (newScheme) ensureStudentElectives(s, seed);
     const bonus = teachingBonusFor(s);
-    const sc = gradeStudent(s, { ...exam, grade }, scale, bonus);
+    const sc = gradeStudent(s, { ...exam, grade, scheme }, scale, bonus);
     rows.push(attachStudentMeta(sc, s));
+  }
+  let assignNote = null;
+  if (newScheme && scale !== "g1-950") {
+    const assigned = applyReelectiveAssign(rows, { exam, seed });
+    if (assigned.changed) {
+      assignNote = ASSIGN_NOTE;
+      const byId = new Map((cohort.students || []).map((s) => [s.id, s]));
+      for (const row of rows) {
+        const s = byId.get(row.studentId);
+        row.total = applyTrackTotalCompression(row.total, s || row, { ...exam, grade }, scale, row.track);
+      }
+    }
   }
   const regular = rows.filter((r) => !r.repeat);
   const repeaters = rows.filter((r) => r.repeat);
@@ -82,7 +107,7 @@ export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0
     };
     sourceNote = sourceNote || exam.sourceNote || "会考为校内学业合格记载，日期为校历示意。";
     for (const r of rows) {
-      const subs = subjectsFor(scale, r.track === "wen" ? "wen" : "li");
+      const subs = subjectsFor(scale, r.track === "wen" ? "wen" : "li", { scheme, electives: r.electives });
       const detail = {};
       let all = true;
       for (const sub of subs) {
@@ -103,9 +128,10 @@ export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0
   const scoreMap = Object.fromEntries(rows.map((r) => [r.studentId, r]));
 
   const classes = summarizeAllClasses(cohort, scoreMap, cut, reallySplit);
-  const subjects = subjectsFor(scale, "li").concat(reallySplit ? [] : []);
+  const subjects = subjectsFor(scale, "li", { scheme }).concat(reallySplit ? [] : []);
   const subjectIds = [...new Set(rows.flatMap((r) => r.subjects || []))];
   const toppers = subjectToppers(rows, subjectIds, reallySplit);
+  if (assignNote) sourceNote = sourceNote ? `${sourceNote} ${assignNote}` : assignNote;
 
   return {
     examId: exam.id,
@@ -117,6 +143,7 @@ export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0
     scale,
     grade,
     split: reallySplit,
+    scheme,
     scoreMap,
     rows,
     cutoffs: cut,
@@ -128,6 +155,7 @@ export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0
     subjectIds,
     toppers,
     repeaters: rankRows(repeaters),
+    assignNote,
   };
 }
 
@@ -206,15 +234,21 @@ export function sameTierCompare(report, tier) {
   return { classes, rows: rankRows(rows) };
 }
 
-/** 本班应届按当次总分重排（同分并列规则与全校 rankRows 一致）。 */
-export function classStandings(rows, classNo) {
+/** 本班应届按当次总分重排（同分并列规则与全校 rankRows 一致），并补齐班排/同层次排/校排展示。 */
+export function classStandings(rows, classNo, report) {
   const list = (rows || []).filter((r) => r.classNo === classNo && !r.repeat);
-  const gradeRank = new Map(list.map((r) => [r.studentId, r.rank]));
-  return rankRows(list).map((r) => ({
-    ...r,
-    classRank: r.rank,
-    gradeRank: gradeRank.has(r.studentId) ? gradeRank.get(r.studentId) : r.rank,
-  }));
+  const opts = report ? reportRankOpts(report) : {
+    split: list.some((r) => r.track === "wen" || r.track === "li"),
+    includeRepeat: false,
+  };
+  const decorated = decorateDisplayRanks(list, rows, opts);
+  return decorated
+    .slice()
+    .sort((a, b) => (a.classRank ?? 9e9) - (b.classRank ?? 9e9) || String(a.studentId).localeCompare(String(b.studentId)))
+    .map((r) => {
+      const school = typeof r.rank === "number" ? r.rank : r.schoolRank;
+      return { ...r, rank: r.classRank, gradeRank: school };
+    });
 }
 
 export function filterClasses(classes, { track, tier, repeat } = {}) {
@@ -305,3 +339,140 @@ export function pickExamReport(list, pick, { preferEntryYear } = {}) {
 }
 
 export { CUTOFF_FIRST_RANK, CUTOFF_SECOND_RANK, provincialLines };
+
+
+/**
+ * 在行总分被更正后（例如作弊成绩取消）按原口径重算名次、校内线和班级汇总。
+ * 不改变 520/1100 划线规则或官方省控。
+ */
+export function recomputeExamDerived(report) {
+  if (!report?.rows?.length) return report;
+  const rows = report.rows;
+  const reallySplit = !!report.split;
+  const includeRepeat = Number(report.grade) >= 3 || !!report.cutoffs?.includeRepeat;
+  const pool = includeRepeat ? rows : rows.filter((r) => !r.repeat);
+  const quota = report.quota || null;
+  const salt = [report.date, report.examId, report.examKind, report.grade].filter(Boolean).join("|");
+  const cut = { split: reallySplit, quota, includeRepeat, ranked: {} };
+  if (!reallySplit) {
+    const ranked = rankRows(pool);
+    const n = pool.length;
+    const { firstN, secondN } = cutoffRanks(n, false, n, { track: "mixed", salt, senior: includeRepeat, includeRepeat });
+    cut.mixed = { ...cutoffsFromRanked(ranked, firstN, secondN), track: "mixed", firstN, secondN, count: n };
+    applyLineFlags(ranked, cut.mixed);
+    cut.ranked = { mixed: ranked };
+  } else {
+    const totalN = pool.length;
+    for (const track of ["li", "wen"]) {
+      const list = pool.filter((r) => r.track === track);
+      const ranked = rankRows(list);
+      const { firstN, secondN } = cutoffRanks(totalN, true, list.length, { track, salt, senior: includeRepeat, includeRepeat });
+      const c = { ...cutoffsFromRanked(ranked, firstN, secondN), track, firstN, secondN, count: list.length };
+      applyLineFlags(ranked, c);
+      cut[track] = c;
+      cut.ranked[track] = ranked;
+    }
+  }
+  const schoolRank = new Map();
+  for (const list of Object.values(cut.ranked || {})) {
+    for (const row of list) schoolRank.set(row.studentId, row.rank);
+  }
+  for (const r of rows) {
+    if (schoolRank.has(r.studentId)) r.rank = schoolRank.get(r.studentId);
+  }
+  for (const r of rows) {
+    if (r.cheat?.voided || r.cheat?.status === "voided") r.scoreStatus = "voided-cheat";
+    const c = reallySplit ? (r.track === "wen" ? cut.wen : cut.li) : cut.mixed;
+    r.line = c && r.total >= c.firstLine ? "一本" : c && r.total >= c.secondLine ? "二本" : "未达二本";
+  }
+  report.cutoffs = cut;
+  report.scoreMap = Object.fromEntries(rows.map((r) => [r.studentId, r]));
+  const classesMeta = report.classes || [];
+  const fakeCohort = {
+    classes: classesMeta.length
+      ? classesMeta
+      : [...new Set(rows.map((r) => r.classNo))].map((no) => {
+        const sample = rows.find((r) => r.classNo === no);
+        return { no, name: `${no}班`, tier: sample?.tier, repeat: !!sample?.repeat };
+      }),
+    students: rows.map((r) => ({
+      id: r.studentId,
+      classNo: r.classNo,
+      tier: r.tier,
+      track: r.track,
+      repeat: !!r.repeat,
+    })),
+  };
+  report.classes = summarizeAllClasses(fakeCohort, report.scoreMap, cut, reallySplit);
+  const subjectIds = report.subjectIds || [...new Set(rows.flatMap((r) => r.subjects || []))];
+  report.subjectIds = subjectIds;
+  report.toppers = subjectToppers(rows, subjectIds, reallySplit);
+  report.repeaters = rankRows(rows.filter((r) => r.repeat));
+  return report;
+}
+
+
+export function applyExamIntegrity(report, students, { seed = 1 } = {}) {
+  if (!isSchoolExamKind(report?.examKind)) return report;
+  if (report.integrityApplied) return report;
+  const byId = new Map((students || []).map((s) => [s.id, s]));
+  let changed = false;
+  report.rows = (report.rows || []).map((row) => {
+    const s = byId.get(row.studentId);
+    if (!s || row.cheat) return row;
+    const attempt = cheatAttempt(s, report, seed);
+    if (!attempt) return row;
+    changed = true;
+    const boosted = applyBoostToRow(row, attempt.boost, s, report, seed);
+    const verdict = investigateCheat(s, report, { ...attempt, boost: boosted.cheat?.boost ?? attempt.boost, maxTotal: row.maxTotal }, seed);
+    boosted.cheat = { ...(boosted.cheat || {}), ...verdict };
+    return boosted;
+  });
+  if (changed) recomputeExamDerived(report);
+  report.integrityApplied = true;
+  return report;
+}
+
+export function resolveExamIntegrity(report, { today, students, notices, force = false } = {}) {
+  const outNotices = notices || [];
+  if (!report?.rows) return { report, notices: outNotices, changed: false };
+  const byId = new Map((students || []).map((s) => [s.id, s]));
+  let changed = false;
+  report.rows = report.rows.map((row) => {
+    const ch = row.cheat;
+    if (!ch?.cheated || !ch.substantiated || ch.voided || ch.status === "voided") return row;
+    if (!force && ch.noticeDate && today && String(today) < String(ch.noticeDate)) return row;
+    changed = true;
+    const restored = restoreCheatedRow(row);
+    const s = byId.get(row.studentId);
+    const notice = composeDisciplineNotice({
+      ...restored.cheat,
+      name: row.name,
+      classNo: row.classNo,
+      studentId: row.studentId,
+      examId: report.examId,
+      examName: report.examName,
+      examKind: report.examKind,
+      examDate: report.date,
+    }, report, s);
+    if (!outNotices.some((n) => n.id === notice.id)) outNotices.push(notice);
+    if (s) {
+      s.disciplines = s.disciplines || [];
+      if (!s.disciplines.some((d) => d.id === notice.id)) {
+        s.disciplines.push({
+          id: notice.id,
+          date: notice.date,
+          examDate: notice.examDate,
+          examName: notice.examName,
+          examKind: notice.examKind,
+          discipline: notice.discipline,
+          disciplineLabel: notice.disciplineLabel,
+          text: resumeDisciplineLine(notice),
+        });
+      }
+    }
+    return restored;
+  });
+  if (changed) recomputeExamDerived(report);
+  return { report, notices: outNotices, changed };
+}

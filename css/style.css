@@ -563,3 +563,73 @@ button.peer-link {
 .visit-panel { margin: 0 0 12px; padding: 10px 14px; border-left: 3px solid var(--gold); }
 .visit-panel h3 { margin: 0 0 6px; color: var(--gold); font-size: 15px; }
 .visit-panel p { margin: 0 0 6px; }
+
+/* 谈话按钮：深色纸质风里提高对比，兼顾教室深底和档案浅纸 */
+button.talk-btn,
+button[data-talk] {
+  color: #1f241e;
+  background: #efe4c8;
+  border: 1px solid #7a4a28;
+}
+button.talk-btn:hover,
+button[data-talk]:hover {
+  background: #e8d5a3;
+  color: #141814;
+}
+button.talk-btn:disabled,
+button[data-talk]:disabled {
+  opacity: 0.55;
+  color: #3a4038;
+  background: #e4dcc8;
+}
+
+.paper button:not(.accent):not(.linkish):not(.talk-btn):not([data-talk]) {
+  color: var(--ink);
+  background: #efe6d0;
+  border-color: #8b5e3c;
+}
+.paper button:not(.accent):not(.linkish):hover {
+  background: #e4d3a8;
+}
+
+/* 考后分析在宣纸底上，原先粉笔黄字几乎看不见 */
+.exam-ai h5,
+.exam-ai h6 {
+  color: var(--ok);
+}
+.exam-ai-note {
+  color: var(--ink);
+  background: rgba(61, 107, 90, 0.10);
+  border-left: 3px solid var(--ok);
+}
+.exam-ai-err { color: var(--seal); }
+.exam-ai-table tr.up td:last-child { color: #2b5c47; font-weight: 600; }
+.exam-ai-table tr.down td:last-child { color: #8a3a2e; font-weight: 600; }
+.paper button.linkish,
+.exam-ai button.linkish {
+  color: #6a3a1c;
+  background: none;
+  border: 0;
+}
+.exam-ai-filters button {
+  color: var(--ink);
+  background: #efe6d0;
+  border: 1px solid #8b5e3c;
+}
+
+.chart-card canvas {
+  background: #f6f0e3;
+  min-height: 200px;
+}
+
+.resume-block { margin: 10px 0 12px; }
+.resume-block h4 { margin: 0 0 6px; color: var(--ok); font-size: 15px; }
+.resume-block ul { margin: 0 0 8px; padding-left: 1.2em; }
+.resume-block .resume-text { white-space: pre-wrap; line-height: 1.65; }
+.god-flag { font-size: 12px; color: var(--seal); }
+.toppers-panel { margin: 14px 0; }
+.toppers-panel h4 { margin: 0 0 8px; color: var(--ok); }
+.toppers-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 800px) {
+  .toppers-grid { grid-template-columns: 1fr; }
+}

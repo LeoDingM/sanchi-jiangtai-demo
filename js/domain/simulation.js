@@ -1,38 +1,39 @@
 /** 游戏状态机：上课/考试/分班/高考录取/毕业升学与自动跳阶段。 */
 import {
   PLAYER_CLASS_NO, PLAYER_DEFAULT_NAME, PLAYER_ROLE, START_DATE, GRADE_YEAR, HOMEROOM_NAME, MENTOR_NAME,
-} from "./config.js?v=t70u1";
-import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById, examParams, formatGradeTerm, formatCohortGrade, termOf } from "./calendar.js?v=t70u1";
-import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf, eraQuality, placeGraduatingRepeaters, applyRepeaterSeating } from "./school.js?v=t70u1";
-import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js?v=t70u1";
-import { runExam } from "./examService.js?v=t70u1";
-import { provincialPassCounts, schoolQuotaFromPrior, fallbackSchoolQuota, examResultLogText } from "./schoolLines.js?v=t70u1";
-import { admitCohort, packLastAdmission } from "./admission.js?v=t70u1";
-import { packLastGaokao } from "./scores.js?v=t70u1";
-import { rngFrom, clamp } from "./prng.js?v=t70u1";
-import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands, homeroomEveningRoll as homeroomEveningRollCore, compileEveningRoll, studentRecentStatus, rollCallStatusLine, classLatecomers, wrongClassroomThisPeriod } from "./teaching.js?v=t70u1";
-import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, upcomingTutoring, formatSlotLabel, isTutoringSlot, weekMathCount, weekSchedule, weekStart } from "./timetable.js?v=t70u1";
-import { swapPeriods as swapPeriodsCore, borrowIn as borrowInCore, borrowOut as borrowOutCore, respondTimetableRequest as respondTimetableRequestCore, ensureIncomingRequest, pendingTimetableRequest, weekBorrowCounts, weekTiaokeSummary, canAlterSlot, shortSlotLabel, teacherOf, ensureTiaokeState } from "./tiaoke.js?v=t70u1";
-import { openParentsMeeting as openParentsMeetingCore, meetParent as meetParentCore, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE } from "./parents.js?v=t70u1";
-import { openSchoolActivity as openSchoolActivityCore, doActivityAction as doActivityActionCore, isSchoolActivityOpen, upcomingSchoolActivity, ACTIVITY_SOURCE_NOTE, playerStageLine } from "./activities.js?v=t70u1";
-import { classCommittee, dutyStudents, weekDuty, classBrief, isHomeroomMeetingSlot, attendClassMeeting as attendClassMeetingCore, hostClassMeeting as hostClassMeetingCore, committeeTitleOf, upcomingClassMeeting, formatStudentShort, DUTY_PER_DAY, COMMITTEE_ROLES } from "./classManage.js?v=t70u1";
-import { ensureStatePeers, ensureCohortPeers, classPeersOf } from "./peers.js?v=t70u1";
-import { syncStateHealth, classAbsences, isAwayFromClass, absenceLogLine } from "./health.js?v=t70u1";
-import { ensureVisits as ensureVisitsCore, handleVisit as handleVisitCore, visitArriveLine, visitsForSlot, isVisitWindow, planDayVisits, planDayVisitPeriods, currentVisitItems, visitPlaceLabel } from "./visits.js?v=t70u1";
+} from "./config.js?v=t71u1";
+import { addDays, cmpDate, formatDateCn, nextExamEvent, SCHOOL_CALENDAR, weekday, eventById, examParams, formatGradeTerm, formatCohortGrade, termOf } from "./calendar.js?v=t71u1";
+import { generateCohort, generateOpeningSchool, classStudents, currentGrade, seatLabel, seatOf, eraQuality, placeGraduatingRepeaters, applyRepeaterSeating } from "./school.js?v=t71u1";
+import { firstPlacement, secondPlacement, rebuildClasses } from "./placement.js?v=t71u1";
+import { runExam, applyExamIntegrity, resolveExamIntegrity } from "./examService.js?v=t71u1";
+import { cohortIsNewGaokao, ensureCohortElectives, isNewGaokaoYear, NEW_GAOKAO_SOURCE } from "./newGaokao.js?v=t71u1";
+import { provincialPassCounts, schoolQuotaFromPrior, fallbackSchoolQuota, examResultLogText } from "./schoolLines.js?v=t71u1";
+import { admitCohort, packLastAdmission, isProvincialFirst } from "./admission.js?v=t71u1";
+import { packLastGaokao } from "./scores.js?v=t71u1";
+import { rngFrom, clamp } from "./prng.js?v=t71u1";
+import { prepareLesson as prepareLessonCore, teachLesson, reviewHomework as reviewHomeworkCore, topicsForGrade, LESSON_STYLES, suggestedTopic, topicProgress, homeworkWatchlist, studentTeachingContext, collectHomeworkFollowups, urgeHomework as urgeHomeworkCore, checkCorrection as checkCorrectionCore, officeMarking as officeMarkingCore, consultHomeroom as consultHomeroomCore, consultMentor as consultMentorCore, tutorEvening as tutorEveningCore, raisedHands, homeroomEveningRoll as homeroomEveningRollCore, compileEveningRoll, studentRecentStatus, rollCallStatusLine, classLatecomers, wrongClassroomThisPeriod } from "./teaching.js?v=t71u1";
+import { daySchedule, currentSlot, nextPeriodAfter, startPeriodId, pendingMajorEvent, majorEventOn, upcomingMath, upcomingTutoring, formatSlotLabel, isTutoringSlot, weekMathCount, weekSchedule, weekStart } from "./timetable.js?v=t71u1";
+import { swapPeriods as swapPeriodsCore, borrowIn as borrowInCore, borrowOut as borrowOutCore, respondTimetableRequest as respondTimetableRequestCore, ensureIncomingRequest, pendingTimetableRequest, weekBorrowCounts, weekTiaokeSummary, canAlterSlot, shortSlotLabel, teacherOf, ensureTiaokeState } from "./tiaoke.js?v=t71u1";
+import { openParentsMeeting as openParentsMeetingCore, meetParent as meetParentCore, isParentsMeetingOpen, upcomingParentsMeeting, PARENT_TALK_CAP, PARENTS_SOURCE_NOTE } from "./parents.js?v=t71u1";
+import { openSchoolActivity as openSchoolActivityCore, doActivityAction as doActivityActionCore, isSchoolActivityOpen, upcomingSchoolActivity, ACTIVITY_SOURCE_NOTE, playerStageLine } from "./activities.js?v=t71u1";
+import { classCommittee, dutyStudents, weekDuty, classBrief, isHomeroomMeetingSlot, attendClassMeeting as attendClassMeetingCore, hostClassMeeting as hostClassMeetingCore, committeeTitleOf, upcomingClassMeeting, formatStudentShort, DUTY_PER_DAY, COMMITTEE_ROLES } from "./classManage.js?v=t71u1";
+import { ensureStatePeers, ensureCohortPeers, classPeersOf } from "./peers.js?v=t71u1";
+import { syncStateHealth, classAbsences, isAwayFromClass, absenceLogLine } from "./health.js?v=t71u1";
+import { ensureVisits as ensureVisitsCore, handleVisit as handleVisitCore, visitArriveLine, visitsForSlot, isVisitWindow, planDayVisits, planDayVisitPeriods, currentVisitItems, visitPlaceLabel } from "./visits.js?v=t71u1";
 import {
   handlePhoneVisit as handlePhoneVisitCore, handleDoorVisit as handleDoorVisitCore,
   suggestPhoneVisits, suggestDoorVisits, isPhoneVisitOpen, isDoorVisitOpen,
   phoneVisitUnavailableReason, doorVisitUnavailableReason, ensureHomeVisitState,
   PHONE_DAY_CAP, PHONE_TERM_CAP, DOOR_DAY_CAP, DOOR_TERM_CAP,
   PHONE_ACTIONS, DOOR_ACTIONS, parentCoopOf, termVisitKey,
-} from "./homeVisit.js?v=t70u1";
+} from "./homeVisit.js?v=t71u1";
 import {
   observeLesson as observeLessonCore, isObserveOpen, observeUnavailableReason, observeChoices,
   ensureObserveState, mentorObserveHook, concludeOpenClass, upcomingOpenClass, upcomingOpenClasses,
   openClassForTerm, openClassOnDate, openClassSlotOn, isOpenClassDay, isOpenClassPeriod,
   latestOpenClassReview, openClassReviewFor, listOpenClasses, composeObserveNote,
   OBSERVE_DAY_CAP, OBSERVE_TERM_CAP, OPEN_CLASS_SOURCE_NOTE, MATH_COLLEAGUES, termObserveKey,
-} from "./observe.js?v=t70u1";
+} from "./observe.js?v=t71u1";
 import {
   doProctorAction as doProctorActionCore, markClassPapers as markClassPapersCore,
   isProctorOpen, proctorUnavailableReason, proctorChoices, proctorAssignment,
@@ -42,14 +43,14 @@ import {
   examAlreadyMarked, playerCohortReports, PROCTOR_SESSION_CAP, MARK_DAY_CAP,
   MARK_PAPERS_MIN, MARK_PAPERS_MAX, PROCTOR_ACTIONS, PROCTOR_SOURCE_NOTE,
   GRADEABLE_EXAM_KINDS, NON_SCHOOL_MARK_KINDS, PROCTOR_EXAM_KINDS,
-} from "./proctor.js?v=t70u1";
+} from "./proctor.js?v=t71u1";
 import {
   handleCoaching as handleCoachingCore, suggestRemedial, suggestEnrichment, suggestCoaching,
   isCoachingOpen, isCoachingWindow, coachingUnavailableReason, ensureCoachingState,
   isCoachingTimeSlot, kindLabel, termCoachKey,
   COACH_DAY_CAP, COACH_TERM_CAP, COACH_SESSION_MIN, COACH_SESSION_MAX,
   COACH_ACTIONS, COACH_SOURCE_NOTE,
-} from "./coaching.js?v=t70u1";
+} from "./coaching.js?v=t71u1";
 import {
   handleTermComment as handleTermCommentCore, suggestTermComments, composeTermComment,
   commentOptionsFor, isCommentOpen, isCommentWindow, commentUnavailableReason,
@@ -57,7 +58,7 @@ import {
   commentPublishDate, commentWindowEnd, isCommentTimeSlot, examCommentKey,
   COMMENT_DAY_CAP, COMMENT_BATCH_MIN, COMMENT_BATCH_MAX, COMMENT_TONES, COMMENT_SOURCE_NOTE,
   COMMENT_EXAM_KINDS, isCommentExamKind,
-} from "./comments.js?v=t70u1";
+} from "./comments.js?v=t71u1";
 import {
   handleTeachersDayCard as handleTeachersDayCardCore,
   handleTeachersDayColleague as handleTeachersDayColleagueCore,
@@ -69,7 +70,7 @@ import {
   isTeachersDayBlockedDate,
   TEACHERS_DAY_CARD_MIN, TEACHERS_DAY_CARD_MAX, TEACHERS_DAY_CARD_CAP,
   TEACHERS_DAY_SOURCE_NOTE, CARD_REPLIES, COLLEAGUE_ACTIONS,
-} from "./teachersDay.js?v=t70u1";
+} from "./teachersDay.js?v=t71u1";
 import {
   handleQualityMeet as handleQualityMeetCore, composeQualityMeetBrief, qualityMeetOptionsFor,
   composeQualityMeetMinutes, isQualityMeetOpen, isQualityMeetWindow, qualityMeetUnavailableReason,
@@ -78,7 +79,7 @@ import {
   isQualityMeetExamKind, typicalErrorTopics, qualityMeetColleagues,
   QUALITY_MEET_ACTIONS, QUALITY_MEET_SOURCE_NOTE, QUALITY_MEET_EXAM_KINDS,
   QUALITY_MEET_COLLEAGUES, latestQualityMeetMinutes,
-} from "./qualityMeet.js?v=t70u1";
+} from "./qualityMeet.js?v=t71u1";
 import {
   handleGroupPrep as handleGroupPrepCore, composeGroupPrepBrief, groupPrepOptionsFor,
   composeGroupPrepMinutes, isGroupPrepOpen, isGroupPrepWindow, groupPrepUnavailableReason,
@@ -87,7 +88,7 @@ import {
   groupPrepColleagues, groupPrepAlignNote, applyGroupPrepAlign,
   GROUP_PREP_ACTIONS, GROUP_PREP_SOURCE_NOTE, GROUP_PREP_COLLEAGUES,
   GROUP_PREP_WEEK_CAP, GROUP_PREP_TERM_CAP,
-} from "./groupPrep.js?v=t70u1";
+} from "./groupPrep.js?v=t71u1";
 import {
   handleOpeningDay as handleOpeningDayCore, composeOpeningDayBrief, openingDayOptionsFor,
   composeOpeningDayMinutes, isOpeningDayOpen, isOpeningDayWindow, openingDayUnavailableReason,
@@ -96,14 +97,14 @@ import {
   openingEventForPlayDate, openingEventAround, isFallOpeningEvent, isSpringOpeningEvent,
   openingEventKind, openingEventKindName,
   FALL_OPENING_ACTIONS, SPRING_OPENING_ACTIONS, OPENING_DAY_SOURCE_NOTE,
-} from "./openingDay.js?v=t70u1";
+} from "./openingDay.js?v=t71u1";
 import {
   handleStudyHall as handleStudyHallCore, composeStudyHallBrief, studyHallOptionsFor,
   composeStudyHallMinutes, isStudyHallOpen, isStudyHallWindow, studyHallUnavailableReason,
   ensureStudyHallState, hasStudyHallThisSlot, latestStudyHallThisSlot, latestStudyHallMinutes,
   isStudyHallTimeSlot, isStudyHallSubject, studyHallSlotKey,
   STUDY_HALL_ACTIONS, STUDY_HALL_SOURCE_NOTE,
-} from "./studyHall.js?v=t70u1";
+} from "./studyHall.js?v=t71u1";
 import {
   handleWeekendHomework as handleWeekendHomeworkCore, composeWeekendHwBrief, weekendHwOptionsFor,
   composeWeekendHwMinutes, isWeekendHwOpen, isWeekendHwWindow, weekendHwUnavailableReason,
@@ -111,7 +112,7 @@ import {
   isWeekendHwTimeSlot, weekWeekendHwKey, termWeekendHwKey, weekendOfKey, weekendHwWindowDate,
   isWeekendHwWindowDate, isWeekendHwNoClassDate, composeWeekendHwLayers, weekendHwFollowUp,
   WEEKEND_HW_ACTIONS, WEEKEND_HW_SOURCE_NOTE, WEEKEND_HW_WEEK_CAP,
-} from "./weekendHomework.js?v=t70u1";
+} from "./weekendHomework.js?v=t71u1";
 import {
   handleDutyWeek as handleDutyWeekCore, composeDutyWeekBrief, dutyWeekOptionsFor,
   composeDutyWeekMinutes, isDutyWeekOpen, isDutyWeekWindow, dutyWeekUnavailableReason,
@@ -120,7 +121,7 @@ import {
   isDutyWeekNoClassDate, dutyWeekStartsOfTerm, firstDutyWeekStart, candidateDutyWeekStarts,
   dutyWeekFollowUp, DUTY_WEEK_ACTIONS, DUTY_WEEK_SOURCE_NOTE, DUTY_WEEKS_PER_TERM,
   DUTY_DAY_CAP, DUTY_LEADER_NAME, DUTY_LEADER_TITLE, DUTY_WEEK_MARK, DUTY_WEEK_STRIDE,
-} from "./dutyWeek.js?v=t70u1";
+} from "./dutyWeek.js?v=t71u1";
 import {
   handleFacultyMeet as handleFacultyMeetCore, composeFacultyMeetBrief, facultyMeetOptionsFor,
   composeFacultyMeetMinutes, isFacultyMeetOpen, isFacultyMeetWindow, facultyMeetUnavailableReason,
@@ -135,7 +136,7 @@ import {
   gradeMeetExamKey, isGradeMeetExamKind,
   GRADE_MEET_ACTIONS, GRADE_MEET_SOURCE_NOTE, GRADE_MEET_EXAM_KINDS,
   GRADE_DIRECTOR_NAME, GRADE_DIRECTOR_TITLE,
-} from "./staffMeet.js?v=t70u1";
+} from "./staffMeet.js?v=t71u1";
 import {
   handlePaperSign as handlePaperSignCore, composePaperSignBrief, paperSignOptionsFor,
   composePaperSignMinutes, isPaperSignOpen, isPaperSignWindow, paperSignUnavailableReason,
@@ -145,9 +146,9 @@ import {
   suggestPaperSignIssue, suggestPaperSignRegister, suggestPaperSignInform,
   PAPER_SIGN_ACTIONS, PAPER_SIGN_SOURCE_NOTE, PAPER_SIGN_BATCH_MIN, PAPER_SIGN_BATCH_MAX,
   PAPER_SIGN_DAY_CAP, PAPER_SIGN_EXAM_KINDS, PAPER_SIGN_BLOCKED_KINDS,
-} from "./paperSign.js?v=t70u1";
-import { OFFICIAL_ROLE, OFFICIAL_LOG_TEXT } from "./career.js?v=t70u1";
-import { talkMathRoomBit, hasLargeRoom } from "./potential.js?v=t70u1";
+} from "./paperSign.js?v=t71u1";
+import { OFFICIAL_ROLE, OFFICIAL_LOG_TEXT } from "./career.js?v=t71u1";
+import { talkMathRoomBit, hasLargeRoom } from "./potential.js?v=t71u1";
 
 export const SAVE_VERSION = 1;
 
@@ -272,6 +273,7 @@ function assembleNewGameState(seed, playerName, cohorts) {
     admissions: {}, // key: `${entryYear}|${year}`
     alumni: [],
     honors: [],
+    disciplineNotices: [],
     log: [{ date, text: `${playerName}到江西省宁川中学报到，担任${GRADE_YEAR}级卓行16班数学实习教师。班主任${HOMEROOM_NAME}，备课组长${MENTOR_NAME}。` }],
     talksToday: 0,
     flags: {},
@@ -382,6 +384,11 @@ function compactReport(report, entryYear) {
     huikaoPass: r.huikaoPass, huikaoSubjects: r.huikaoSubjects,
     cityRank: r.cityRank, countyRank: r.countyRank, provinceRank: r.provinceRank,
     cityN: r.cityN, countyN: r.countyN, provinceN: r.provinceN, jointLine: r.jointLine,
+    cheat: r.cheat, scoreStatus: r.scoreStatus, rawTotal: r.rawTotal, rawScores: r.rawScores,
+    discipline: r.discipline,
+    electives: r.electives, assign: r.assign, scheme: r.scheme,
+    physicsRaw: r.physicsRaw, chemistryRaw: r.chemistryRaw, biologyRaw: r.biologyRaw,
+    politicsRaw: r.politicsRaw, geographyRaw: r.geographyRaw,
   }));
   const cut = { ...report.cutoffs, ranked: undefined };
   return {
@@ -390,6 +397,8 @@ function compactReport(report, entryYear) {
     scale: report.scale, grade: report.grade, split: report.split, entryYear,
     rows, classes: report.classes, subjectIds: report.subjectIds, toppers: report.toppers,
     cutoffs: cut, quota: report.quota || null, huikao: report.huikao || null, sourceNote: report.sourceNote || null, joint: report.joint || null,
+    integrityApplied: !!report.integrityApplied, integrity: report.integrity || null,
+    scheme: report.scheme || null, assignNote: report.assignNote || null,
   };
 }
 
@@ -445,6 +454,31 @@ export function listExamReports(state, { entryYear, examId } = {}) {
     .sort((a, b) => (a.date < b.date ? 1 : -1));
 }
 
+
+function ensureDisciplineNotices(state) {
+  if (!Array.isArray(state.disciplineNotices)) state.disciplineNotices = [];
+  return state.disciplineNotices;
+}
+
+function studentsForExamReport(state, report, entryYear) {
+  const year = entryYear ?? report.entryYear;
+  return state.cohorts[year]?.students || [];
+}
+
+function resolveExamsIntegrity(state, { force = false, today = state.date } = {}) {
+  const notices = ensureDisciplineNotices(state);
+  let any = false;
+  for (const key of Object.keys(state.exams || {})) {
+    const report = hydrateReport(state.exams[key]);
+    const entryYear = report.entryYear ?? Number(String(key).split("|")[0]);
+    const students = studentsForExamReport(state, report, entryYear);
+    const res = resolveExamIntegrity(report, { today, students, notices, force });
+    state.exams[key] = res.report;
+    if (res.changed) any = true;
+  }
+  return any;
+}
+
 export function runScheduledExam(state, ev) {
   const reports = [];
   const years = ev.grades
@@ -461,7 +495,9 @@ export function runScheduledExam(state, ev) {
       split: !!c.trackSplit,
       teachingBonusFor: (s) => bonusFor(state, s),
       schoolQuota: currentSchoolQuota(state),
+      seed: state.seed,
     });
+    applyExamIntegrity(report, c.students, { seed: state.seed });
     storeExam(state, entryYear, report);
     reports.push({ entryYear, grade, report });
     if (ev.examKind === "gaokao") {
@@ -483,18 +519,22 @@ export function runScheduledExam(state, ev) {
 export function doFirstPlacement(state, entryYear, overrides = {}) {
   const c = state.cohorts[entryYear];
   if (!c || c.trackSplit) return { ok: false, reason: "已经分过第一次班" };
+  resolveExamsIntegrity(state, { force: true, today: state.date });
   const finals = listExamReports(state, { entryYear }).filter((r) => r.examKind === "final" || r.examName.includes("期末"));
   const report = finals[0] || listExamReports(state, { entryYear })[0];
   if (!report) return { ok: false, reason: "还没有期末成绩，无法分班" };
   const p = firstPlacement(c.students, report.scoreMap, { overrides, seed: state.seed + entryYear });
   c.students = p.students;
+  if (cohortIsNewGaokao(entryYear)) ensureCohortElectives(c.students, state.seed + entryYear);
   c.classes = rebuildClasses(c.students);
   c.trackSplit = true;
   const stay = p.assignments.filter((a) => {
     const s = report.scoreMap[a.id];
     return s && s.classNo === a.classNo;
   }).length;
-  addLog(state, `${entryYear}级完成第一次分班：文理分科并按期末成绩调整梯队。云岫0/1班不参与普通淘汰，2—4班保持顶尖梯队。`);
+  addLog(state, cohortIsNewGaokao(entryYear)
+    ? `${entryYear}级完成第一次分班：按江西新高考 3+1+2 完成选科（首选物理或历史，再选两门），不是文理分科。云岫0/1班不参与普通淘汰，2—4班保持顶尖梯队。${NEW_GAOKAO_SOURCE}`
+    : `${entryYear}级完成第一次分班：文理分科并按期末成绩调整梯队。云岫0/1班不参与普通淘汰，2—4班保持顶尖梯队。`);
   state.flags[`place1-${entryYear}`] = true;
   c.placed1 = true;
   ensureCohortPeers(c, state.seed, "peers");
@@ -505,6 +545,7 @@ export function doSecondPlacement(state, entryYear) {
   const c = state.cohorts[entryYear];
   if (!c || !c.trackSplit) return { ok: false, reason: "尚未完成第一次分班" };
   if (c.placed2) return { ok: false, reason: "已经做过第二次分班" };
+  resolveExamsIntegrity(state, { force: true, today: state.date });
   const finals = listExamReports(state, { entryYear }).filter((r) => r.examKind === "final");
   const report = finals[0] || listExamReports(state, { entryYear })[0];
   if (!report) return { ok: false, reason: "缺少期末成绩" };
@@ -512,7 +553,9 @@ export function doSecondPlacement(state, entryYear) {
   c.students = p.students;
   c.classes = rebuildClasses(c.students);
   c.placed2 = true;
-  addLog(state, `${entryYear}级完成第二次分班：不再分文理、不跨梯队，只在同科类同层次内部均衡重组。0/1班保持稳定。`);
+  addLog(state, cohortIsNewGaokao(entryYear)
+    ? `${entryYear}级完成第二次分班：不改首选科目、不跨梯队，只在同首选（物理类/历史类）同层次内部均衡重组。0/1班保持稳定。`
+    : `${entryYear}级完成第二次分班：不再分文理、不跨梯队，只在同科类同层次内部均衡重组。0/1班保持稳定。`);
   state.flags[`place2-${entryYear}`] = true;
   ensureCohortPeers(c, state.seed, "peers");
   return { ok: true, placement: p };
@@ -527,11 +570,11 @@ export function doAdmission(state, ev) {
   const year = ev.year || Number(ev.date.slice(0, 4));
   const seniors = c.students.filter((s) => gradeOf(s.entryYear, ev.date) >= 3 || s.repeat);
   // 应届 + 复读都参加录取
-  const results = admitCohort(c.students, gk.scoreMap, year);
+  const results = admitCohort(c.students, gk.scoreMap, year, { seed: state.seed, date: ev.date, difficulty: gk.difficulty });
   const key = `${entryYear}|${year}`;
   state.admissions[key] = { year, entryYear, results, date: ev.date };
   const qb = results.filter((r) => r.qingbei);
-  const first = results.filter((r) => r.batch === "一批").length;
+  const first = results.filter((r) => isProvincialFirst(r)).length;
   const supp = results.filter((r) => r.supplement).length;
   addLog(state, `${year}年高考录取公布。本届（含复读）一批${first}人${supp ? `，一本补录${supp}人` : ""}，清北${qb.length}人。去向按江西公开投档线对照，不以喜报凑数。一本补录不计入省控一本上线人数。`);
   state.flags[`admit-${entryYear}-${year}`] = true;
@@ -734,6 +777,7 @@ export function skipToNextStage(state) {
   state.talksThisPeriod = 0;
   state.tutorAnswers = 0;
   syncStateHealth(state);
+  resolveExamsIntegrity(state, { today: state.date });
   const result = applyEvent(state, ev);
   const becameOfficial = !!result?.becameOfficial;
   const advance = describeStageAdvance(state, ev);
@@ -931,6 +975,7 @@ export function advanceDay(state) {
   state.talksToday = 0;
   state.reviewsToday = 0;
   syncStateHealth(state);
+  resolveExamsIntegrity(state, { today: state.date });
   const updates = collectHomeworkFollowups(state, "day");
   const incoming = SCHOOL_CALENDAR.filter((e) => e.date === state.date);
   const opened = openTodayPartialActivity(state);
@@ -971,7 +1016,10 @@ export function advancePeriod(state) {
   state.periodId = n.slot.id;
   if (rolledDay) resetDailyCounters(state);
   else resetPeriodCounters(state);
-  if (rolledDay) syncStateHealth(state);
+  if (rolledDay) {
+    syncStateHealth(state);
+    resolveExamsIntegrity(state, { today: state.date });
+  }
   const opened = rolledDay ? openTodayPartialActivity(state) : null;
   const updates = collectHomeworkFollowups(state, "period");
   ensureVisitsCore(state);

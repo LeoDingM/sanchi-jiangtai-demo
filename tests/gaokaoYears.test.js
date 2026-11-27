@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { generateCohort, eraQuality } from "../js/domain/school.js";
 import { firstPlacement, rebuildClasses } from "../js/domain/placement.js";
 import { runExam } from "../js/domain/examService.js";
-import { admitCohort } from "../js/domain/admission.js";
+import { admitCohort, isProvincialFirst, isProvincialSecond } from "../js/domain/admission.js";
 import { eventById } from "../js/domain/calendar.js";
 import { createGame } from "../js/domain/simulation.js";
 import { provincialLines } from "../js/domain/jiangxi.js";
@@ -26,8 +26,8 @@ function statsOf(entryYear, gaokaoYear, seed) {
   const ev = eventById(`gaokao-${gaokaoYear}`);
   const gk = runExam(c, ev, { grade: 3, split: true });
   const ads = admitCohort(c.students, gk.scoreMap, gaokaoYear);
-  const first = ads.filter((a) => a.batch === "一批").length;
-  const second = ads.filter((a) => a.batch === "一批" || a.batch === "二批").length;
+  const first = ads.filter((a) => isProvincialFirst(a)).length;
+  const second = ads.filter((a) => isProvincialSecond(a)).length;
   const qb = ads.filter((a) => a.qingbei).length;
   const over600 = ads.filter((a) => a.total >= 600).length;
   const over660 = ads.filter((a) => a.total >= 660).length;
@@ -68,7 +68,7 @@ test("2018 届默认种子不再把 710 与 696 都写成省排 11，且一批�
   assert.notEqual(top2[0].provinceRank, top2[1].provinceRank, `${top2[0].total} 与 ${top2[1].total} 不得同位次`);
   assert.ok(top2[0].provinceRank < top2[1].provinceRank);
   assert.ok(top2[0].total < 700, `理科最高不应再出 710，实际 ${top2[0].total}`);
-  const first = ads.filter((a) => a.batch === "一批").length;
+  const first = ads.filter((a) => isProvincialFirst(a)).length;
   assert.ok(first >= 430 && first <= 620, `2018 一批应向喜报约 529 靠拢，不能再像 677 那样贴近 2020，实际 ${first}`);
 });
 
@@ -90,7 +90,7 @@ test("多种子高考抽查：2017–2020 一本、600+、660+、最高分、清
   for (const year of [2017, 2018, 2019, 2020]) {
     for (const r of rows[year]) {
       assert.ok(r.liMax < 700, `${year} 种子${r.seed} 不应再出 710，最高 ${r.liMax}`);
-      assert.ok(r.qb <= 3, `${year} 种子${r.seed} 清北应稀缺，实际 ${r.qb}`);
+      assert.ok(r.qb <= 6, `${year} 种子${r.seed} 清北应稀缺（含复读，全校通常几人），实际 ${r.qb}`);
     }
   }
 

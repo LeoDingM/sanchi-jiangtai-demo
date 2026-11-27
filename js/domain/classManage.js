@@ -3,11 +3,11 @@
  * 玩家是数学实习教师，协助班主任，不能主持班会，也不能撤换班委。
  * 只为玩家任教班做完整生成，不为全校每班另开一套。
  */
-import { HOMEROOM_NAME } from "./config.js?v=t70u1";
-import { hash01 } from "./prng.js?v=t70u1";
-import { addDays, formatDateCn, parseYmd, weekday, weekdayName } from "./calendar.js?v=t70u1";
-import { currentSlot, daySchedule, weekDates, weekStart } from "./timetable.js?v=t70u1";
-import { homeworkWatchlist } from "./teaching.js?v=t70u1";
+import { HOMEROOM_NAME } from "./config.js?v=t71u1";
+import { hash01 } from "./prng.js?v=t71u1";
+import { addDays, formatDateCn, parseYmd, weekday, weekdayName } from "./calendar.js?v=t71u1";
+import { currentSlot, daySchedule, weekDates, weekStart } from "./timetable.js?v=t71u1";
+import { homeworkWatchlist } from "./teaching.js?v=t71u1";
 
 export const COMMITTEE_ROLES = [
   { id: "study", title: "学习委员" },
@@ -283,4 +283,87 @@ export function attendClassMeeting(state, students, { assist = false } = {}) {
 export function hostClassMeeting(state) {
   const home = state?.player?.homeroom || HOMEROOM_NAME;
   return { ok: false, reason: `班会由班主任${home}主持，实习教师不能推开她去主持班会。` };
+}
+
+/** 课代表：按本班课表科目各设一名，不与班委兼职，也不给每人一个职务。 */
+export const SUBJECT_REP_DEFS = [
+  { id: "rep-chinese", title: "语文课代表", subjectId: "chinese" },
+  { id: "rep-math", title: "数学课代表", subjectId: "math" },
+  { id: "rep-english", title: "英语课代表", subjectId: "english" },
+  { id: "rep-physics", title: "物理课代表", subjectId: "physics" },
+  { id: "rep-chemistry", title: "化学课代表", subjectId: "chemistry" },
+  { id: "rep-biology", title: "生物课代表", subjectId: "biology" },
+  { id: "rep-history", title: "历史课代表", subjectId: "history" },
+  { id: "rep-politics", title: "政治课代表", subjectId: "politics" },
+  { id: "rep-geography", title: "地理课代表", subjectId: "geography" },
+];
+
+export function repSubjectsForClass(students) {
+  const list = students || [];
+  const tracks = new Set(list.map((s) => s.track || s.trackPref || "mixed"));
+  const splitLi = tracks.size === 1 && tracks.has("li");
+  const splitWen = tracks.size === 1 && tracks.has("wen");
+  const hasBio = list.some((s) => s.ability && s.ability.biology != null);
+  if (splitLi) return ["chinese", "math", "english", "physics", "chemistry"].concat(hasBio ? ["biology"] : []);
+  if (splitWen) return ["chinese", "math", "english", "politics", "history", "geography"];
+  return ["chinese", "math", "english", "physics", "chemistry", "politics", "history", "geography"];
+}
+
+function subjectAbilityOf(student, subjectId) {
+  const v = Number(student?.ability?.[subjectId]);
+  return Number.isFinite(v) ? v : 0;
+}
+
+export function selectSubjectReps(students, seed = 1, classNo = 16, { excludeIds } = {}) {
+  const list = (students || []).slice();
+  const taken = new Set(excludeIds || []);
+  const roles = [];
+  for (const sid of repSubjectsForClass(list)) {
+    const def = SUBJECT_REP_DEFS.find((d) => d.subjectId === sid);
+    if (!def) continue;
+    const pool = list.filter((s) => !taken.has(s.id));
+    if (!pool.length) break;
+    let best = null;
+    let bestScore = -Infinity;
+    let bestTie = 1;
+    for (const s of pool) {
+      const sc = subjectAbilityOf(s, sid) * 1.2 + (Number(s.stability) || 0) * 0.15 + (PERSONALITY_SCORE.study[s.personality] || 0) * 0.3;
+      const tie = hash01(seed, "subj-rep", classNo, sid, s.id);
+      if (!best || sc > bestScore || (sc === bestScore && tie < bestTie)) {
+        best = s;
+        bestScore = sc;
+        bestTie = tie;
+      }
+    }
+    if (!best) break;
+    taken.add(best.id);
+    roles.push({ id: def.id, title: def.title, subjectId: sid, student: best });
+  }
+  const byStudentId = {};
+  for (const r of roles) byStudentId[r.student.id] = r.title;
+  return { roles, byStudentId, classNo };
+}
+
+/** 班委 + 课代表。分班后按新名单重算，实习老师不能任命。 */
+export function selectClassOffices(students, seed = 1, classNo = 16) {
+  const committee = selectCommittee(students, seed, classNo);
+  const reps = selectSubjectReps(students, seed, classNo, { excludeIds: Object.keys(committee.byStudentId || {}) });
+  const titlesByStudentId = { ...committee.byStudentId };
+  for (const [id, title] of Object.entries(reps.byStudentId || {})) {
+    titlesByStudentId[id] = titlesByStudentId[id] ? `${titlesByStudentId[id]}、${title}` : title;
+  }
+  return { committee, reps, titlesByStudentId, classNo };
+}
+
+export function officeTitlesOf(offices, studentId) {
+  if (!offices || studentId == null) return [];
+  const c = offices.committee?.byStudentId?.[studentId];
+  const r = offices.reps?.byStudentId?.[studentId];
+  return [c, r].filter(Boolean);
+}
+
+export function classOfficesFor(state, classNo, students) {
+  const no = classNo != null ? Number(classNo) : Number(state?.player?.classNo);
+  const seed = state?.seed ?? 1;
+  return selectClassOffices(students || [], seed, no);
 }

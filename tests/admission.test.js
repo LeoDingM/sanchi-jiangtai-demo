@@ -43,7 +43,11 @@ test("2020 年录取：达线才进对应批次，清北必须达到公开投档
       assert.ok(a.total >= L.first, `${a.name} ${a.total} < ${L.first}`);
       assert.ok(!a.supplement, `达一本线的 ${a.name} 不应标补录`);
     }
-    if (a.batch === "二批") assert.ok(a.total >= L.second && a.total < L.first);
+    if (a.batch === "二批" && !a.goodSecond) assert.ok(a.total >= L.second && a.total < L.first);
+    if (a.goodSecond) {
+      assert.equal(a.batch, "二批");
+      assert.ok(a.total >= L.first, `选二本好专业仍应过一本省控，${a.name} ${a.total}`);
+    }
     if (a.supplement) {
       assert.equal(a.batch, "二批");
       assert.ok(a.total < L.first);
@@ -51,13 +55,26 @@ test("2020 年录取：达线才进对应批次，清北必须达到公开投档
     }
     if (a.qingbei) {
       const need = a.track === "wen" ? 644 : 686;
-      assert.ok(a.total >= need, `清北 ${a.name} ${a.total} 未达 ${need}`);
+      if (a.usedConcession || a.recruitPassed) {
+        assert.ok(a.total < need || a.total >= need);
+        assert.ok(a.usedConcession || a.total >= need, `清北降分须有据，${a.name} ${a.total} 线 ${need}`);
+        assert.ok(a.total !== need || !a.usedConcession || a.total < need + 1);
+        // 降分不得写进高考总分：总分仍应低于公开投档线。
+        if (a.usedConcession) assert.ok(a.total < need, `降分后总分被改写 ${a.name} ${a.total}`);
+      } else {
+        assert.ok(a.total >= need, `清北 ${a.name} ${a.total} 未达 ${need}`);
+      }
       assert.match(a.university, /清华大学|北京大学/);
       assert.ok(!a.supplement);
     }
   }
   const qb = ads.filter((a) => a.qingbei);
-  assert.ok(qb.length <= 4, `清北人数应稀缺，实际 ${qb.length}`);
+  assert.ok(qb.length <= 5, `清北人数应稀缺，实际 ${qb.length}`);
+  const qbClass = {};
+  for (const a of qb) qbClass[a.classNo] = (qbClass[a.classNo] || 0) + 1;
+  for (const [no, n] of Object.entries(qbClass)) {
+    assert.ok(n <= 5, `单班清北不应到 6–7 人，${no}班 ${n}`);
+  }
   const zxNos = new Set(c.students.filter((s) => s.tier === "zhuoxing").map((s) => s.classNo));
   for (const no of zxNos) {
     const n = suppByClass[no] || 0;

@@ -10,7 +10,7 @@ import { examParams } from "../js/domain/calendar.js";
 import { provincialPassCounts } from "../js/domain/schoolLines.js";
 import { formatLastAdmissionLabel, packLastAdmission } from "../js/domain/admission.js";
 import { formatLastGaokaoText } from "../js/domain/scores.js";
-import { canInsertRepeat, missedProvincialFirst, admitCohort } from "../js/domain/admission.js";
+import { canInsertRepeat, missedProvincialFirst, admitCohort, isProvincialFirst, isProvincialSecond } from "../js/domain/admission.js";
 import { createGame, skipToGaokaoOf, skipToNextCohort } from "../js/domain/simulation.js";
 import {
   FIRST_PLACEMENT_TARGETS, REPEAT_WEN_NOS, REPEAT_LI_NOS, REPEAT_CLASS_SIZE,
@@ -295,8 +295,8 @@ function tutoringGaokao(entryYear, seed) {
       return {
         no,
         n: list.length,
-        first: list.filter((a) => a.batch === "一批").length,
-        second: list.filter((a) => a.batch === "一批" || a.batch === "二批").length,
+        first: list.filter((a) => isProvincialFirst(a)).length,
+        second: list.filter((a) => isProvincialSecond(a)).length,
         avg: meanOf(totals),
         med: pctile(totals, 0.5),
         p10: pctile(totals, 0.1),

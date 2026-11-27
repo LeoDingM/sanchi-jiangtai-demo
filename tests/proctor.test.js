@@ -22,7 +22,11 @@ function abilityMap(state) {
 function examTotals(state) {
   const out = {};
   for (const ex of Object.values(state.exams || {})) {
-    for (const row of ex.rows || []) out[`${ex.examId || ex.date}|${row.studentId}`] = row.total;
+    for (const row of ex.rows || []) {
+      // 查实取消作弊分是规则内变更；对照用卷面原始分，避免把处分重算当成重新出分。
+      const total = row.cheat?.rawTotal != null ? row.cheat.rawTotal : row.total;
+      out[`${ex.examId || ex.date}|${row.studentId}`] = total;
+    }
   }
   return out;
 }

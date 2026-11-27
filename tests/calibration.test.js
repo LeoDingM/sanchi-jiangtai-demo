@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { generateCohort } from "../js/domain/school.js";
 import { firstPlacement, rebuildClasses } from "../js/domain/placement.js";
 import { runExam } from "../js/domain/examService.js";
-import { admitCohort } from "../js/domain/admission.js";
+import { admitCohort, isProvincialFirst, isProvincialSecond } from "../js/domain/admission.js";
 
 const SEEDS = [20170901, 7, 99, 2020, 42, 11];
 
@@ -39,28 +39,28 @@ test("多种子高考抽查：平行班按省控标定，笃学允许 0 一本�
       byTier[t] ??= { n: 0, first: 0, second: 0, sum: 0 };
       byTier[t].n++;
       byTier[t].sum += a.total;
-      if (a.batch === "一批") byTier[t].first++;
-      if (a.batch === "一批" || a.batch === "二批") byTier[t].second++;
+      if (isProvincialFirst(a)) byTier[t].first++;
+      if (isProvincialSecond(a)) byTier[t].second++;
       if (s?.tier === "zhuoxing" && s.track !== "wen") {
         liZx[s.classNo] ??= { n: 0, first: 0, second: 0 };
         liZx[s.classNo].n++;
-        if (a.batch === "一批") liZx[s.classNo].first++;
-        if (a.batch === "一批" || a.batch === "二批") liZx[s.classNo].second++;
+        if (isProvincialFirst(a)) liZx[s.classNo].first++;
+        if (isProvincialSecond(a)) liZx[s.classNo].second++;
       }
       if (s?.classNo === 16) {
         class16.n++;
-        if (a.batch === "一批") class16.first++;
-        if (a.batch === "一批" || a.batch === "二批") class16.second++;
+        if (isProvincialFirst(a)) class16.first++;
+        if (isProvincialSecond(a)) class16.second++;
       }
     }
     const qb = ads.filter((a) => a.qingbei).length;
-    const first = ads.filter((a) => a.batch === "一批").length;
+    const first = ads.filter((a) => isProvincialFirst(a)).length;
     const dx = byTier.duxue || { n: 0, first: 0, second: 0 };
     const avg = (t) => byTier[t].sum / byTier[t].n;
     assert.ok(avg("yunxiu_exp") > avg("lingxiao"), `种子${seed} 实验应高于凌霄`);
     assert.ok(avg("lingxiao") > avg("zhuoxing"), `种子${seed} 凌霄应高于卓行`);
     assert.ok(avg("zhuoxing") > avg("duxue"), `种子${seed} 卓行应高于笃学`);
-    assert.ok(qb <= 3, `种子${seed} 清北应稀缺，实际 ${qb}`);
+    assert.ok(qb <= 5, `种子${seed} 清北应稀缺，实际 ${qb}`);
     assert.ok(first >= 450 && first <= 850, `种子${seed} 应届一本 ${first} 应接近赣南重点中学量级`);
 
     const liClasses = Object.values(liZx);

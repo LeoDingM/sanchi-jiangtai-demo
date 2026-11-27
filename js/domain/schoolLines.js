@@ -3,9 +3,9 @@
  * 高一高二没有补习班，按 520/1696、1100/1696 折算到本年级应届池，不能套用这两个绝对名次。
  * 应届省控上线人数仍只统应届，只作对照统计，不再当作校内划线名额。
  */
-import { FALLBACK_SCHOOL_QUOTA, SCHOOL_LINE_FIRST_RANK, SCHOOL_LINE_SECOND_RANK } from "./config.js?v=t70u1";
-import { provincialLines, officialProvincialPack } from "./jiangxi.js?v=t70u1";
-import { hash01 } from "./prng.js?v=t70u1";
+import { FALLBACK_SCHOOL_QUOTA, SCHOOL_LINE_FIRST_RANK, SCHOOL_LINE_SECOND_RANK } from "./config.js?v=t71u1";
+import { provincialLines, officialProvincialPack, gaokaoScheme, isOfficialProvincialYear, provincialTrackLabel, provincialFirstShortLabel, provincialSecondShortLabel } from "./jiangxi.js?v=t71u1";
+import { hash01 } from "./prng.js?v=t71u1";
 
 function clampRank(want, n) {
   const cap = Math.max(1, n);
@@ -147,7 +147,7 @@ function emptyCounts(year) {
 }
 
 function addPass(pack, track, total, year) {
-  const lines = provincialLines(year, track) || provincialLines(2020, track);
+  const lines = provincialLines(year, track);
   const b = pack[track];
   b.n++;
   if (total >= lines.first) b.firstN++;
@@ -254,29 +254,36 @@ export function describeZhuoxingPeers(report, classNo) {
   const pF = midRange(peers.map((c) => c.provFirst));
   const sS = midRange(peers.map((c) => c.schoolSecond));
   const pS = midRange(peers.map((c) => c.provSecond));
+  const year = provincialCompareYear(report.date);
+  const ph = passCountPhrases(year);
   const label = track === "wen" ? "卓行文科" : track === "li" ? "卓行理科" : "卓行";
   if (report.examKind === "gaokao") {
     const mine = me
-      ? `任教班省控一本 ${me.provFirst} 人、省控二本累计 ${me.provSecond} 人；校内一本 ${me.schoolFirst} 人、校内二本累计 ${me.schoolSecond} 人`
+      ? `任教班省控${ph.first} ${me.provFirst} 人、省控${ph.secondPhrase} ${me.provSecond} 人；校内一本 ${me.schoolFirst} 人、校内二本累计 ${me.schoolSecond} 人`
       : "";
-    return `${label}各班省控一本 ${pF.min}–${pF.max} 人（中位 ${pF.mid}），省控二本累计 ${pS.min}–${pS.max} 人（中位 ${pS.mid}）；校内一本 ${sF.min}–${sF.max} 人（中位 ${sF.mid}），校内二本累计 ${sS.min}–${sS.max} 人（中位 ${sS.mid}）。${mine}。`;
+    return `${label}各班省控${ph.first} ${pF.min}–${pF.max} 人（中位 ${pF.mid}），省控${ph.secondPhrase} ${pS.min}–${pS.max} 人（中位 ${pS.mid}）；校内一本 ${sF.min}–${sF.max} 人（中位 ${sF.mid}），校内二本累计 ${sS.min}–${sS.max} 人（中位 ${sS.mid}）。${mine}。`;
   }
   const mine = me
-    ? `任教班校内一本 ${me.schoolFirst} 人、二本累计 ${me.schoolSecond} 人；对照省控一本 ${me.provFirst} 人、二本累计 ${me.provSecond} 人`
+    ? `任教班校内一本 ${me.schoolFirst} 人、二本累计 ${me.schoolSecond} 人；对照省控${ph.first} ${me.provFirst} 人、${ph.secondPhrase} ${me.provSecond} 人`
     : "";
-  return `${label}各班校内一本 ${sF.min}–${sF.max} 人（中位 ${sF.mid}），二本累计 ${sS.min}–${sS.max} 人（中位 ${sS.mid}）；对照省控一本 ${pF.min}–${pF.max} 人（中位 ${pF.mid}），二本累计 ${pS.min}–${pS.max} 人（中位 ${pS.mid}）。${mine}。`;
+  return `${label}各班校内一本 ${sF.min}–${sF.max} 人（中位 ${sF.mid}），二本累计 ${sS.min}–${sS.max} 人（中位 ${sS.mid}）；对照省控${ph.first} ${pF.min}–${pF.max} 人（中位 ${pF.mid}），${ph.secondPhrase} ${pS.min}–${pS.max} 人（中位 ${pS.mid}）。${mine}。`;
 }
 
 /** 高考主卡片用的公开省控（国家线）说明。非 2020 年不含估算位次。 */
-export function describeOfficialProvincialLines(year, tracks = ["li", "wen"]) {
-  const pack = officialProvincialPack(year);
+export function describeOfficialProvincialLines(year, tracks = ["li", "wen"], opts = {}) {
+  const pack = officialProvincialPack(year, opts);
   const bits = (tracks.length ? tracks : ["li", "wen"]).map((tr) => {
     const t = tr === "wen" ? pack.wen : pack.li;
-    const label = tr === "wen" ? "文科" : "理科";
-    const ranks = t.ranks ? `，一本全省前 ${t.ranks.firstN} 名、二本全省前 ${t.ranks.secondN} 名` : "";
-    return `${label}一本 ${t.first}、二本 ${t.second}，分差 ${t.gap}${ranks}`;
+    const label = pack.trackLabel?.[tr] || (tr === "wen" ? "文科" : "理科");
+    const firstName = pack.firstLabel || "一本";
+    const secondName = pack.secondLabel || "二本";
+    const ranks = t.ranks ? `，${firstName}全省前 ${t.ranks.firstN} 名、${secondName}全省前 ${t.ranks.secondN} 名` : "";
+    return `${label}${firstName} ${t.first}、${secondName} ${t.second}，分差 ${t.gap}${ranks}`;
   });
-  return `${pack.year}年公开省控（国家线）：${bits.join("；")}。${pack.sourceNote}`;
+  const head = pack.simulated
+    ? `${pack.year}年模拟省控（模拟线，非正式官方省控）`
+    : `${pack.year}年公开省控（国家线）`;
+  return `${head}：${bits.join("；")}。${pack.sourceNote}`;
 }
 
 export function schoolCutoffView(report, track = "li") {
@@ -332,27 +339,41 @@ export function describeSchoolCutoff(cutOrQuota, split, opts = {}) {
   return `校内一本、二本按本年级应届池比例折算取分（${liPart}${wenPart}；${pool}），只作对照，不是国家线`;
 }
 
-export function provincialCompareNote(report) {
+export function provincialCompareNote(report, opts = {}) {
   const year = provincialCompareYear(report.date);
-  if (report.examKind === "gaokao") return `对照${year}年公开省控（高考 750 分制）`;
-  if (isG1Scale(report)) return `对照${year}年省控（高一卷面按 950 分折合 750 分比较，受当次难度影响会晃）`;
-  return `对照${year}年省控（卷面折合 750 分比较，受当次难度影响会晃）`;
+  const pack = officialProvincialPack(year, opts);
+  const kind = pack.simulated ? "模拟省控（模拟线，非正式官方省控）" : (pack.official ? "公开省控" : "省控");
+  if (report.examKind === "gaokao") return `对照${year}年${kind === "公开省控" ? "公开省控（高考 750 分制）" : kind + "（高考 750 分制）"}`;
+  if (isG1Scale(report)) return `对照${year}年${pack.simulated ? "模拟省控（模拟线，非正式官方省控）" : "省控"}（高一卷面按 950 分折合 750 分比较，受当次难度影响会晃）`;
+  return `对照${year}年${pack.simulated ? "模拟省控（模拟线，非正式官方省控）" : "省控"}（卷面折合 750 分比较，受当次难度影响会晃）`;
+}
+
+function passCountPhrases(year) {
+  const first = provincialFirstShortLabel(year);
+  const second = provincialSecondShortLabel(year);
+  return { first, second, firstPhrase: first, secondPhrase: `${second}累计` };
 }
 
 export function describeClassProvincial(report, classNo) {
+  const year = provincialCompareYear(report.date);
   const note = provincialCompareNote(report);
   const p = classProvincialCounts(report, classNo);
-  return `${note}：一本 ${p.firstN} 人、二本累计 ${p.secondN} 人`;
+  const ph = passCountPhrases(year);
+  return `${note}：${ph.first} ${p.firstN} 人、${ph.secondPhrase} ${p.secondN} 人`;
 }
 
 export function describeSchoolProvincial(report) {
   const year = provincialCompareYear(report.date);
   const pack = provincialPassCountsFromRows(report.rows, year, report.split);
   const note = provincialCompareNote(report);
+  const ph = passCountPhrases(year);
   if (!report.split) {
-    return `${note}：全校应届一本 ${pack.mixed.firstN} 人、二本累计 ${pack.mixed.secondN} 人（按学生科类意向分别对照文理省控后合计）`;
+    const byTrack = gaokaoScheme(year) === "new-3+1+2" ? "按学生首选物理或历史分别对照省控后合计" : "按学生科类意向分别对照文理省控后合计";
+    return `${note}：全校应届${ph.first} ${pack.mixed.firstN} 人、${ph.secondPhrase} ${pack.mixed.secondN} 人（${byTrack}）`;
   }
-  return `${note}：全校应届理科一本 ${pack.li.firstN} 人、二本累计 ${pack.li.secondN} 人；文科一本 ${pack.wen.firstN} 人、二本累计 ${pack.wen.secondN} 人`;
+  const liL = provincialTrackLabel(year, "li");
+  const wenL = provincialTrackLabel(year, "wen");
+  return `${note}：全校应届${liL}${ph.first} ${pack.li.firstN} 人、${ph.secondPhrase} ${pack.li.secondN} 人；${wenL}${ph.first} ${pack.wen.firstN} 人、${ph.secondPhrase} ${pack.wen.secondN} 人`;
 }
 
 /** 考试日志：同时写校内线、对照省控、卓行同层次对比。 */

@@ -6,15 +6,15 @@
  * 文案由已有本班/学校事实与确定性 PRNG 生成，不用 LLM，不改能力、分数、排名或省控。
  * 玩家以本班任课（实习或正式）数学老师身份随班参加，不是典礼主持人或班主任。
  */
-import { hash01 } from "./prng.js?v=t70u1";
+import { hash01 } from "./prng.js?v=t71u1";
 import {
   addDays, formatCohortGrade, SCHOOL_CALENDAR, weekday,
-} from "./calendar.js?v=t70u1";
-import { activityEventOn, currentSlot, isEveningPeriodId, majorEventOn } from "./timetable.js?v=t70u1";
-import { isOfficeSittingSlot } from "./homeVisit.js?v=t70u1";
-import { isAwayFromClass, leaveCovering } from "./health.js?v=t70u1";
-import { playerClassStudents } from "./visits.js?v=t70u1";
-import { HOMEROOM_NAME, PLAYER_CLASS_NO } from "./config.js?v=t70u1";
+} from "./calendar.js?v=t71u1";
+import { activityEventOn, currentSlot, isEveningPeriodId, majorEventOn } from "./timetable.js?v=t71u1";
+import { isOfficeSittingSlot } from "./homeVisit.js?v=t71u1";
+import { isAwayFromClass, leaveCovering } from "./health.js?v=t71u1";
+import { playerClassStudents } from "./visits.js?v=t71u1";
+import { HOMEROOM_NAME, PLAYER_CLASS_NO } from "./config.js?v=t71u1";
 
 export const OPENING_DAY_SOURCE_NOTE = "这是宁川中学校内的开学安排，秋季开学日举行开学典礼，春季为报到；日期按校历每年 9 月 1 日、2 月 22 日排入，若适逢周末则在之后最近的上课工作日进行。不是某所实校或教育行政部门公告的日期。你以本班任课（实习或正式）数学老师身份随卓行班站队或到教室参加，不是典礼主持人或班主任。";
 

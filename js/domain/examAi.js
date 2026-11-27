@@ -2,15 +2,16 @@
  * 考后 AI 分析：只根据已算好的成绩和排名写评语，不改分、不改排名、不上线人数。
  * API 密钥只放在独立的 localStorage 项里，与游戏存档 JSON 分开。
  */
-import { subjectById, TIER } from "./config.js?v=t70u1";
-import { usesComprehensive, comprehensiveMeta, comprehensiveScore } from "./scores.js?v=t70u1";
-import { subjectRanks } from "./scores.js?v=t70u1";
+import { subjectById, TIER } from "./config.js?v=t71u1";
+import { usesComprehensive, comprehensiveMeta, comprehensiveScore } from "./scores.js?v=t71u1";
+import { subjectRanks } from "./scores.js?v=t71u1";
 import {
   describeSchoolCutoff, describeClassProvincial, describeSchoolProvincial,
   describeZhuoxingPeers, classProvincialCounts, scaledTotal750, provincialCompareYear,
-} from "./schoolLines.js?v=t70u1";
-import { provincialLines } from "./jiangxi.js?v=t70u1";
-import { buildStudentExamSnapshot, strongerTiers, tierName } from "./studentHistory.js?v=t70u1";
+} from "./schoolLines.js?v=t71u1";
+import { provincialLines } from "./jiangxi.js?v=t71u1";
+import { buildStudentExamSnapshot, strongerTiers, tierName } from "./studentHistory.js?v=t71u1";
+import { sameTierFirstBoard, classFirstBoard, formatStability } from "./toppers.js?v=t71u1";
 
 export const AI_SETTINGS_KEY = "sanchi-jiangtai-ai-settings-v1";
 export const AI_KEY_KEY = "sanchi-jiangtai-ai-key-v1";
@@ -730,6 +731,31 @@ export function buildExamAnalysisPayload(report, { player, classNo, previousRepo
 
   fact.建议谈话 = pickTalkLists(mine, deltas, snaps, { subjectFirst: scope === "subject", report, track });
 
+  const tierFirsts = sameTierFirstBoard(report, priorList, { track: report.split ? track : undefined });
+  const classFirsts = classFirstBoard(report, priorList, { track: report.split ? track : undefined });
+  const myTier = tierFirsts.find((x) => x.tier === tier);
+  const myClass = classFirsts.find((x) => Number(x.classNo) === Number(clsNo));
+  fact.同层次与各班第一 = {
+    本层第一: myTier ? {
+      层次: myTier.tierName,
+      姓名: myTier.name,
+      班级: myTier.classNo,
+      总分: myTier.total,
+      校排: myTier.schoolRank,
+      较上场分差: myTier.scoreDelta,
+      稳定性: formatStability(myTier.series),
+    } : null,
+    本班第一: myClass ? {
+      姓名: myClass.name,
+      总分: myClass.total,
+      校排: myClass.schoolRank,
+      较上场分差: myClass.scoreDelta,
+      稳定性: formatStability(myClass.series),
+    } : null,
+    各层次第一: tierFirsts.map((x) => ({ 层次: x.tierName, 姓名: x.name, 班: x.classNo, 总分: x.total, 校排: x.schoolRank, 分差: x.scoreDelta })),
+    各班第一摘要: classFirsts.slice(0, 24).map((x) => ({ 班: x.classNo, 层次: x.tierName, 姓名: x.name, 总分: x.total, 校排: x.schoolRank, 分差: x.scoreDelta })),
+  };
+
   if (report.examKind === "huikao" && report.huikao) {
     fact.会考 = {
       说明: report.huikao.source || report.sourceNote || "",
@@ -900,10 +926,12 @@ export function buildExamChartModel(payload, { reports, report } = {}) {
       本场分数: subjectFirst ? row.分数 : row.总分,
       本场校排: subjectFirst ? row.该科校排 : row.校排,
       本场班排: subjectFirst ? (row.该科班排 ?? row.班排) : row.班排,
+      本场同层次排: subjectFirst ? (row.该科同层次排 ?? null) : (row.同层次排 ?? null),
       分数差: hasPrevious ? scoreCh : null,
       分数差说明: scoreKind,
       校排变化: hasPrevious ? (schoolCh?.变化 ?? null) : null,
       班排变化: hasPrevious ? (classCh?.变化 ?? null) : null,
+      同层次排变化: hasPrevious ? ((subjectFirst ? d?.该科同层次排 : (d?.同层次排 || d?.总分同层次排))?.变化 ?? null) : null,
       校排对照: hasPrevious ? (schoolCh || null) : null,
       班排对照: hasPrevious ? (classCh || null) : null,
     };
@@ -977,7 +1005,7 @@ export function buildAnalysisMessages(payload) {
     "必须严格使用用户消息里已经算好的数字，包括排名、进退步和建议谈话原因，不得生成、改写、估算或纠正任何分数、排名、上线人数、均分、划线或进退步。",
     "不得编造材料里没有的进步、退步或人名。若材料写明没有先前对比，不要虚构进退步。若某项数字材料里没有，就写「材料未给出」，不要自行补数。",
     "分析要结合班级层次（如卓行普通班、凌霄、云岫重点等）和当次考试的难度、校内划线、对照省控。",
-    "页面已用图表展示进退步、走势和薄弱点。你只需要为各块写一两句短评，并点出材料里已列好的建议谈话对象（用材料中的姓名和原因数字），给出下一阶段课、作业或辅导的具体抓手。不要空话套话，不要客套开场。",
+    "页面已用图表展示进退步、走势和薄弱点。短评要覆盖总分与单科、班排/同层次排/校排（材料里已有的跨层次也要提到）、进退步、薄弱点，以及与同层次第一、各班第一的对照（用材料「同层次与各班第一」里的姓名和数字）。并点出材料里已列好的建议谈话对象（用材料中的姓名和原因数字），给出下一阶段课、作业或辅导的具体抓手。不要空话套话，不要客套开场。不要写潜力。",
     "只输出一个 JSON 对象，不要写 markdown 标题、不要用 ## 或 **，不要重复粘贴整张成绩表，不要在这个 JSON 之外再写其它文字。字段必须是：总评、进退步、走势、薄弱点、建议谈话，每个字段一两句话。",
     scopeHint,
   ].join("");
@@ -1014,14 +1042,13 @@ export function formatAiError(err, status, bodyText) {
   return "分析请求失败，请稍后再试。";
 }
 
-export async function requestExamAnalysis(payload, { fetchImpl, settings, signal } = {}) {
-  if (!payload?.ok) return { ok: false, reason: payload?.reason || "没有可分析的成绩。" };
+
+export async function requestChatCompletion(messages, { fetchImpl, settings, signal, temperature = 0.3, maxTokens = 1200, timeoutMs = 90000 } = {}) {
   const conf = settings || loadAiSettings();
   const apiKey = String(conf.apiKey || "").trim();
   if (!apiKey) return { ok: false, reason: formatAiError(new Error("NO_KEY")) };
   const model = (conf.model || DEFAULT_AI_MODEL).trim() || DEFAULT_AI_MODEL;
   const url = chatCompletionsUrl(conf.baseUrl);
-  const messages = buildAnalysisMessages(payload);
   const fetchFn = fetchImpl || (typeof fetch === "function" ? fetch : null);
   if (!fetchFn) return { ok: false, reason: "当前环境无法发起网络请求。" };
   let res;
@@ -1033,7 +1060,7 @@ export async function requestExamAnalysis(payload, { fetchImpl, settings, signal
       if (signal.aborted) ctrl.abort();
       else signal.addEventListener("abort", onAbort, { once: true });
     }
-    const timer = setTimeout(() => { timedOut = true; ctrl.abort(); }, 90000);
+    const timer = setTimeout(() => { timedOut = true; ctrl.abort(); }, timeoutMs);
     try {
       res = await fetchFn(url, {
         method: "POST",
@@ -1044,8 +1071,8 @@ export async function requestExamAnalysis(payload, { fetchImpl, settings, signal
         body: JSON.stringify({
           model,
           messages,
-          temperature: 0.3,
-          max_tokens: 1200,
+          temperature,
+          max_tokens: maxTokens,
           thinking: { type: "disabled" },
         }),
         signal: ctrl.signal,
@@ -1055,7 +1082,7 @@ export async function requestExamAnalysis(payload, { fetchImpl, settings, signal
       if (signal) signal.removeEventListener("abort", onAbort);
     }
   } catch (err) {
-    if (timedOut) return { ok: false, reason: "分析请求超时，请稍后再试。" };
+    if (timedOut) return { ok: false, reason: "请求超时，请稍后再试。" };
     return { ok: false, reason: formatAiError(err) };
   }
   const text = await res.text().catch(() => "");
@@ -1066,6 +1093,94 @@ export async function requestExamAnalysis(payload, { fetchImpl, settings, signal
   }
   const content = String(data?.choices?.[0]?.message?.content || "").trim();
   if (!content) return { ok: false, reason: formatAiError(new Error("EMPTY")) };
-  const parsed = parseAiCommentary(content);
-  return { ok: true, text: content, commentary: parsed.comments, fromJson: parsed.fromJson, ignoredMarkdown: parsed.ignoredMarkdown, model };
+  return { ok: true, text: content, model };
+}
+
+function parseShortText(content) {
+  const obj = extractJsonObject(content);
+  if (obj) {
+    const text = String(obj.短评 || obj.履历 || obj.谈话 || obj.反思 || obj.text || "").trim();
+    if (text) return { text, fromJson: true };
+  }
+  const plain = String(content || "").replace(/```[\s\S]*?```/g, (m) => {
+    const inner = m.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+    return inner;
+  }).replace(/^#{1,6}\s+/gm, "").replace(/\*\*/g, "").trim();
+  return { text: plain, fromJson: false };
+}
+
+export function buildTalkMessages(facts) {
+  return [
+    {
+      role: "system",
+      content: [
+        "你是高中班主任或数学老师的谈话助手。只根据已有事实写一段简短、可直接对学生说的谈话内容。",
+        "必须使用材料里的作业、考试、课堂和排名数字，不得编造分数、排名、奖项或潜力。",
+        "不要写 markdown。只输出一个 JSON 对象：{\"谈话\":\"一两段话\"}。",
+      ].join(""),
+    },
+    { role: "user", content: JSON.stringify(facts) },
+  ];
+}
+
+export function buildTeachingMessages(facts) {
+  return [
+    {
+      role: "system",
+      content: [
+        "你是高中数学教师的课后助手。根据已有课堂事实写一段简短教学反思或下一节提示。",
+        "不得改写或编造分数、能力、潜力或省控。不要写 markdown。只输出 JSON：{\"反思\":\"一两段话\"}。",
+      ].join(""),
+    },
+    { role: "user", content: JSON.stringify(facts) },
+  ];
+}
+
+export function buildResumeMessages(payload) {
+  return [
+    {
+      role: "system",
+      content: [
+        "你把已有学生履历事实润色成通顺短文，只能组织材料里的职务、比赛、水平、单科异常和近几次考试。",
+        "不得编造奖项、职务、分数或排名，不得写潜力（除非材料明确允许）。不要写 markdown。只输出 JSON：{\"履历\":\"短文\"}。",
+      ].join(""),
+    },
+    { role: "user", content: JSON.stringify(payload) },
+  ];
+}
+
+export async function requestTalkAdvice(facts, opts = {}) {
+  if (opts.autoMode) return { ok: false, reason: "自动模式不发起在线调用。", fallback: true };
+  const r = await requestChatCompletion(buildTalkMessages(facts), { ...opts, temperature: 0.4, maxTokens: 600 });
+  if (!r.ok) return r;
+  const parsed = parseShortText(r.text);
+  if (!parsed.text) return { ok: false, reason: formatAiError(new Error("EMPTY")) };
+  return { ok: true, text: parsed.text, model: r.model };
+}
+
+export async function requestTeachingReflection(facts, opts = {}) {
+  if (opts.autoMode) return { ok: false, reason: "自动模式不发起在线调用。", fallback: true };
+  const r = await requestChatCompletion(buildTeachingMessages(facts), { ...opts, temperature: 0.35, maxTokens: 600 });
+  if (!r.ok) return r;
+  const parsed = parseShortText(r.text);
+  if (!parsed.text) return { ok: false, reason: formatAiError(new Error("EMPTY")) };
+  return { ok: true, text: parsed.text, model: r.model };
+}
+
+export async function requestResumePolish(payload, opts = {}) {
+  if (opts.autoMode) return { ok: false, reason: "自动模式不发起在线调用。", fallback: true };
+  const r = await requestChatCompletion(buildResumeMessages(payload), { ...opts, temperature: 0.35, maxTokens: 800 });
+  if (!r.ok) return r;
+  const parsed = parseShortText(r.text);
+  if (!parsed.text) return { ok: false, reason: formatAiError(new Error("EMPTY")) };
+  return { ok: true, text: parsed.text, model: r.model };
+}
+
+export async function requestExamAnalysis(payload, { fetchImpl, settings, signal } = {}) {
+  if (!payload?.ok) return { ok: false, reason: payload?.reason || "没有可分析的成绩。" };
+  const conf = settings || loadAiSettings();
+  const r = await requestChatCompletion(buildAnalysisMessages(payload), { fetchImpl, settings: conf, signal, temperature: 0.3, maxTokens: 1200 });
+  if (!r.ok) return r;
+  const parsed = parseAiCommentary(r.text);
+  return { ok: true, text: r.text, commentary: parsed.comments, fromJson: parsed.fromJson, ignoredMarkdown: parsed.ignoredMarkdown, model: r.model };
 }

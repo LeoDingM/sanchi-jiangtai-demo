@@ -5,17 +5,21 @@
 import {
   SUBJECTS_G1, SUBJECT_IDS, SUBJECT_MAX, G1_TOTAL, CUTOFF_FIRST_RANK, CUTOFF_SECOND_RANK,
   LI_SUBJECTS, WEN_SUBJECTS, TIER, examById,
-} from "./config.js?v=t70u1";
-import { clamp, gauss, hash01, rngFrom, round1, round2 } from "./prng.js?v=t70u1";
-import { resolveSchoolQuota } from "./schoolLines.js?v=t70u1";
+} from "./config.js?v=t71u1";
+import { clamp, gauss, hash01, rngFrom, round1, round2 } from "./prng.js?v=t71u1";
+import { resolveSchoolQuota } from "./schoolLines.js?v=t71u1";
+import { newGaokaoSubjects, defaultElectivesForTrack, isReelectiveId, isNewGaokaoYear, formatElectives, SUBJECT_NAMES as NG_NAMES } from "./newGaokao.js?v=t71u1";
 
 export const SCALE_G1 = "g1-950";
 export const SCALE_G2 = "g2-750";
 export const SCALE_G3 = "g3-750";
 export const SCALE_GAOKAO = "gaokao-750";
 
-export function subjectsFor(scale, track = "mixed") {
+export function subjectsFor(scale, track = "mixed", opts = {}) {
   if (scale === SCALE_G1) return SUBJECTS_G1.map((s) => ({ ...s }));
+  if (opts.scheme === "new-3+1+2") {
+    return newGaokaoSubjects(opts.electives || defaultElectivesForTrack(track === "wen" ? "wen" : "li"));
+  }
   if (track === "wen") {
     return [
       { id: "chinese", name: "语文", max: 150 },
@@ -48,8 +52,9 @@ export const WEN_COMP_SUBJECTS = [
   { id: "geography", name: "地理", short: "地" },
 ];
 
-/** 高三平时考、模拟、联考、高考等（grade>=3 或对应卷面）按理综/文综展示。高一高二仍列单科。 */
-export function usesComprehensive(scaleOrGrade) {
+/** 旧高考高三/高考按理综/文综展示。新高考 3+1+2 年份不合并文综理综。高一高二仍列单科。 */
+export function usesComprehensive(scaleOrGrade, opts = {}) {
+  if (opts.scheme === "new-3+1+2") return false;
   if (scaleOrGrade == null) return false;
   if (typeof scaleOrGrade === "number") return scaleOrGrade >= 3;
   return scaleOrGrade === SCALE_G3 || scaleOrGrade === SCALE_GAOKAO;
@@ -95,9 +100,10 @@ export function formatComprehensiveLabel(row, track) {
 
 const LAST_GAOKAO_SUBJECTS = ["chinese", "math", "english", "physics", "chemistry", "biology", "politics", "history", "geography"];
 
-export function packLastGaokao(scoreRow, { year, track, firstLine = null, secondLine = null } = {}) {
+export function packLastGaokao(scoreRow, { year, track, firstLine = null, secondLine = null, electives = null, scheme = null } = {}) {
   const row = scoreRow || {};
   const kind = track === "wen" ? "wen" : "li";
+  const newScheme = scheme === "new-3+1+2" || isNewGaokaoYear(year);
   const out = {
     total: row.total,
     year,
@@ -105,10 +111,14 @@ export function packLastGaokao(scoreRow, { year, track, firstLine = null, second
     scale: row.scale || SCALE_GAOKAO,
     firstLine,
     secondLine,
+    scheme: newScheme ? "new-3+1+2" : "wenli-batches",
+    electives: electives || row.electives || null,
   };
   for (const id of LAST_GAOKAO_SUBJECTS) {
     if (row[id] != null) out[id] = row[id];
+    if (row[`${id}Raw`] != null) out[`${id}Raw`] = row[`${id}Raw`];
   }
+  if (newScheme) return out;
   if (kind === "wen") out.wenzong = comprehensiveScore(out, "wen");
   else out.lizong = comprehensiveScore(out, "li");
   return out;
@@ -123,16 +133,34 @@ export function formatLastGaokaoText(lastGaokao) {
   if (lastGaokao.chinese != null) core.push(`语文 ${lastGaokao.chinese}`);
   if (lastGaokao.math != null) core.push(`数学 ${lastGaokao.math}`);
   if (lastGaokao.english != null) core.push(`英语 ${lastGaokao.english}`);
+  if (lastGaokao.scheme === "new-3+1+2" || isNewGaokaoYear(lastGaokao.year)) {
+    const el = lastGaokao.electives;
+    const ids = el ? [el.first, ...(el.seconds || [])] : ["physics", "chemistry", "biology", "history", "politics", "geography"].filter((id) => lastGaokao[id] != null);
+    const extra = ids.filter((id) => lastGaokao[id] != null).map((id) => `${NG_NAMES[id] || id} ${lastGaokao[id]}`);
+    if (core.length) parts.push(core.join("　"));
+    if (extra.length) parts.push(extra.join("　"));
+    if (el) parts.push(formatElectives(el));
+    return parts.join("　");
+  }
   const comp = formatComprehensiveLabel(lastGaokao, track);
   if (core.length) parts.push(core.join("　"));
   if (comp && comp !== "—") parts.push(comp);
   return parts.join("　");
 }
 
-export function displayScoreColumns(scale, track, subjectIds) {
+export function displayScoreColumns(scale, track, subjectIds, opts = {}) {
   const ids = subjectIds
-    || subjectsFor(scale, track === "wen" ? "wen" : track === "li" ? "li" : "mixed").map((s) => s.id);
-  if (!usesComprehensive(scale)) {
+    || subjectsFor(scale, track === "wen" ? "wen" : track === "li" ? "li" : "mixed", opts).map((s) => s.id);
+  if (opts.scheme === "new-3+1+2") {
+    const order = ["chinese", "math", "english", "physics", "history", "chemistry", "biology", "politics", "geography"];
+    const have = new Set(ids);
+    return order.filter((id) => have.has(id)).map((id) => ({
+      id,
+      name: NG_NAMES[id] || id,
+      kind: isReelectiveId(id) ? "assigned" : "subject",
+    }));
+  }
+  if (!usesComprehensive(scale, opts)) {
     return ids.filter((id) => id !== "lizong" && id !== "wenzong").map((id) => ({
       id, name: (id === "biology" ? "生物" : null) || ({
         chinese: "语文", math: "数学", english: "英语", physics: "物理", chemistry: "化学",
@@ -156,6 +184,14 @@ export function displayScoreColumns(scale, track, subjectIds) {
 
 export function displayScoreCell(row, col) {
   if (!col) return "—";
+  if (col.kind === "assigned") {
+    const v = row?.[col.id];
+    if (v == null || v === "") return "—";
+    const raw = row?.[`${col.id}Raw`];
+    const grade = row?.assign?.[col.id]?.grade;
+    if (raw != null && grade) return `${v}（${grade}）`;
+    return v;
+  }
   if (col.kind === "comp") {
     const rowTrack = row?.track === "wen" ? "wen" : (row?.track === "li" ? "li" : null);
     if (rowTrack && rowTrack !== col.track) return "—";
@@ -169,9 +205,10 @@ export function displayScoreCell(row, col) {
   return v == null || v === "" ? "—" : v;
 }
 
-export function formatToppersLine(toppers, subjectIds, scale, rows, track = "all") {
+export function formatToppersLine(toppers, subjectIds, scale, rows, track = "all", opts = {}) {
   const set = toppers || {};
-  if (!usesComprehensive(scale)) {
+  const newScheme = opts.scheme === "new-3+1+2";
+  if (newScheme || !usesComprehensive(scale, opts)) {
     return (subjectIds || []).map((id) => {
       const t = set[id];
       const nm = ({
@@ -310,7 +347,10 @@ export function studentFormBundle(student, examId, difficultyKey = "", examKind 
 
 export function gradeStudent(student, exam, scale, teachingBonus = 0) {
   const track = student.track === "wen" ? "wen" : student.track === "li" ? "li" : "li";
-  const subjects = subjectsFor(scale, scale === SCALE_G1 ? "mixed" : track);
+  const subjects = subjectsFor(scale, scale === SCALE_G1 ? "mixed" : track, {
+    scheme: exam?.scheme,
+    electives: student?.electives,
+  });
   const difficulty = exam.difficulty ?? 1;
   const dispersion = exam.dispersion ?? 1;
   const bundle = studentFormBundle(student, exam.id, `${difficulty}|${dispersion}`, exam.examKind);
@@ -344,23 +384,24 @@ export function gradeStudent(student, exam, scale, teachingBonus = 0) {
     throw new Error("高一试卷不应出现生物");
   }
   const maxTotal = subjects.reduce((s, x) => s + x.max, 0);
-  // 文科校内一本常落在卓行上段，与理科共用 60–64 陡坡后分差易偏宽。
-  // 500–580 略压、580–618 收回，与高尾清北压缩在 618 处连续衔接。
-  // 2020 江西文科 650 分以上全省仅约 12 人，644 分约全省第 24 名。
-  if ((scale === SCALE_GAOKAO || scale === SCALE_G3 || scale === SCALE_G2) && track === "wen" && total > 500) {
-    if (total <= 580) {
-      total = Math.round(500 + (total - 500) * 0.70);
-    } else if (total <= 618) {
-      // 580 → 556，再线性回到 618，保证单调且与高尾相接。
-      total = Math.round(556 + (total - 580) * (62 / 38));
-    } else {
-      total = Math.round(618 + (total - 618) * 0.36);
-    }
-  }
-  if ((scale === SCALE_GAOKAO || scale === SCALE_G3 || scale === SCALE_G2) && track === "li") {
-    total = compressLiHighTail(total, student, exam);
-  }
+  total = applyTrackTotalCompression(total, student, exam, scale, track);
   return { ...scores, total, maxTotal, scale, subjects: subjects.map((s) => s.id) };
+}
+
+/** 文理高尾压缩：只改总分，不改单科。新高考赋分后可再套一次，避免总分与压缩脱节。不改 2016–2020 标定曲线本身。 */
+export function applyTrackTotalCompression(total, student, exam, scale, track) {
+  const tr = track === "wen" ? "wen" : "li";
+  if (!(scale === SCALE_GAOKAO || scale === SCALE_G3 || scale === SCALE_G2)) return Math.round(total);
+  if (tr === "wen" && total > 500) {
+    if (total <= 580) {
+      return Math.round(500 + (total - 500) * 0.70);
+    } else if (total <= 618) {
+      return Math.round(556 + (total - 580) * (62 / 38));
+    }
+    return Math.round(618 + (total - 618) * 0.36);
+  }
+  if (tr === "li") return compressLiHighTail(total, student, exam);
+  return Math.round(total);
 }
 
 export function compareScoreRows(a, b) {
@@ -477,6 +518,7 @@ export function attachStudentMeta(row, student) {
     repeat: !!student.repeat,
     entryYear: student.entryYear,
     gender: student.gender,
+    electives: student.electives || null,
   };
 }
 
