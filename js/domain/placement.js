@@ -3,10 +3,10 @@
  * 第一次：高一上期末后，文理分科 + 凌霄及以下梯队晋级淘汰；0/1 不参与普通淘汰，2—4 保持顶尖梯队。
  * 第二次：高一下期末后，不再分文理、不跨梯队，只在同科类同梯队内部均衡重组。
  */
-import { FIRST_PLACEMENT_TARGETS, CLASS_BLUEPRINT } from "./config.js?v=t67u1";
-import { compareScoreRows } from "./scores.js?v=t67u1";
-import { rngFrom, shuffle } from "./prng.js?v=t67u1";
-import { reseatClasses, syncSeatsToSeq, seatFromSeq, applyRepeaterSeating, ensureZhuoxingClassSpread } from "./school.js?v=t67u1";
+import { FIRST_PLACEMENT_TARGETS, CLASS_BLUEPRINT } from "./config.js?v=t68u1";
+import { compareScoreRows } from "./scores.js?v=t68u1";
+import { rngFrom, shuffle } from "./prng.js?v=t68u1";
+import { reseatClasses, syncSeatsToSeq, seatFromSeq, applyRepeaterSeating, ensureZhuoxingClassSpread } from "./school.js?v=t68u1";
 
 export function firstPlacement(students, scoreMap, { overrides = {}, seed = 1 } = {}) {
   const movable = [];

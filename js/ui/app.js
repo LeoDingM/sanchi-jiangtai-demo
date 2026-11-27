@@ -64,32 +64,40 @@ import {
   ensureDutyWeekState, hasDutyWeekToday, latestDutyWeekToday,
   DUTY_WEEK_ACTIONS, DUTY_WEEK_SOURCE_NOTE, DUTY_WEEKS_PER_TERM, DUTY_WEEK_MARK,
   DUTY_LEADER_NAME, DUTY_LEADER_TITLE,
-} from "../domain/simulation.js?v=t67u1";
-import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t67u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t67u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t67u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t67u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t67u1";
-import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t67u1";
-import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t67u1";
-import { hydrateReport } from "../domain/simulation.js?v=t67u1";
-import { renderSeating } from "./classroom.js?v=t67u1";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t67u1";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t67u1";
-import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t67u1";
-import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t67u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t67u1";
-import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t67u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t67u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t67u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t67u1";
+  handleFacultyMeet, composeFacultyMeetBrief, facultyMeetOptionsFor,
+  isFacultyMeetOpen, isFacultyMeetWindow, facultyMeetUnavailableReason,
+  ensureFacultyMeetState, hasFacultyMeet, latestFacultyMeetMinutes,
+  facultyMeetOpeningEvent, FACULTY_MEET_ACTIONS, FACULTY_MEET_SOURCE_NOTE,
+  handleGradeMeet, composeGradeMeetBrief, gradeMeetOptionsFor,
+  isGradeMeetOpen, isGradeMeetWindow, gradeMeetUnavailableReason,
+  ensureGradeMeetState, hasGradeMeet, latestGradeMeetMinutes, currentGradeMeetExam,
+  GRADE_MEET_ACTIONS, GRADE_MEET_SOURCE_NOTE, GRADE_DIRECTOR_NAME, GRADE_DIRECTOR_TITLE,
+} from "../domain/simulation.js?v=t68u1";
+import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t68u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t68u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t68u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t68u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t68u1";
+import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t68u1";
+import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t68u1";
+import { hydrateReport } from "../domain/simulation.js?v=t68u1";
+import { renderSeating } from "./classroom.js?v=t68u1";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t68u1";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t68u1";
+import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t68u1";
+import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t68u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t68u1";
+import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t68u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t68u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t68u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t68u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
   parseAiCommentary, emptyAiCommentary,
-} from "../domain/examAi.js?v=t67u1";
+} from "../domain/examAi.js?v=t68u1";
 
 let state = null;
 let view = "classroom";
@@ -2053,6 +2061,93 @@ function bindDutyWeekActions(host) {
   });
 }
 
+function facultyMeetPanelHtml() {
+  if (!state) return "";
+  if (!isFacultyMeetWindow(state)) return "";
+  ensureFacultyMeetState(state);
+  const ev = facultyMeetOpeningEvent(state.date);
+  const rec = state.facultyMeet || {};
+  const done = ev && hasFacultyMeet(state, ev);
+  if (!isFacultyMeetOpen(state) && !done) {
+    return `<div class="paper visit-panel faculty-meet-panel" data-faculty-meet-panel="1">
+      <h3>教职工大会</h3>
+      <p class="muted">${facultyMeetUnavailableReason(state)} ${FACULTY_MEET_SOURCE_NOTE}</p>
+    </div>`;
+  }
+  if (done) {
+    const minutes = rec.lastMinutes?.minutes || latestFacultyMeetMinutes(state, ev)?.minutes || (state.facultyMeetings || [])[0]?.minutes || "";
+    return `<div class="paper visit-panel faculty-meet-panel" data-faculty-meet-panel="1">
+      <h3>教职工大会</h3>
+      <p class="muted">本学期这场教职工大会已经参加过了。下面是会议纪要，也可在学校日志里查阅。${FACULTY_MEET_SOURCE_NOTE}</p>
+      <p>${minutes}</p>
+    </div>`;
+  }
+  const brief = composeFacultyMeetBrief(state, ev);
+  const options = facultyMeetOptionsFor(state, ev);
+  const btns = (options.length ? options : FACULTY_MEET_ACTIONS).map((o) => `<button type="button" data-faculty-meet="${o.id}">${o.label}</button>`).join("");
+  return `<div class="paper visit-panel faculty-meet-panel" data-faculty-meet-panel="1">
+      <h3>教职工大会</h3>
+      <p class="muted">开学典礼或报到可玩日之后最近的上课工作日，办公室坐班可以参加一次全校教职工大会。每一次开学最多一次。由校领导主持，你以任课老师身份到场听会，不是主持人。${FACULTY_MEET_SOURCE_NOTE}</p>
+      <p>${brief?.shortPoints || "到场听校领导布置本学期校内要求。"}</p>
+      <div class="row-actions">${btns}</div>
+    </div>`;
+}
+
+function bindFacultyMeetActions(host) {
+  host.querySelectorAll("[data-faculty-meet]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const r = handleFacultyMeet(state, b.dataset.facultyMeet);
+      toast(r.ok ? r.text : r.reason);
+      persist(); render();
+    };
+  });
+}
+
+function gradeMeetPanelHtml() {
+  if (!state) return "";
+  if (!isGradeMeetWindow(state)) return "";
+  ensureGradeMeetState(state);
+  const exam = currentGradeMeetExam(state);
+  const rec = state.gradeMeet || {};
+  const done = exam && hasGradeMeet(state, exam);
+  if (!isGradeMeetOpen(state) && !done) {
+    return `<div class="paper visit-panel grade-meet-panel" data-grade-meet-panel="1">
+      <h3>年级会</h3>
+      <p class="muted">${gradeMeetUnavailableReason(state)} ${GRADE_MEET_SOURCE_NOTE}</p>
+    </div>`;
+  }
+  if (done) {
+    const minutes = rec.lastMinutes?.minutes || latestGradeMeetMinutes(state, exam)?.minutes || (state.gradeMeetings || [])[0]?.minutes || "";
+    return `<div class="paper visit-panel grade-meet-panel" data-grade-meet-panel="1">
+      <h3>年级会</h3>
+      <p class="muted">本场「${exam?.examName || "这场考试"}」的年级会已经开过。下面是会议纪要，也可在学校日志里查阅。${GRADE_MEET_SOURCE_NOTE}</p>
+      <p>${minutes}</p>
+    </div>`;
+  }
+  const brief = composeGradeMeetBrief(state, exam);
+  const options = gradeMeetOptionsFor(state, exam);
+  const btns = (options.length ? options : GRADE_MEET_ACTIONS).map((o) => `<button type="button" data-grade-meet="${o.id}">${o.label}</button>`).join("");
+  return `<div class="paper visit-panel grade-meet-panel" data-grade-meet-panel="1">
+      <h3>年级会</h3>
+      <p class="muted">本校月考、期中、期末或模拟成绩公布后，办公室坐班可以参加一场年级会。每一场对应考试只开一次。由年级主任主持，你以任课老师身份到场听会，不是主持人。${GRADE_MEET_SOURCE_NOTE}</p>
+      <p><b>本场考试</b>　${exam?.examName || ""}</p>
+      <p>${brief?.shortPoints || "到场听年级主任布置作息、纪律和下阶段安排。"}</p>
+      <div class="row-actions">${btns}</div>
+    </div>`;
+}
+
+function bindGradeMeetActions(host) {
+  host.querySelectorAll("[data-grade-meet]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const r = handleGradeMeet(state, b.dataset.gradeMeet);
+      toast(r.ok ? r.text : r.reason);
+      persist(); render();
+    };
+  });
+}
+
 function officeCollabHtml() {
 
   const watch = homeworkWatchlist(state.homework, state);
@@ -2081,6 +2176,8 @@ function officeCollabHtml() {
     ${groupPrepPanelHtml()}
     ${weekendHwPanelHtml()}
     ${dutyWeekPanelHtml()}
+    ${facultyMeetPanelHtml()}
+    ${gradeMeetPanelHtml()}
     ${openingDayPanelHtml()}
     ${tiaokePanelHtml()}`;
 }
@@ -2101,6 +2198,8 @@ function bindOfficeActions(host) {
   bindGroupPrepActions(host);
   bindWeekendHwActions(host);
   bindDutyWeekActions(host);
+  bindFacultyMeetActions(host);
+  bindGradeMeetActions(host);
   bindOpeningDayActions(host);
   bindObserveActions(host);
   bindProctorActions(host);
@@ -3184,13 +3283,19 @@ function viewLog(host) {
   const studyHallMinutes = (state.studyHalls || []).map((m) => `<div class="log-item"><b>${m.date}</b> 自习看班${m.slotLabel ? "「" + m.slotLabel + "」" : ""}　${m.minutes}</div>`);
   const weekendHwMinutes = (state.weekendHomeworks || []).map((m) => `<div class="log-item"><b>${m.date}</b> 周末作业${m.topic ? "「" + m.topic + "」" : ""}　${m.minutes}</div>`);
   const dutyWeekMinutes = (state.dutyWeeks || []).map((m) => `<div class="log-item"><b>${m.date}</b> 值周${m.actionId ? "「" + (DUTY_WEEK_ACTIONS.find((a)=>a.id===m.actionId)?.label || m.actionId) + "」" : ""}　${m.minutes}</div>`);
+  const facultyMinutes = (state.facultyMeetings || []).map((m) => `<div class="log-item"><b>${m.date}</b> 教职工大会　${m.minutes}</div>`);
+  const gradeMinutes = (state.gradeMeetings || []).map((m) => `<div class="log-item"><b>${m.date}</b> 年级会${m.examName ? "「" + m.examName + "」" : ""}　${m.minutes}</div>`);
   const minutes = qualityMinutes.concat(groupMinutes).join("");
   const openingBlock = openingMinutes.join("");
   const studyHallBlock = studyHallMinutes.join("");
   const weekendHwBlock = weekendHwMinutes.join("");
   const dutyWeekBlock = dutyWeekMinutes.join("");
+  const facultyBlock = facultyMinutes.join("");
+  const gradeBlock = gradeMinutes.join("");
   host.innerHTML = `<h3>近期校历</h3>${cal || "<p class=\"muted\">暂无后续安排</p>"}
     ${minutes ? `<h3>备课组会议纪要</h3>${minutes}` : ""}
+    ${facultyBlock ? `<h3>教职工大会纪要</h3>${facultyBlock}` : ""}
+    ${gradeBlock ? `<h3>年级会纪要</h3>${gradeBlock}` : ""}
     ${openingBlock ? `<h3>开学纪要</h3>${openingBlock}` : ""}
     ${studyHallBlock ? `<h3>自习看班纪要</h3>${studyHallBlock}` : ""}
     ${weekendHwBlock ? `<h3>周末作业纪要</h3>${weekendHwBlock}` : ""}
