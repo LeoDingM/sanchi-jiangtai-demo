@@ -1,12 +1,12 @@
 /** 按江西公开投档线/位次将高考分数对应到真实大学，文理、年份、批次分开。 */
-import { provincialLines, provincialRank, universities, uniTier, QINGBEI, gaokaoScheme, provincialEnrollmentBatch } from "./jiangxi.js?v=t66u2";
-import { formatSchoolName } from "./schoolNames.js?v=t66u2";
-import { INSERT_REPEAT_CLASS_NOS, TIER } from "./config.js?v=t66u2";
-import { hash01 } from "./prng.js?v=t66u2";
+import { provincialLines, provincialRank, universities, uniTier, QINGBEI, gaokaoScheme, provincialEnrollmentBatch } from "./jiangxi.js?v=t73u2";
+import { formatSchoolName } from "./schoolNames.js?v=t73u2";
+import { INSERT_REPEAT_CLASS_NOS, TIER } from "./config.js?v=t73u2";
+import { hash01 } from "./prng.js?v=t73u2";
 import {
   recruitOutcome, recruitPolicy, isQingbeiName, meetsLineWithConcession,
   studentContestAwards,
-} from "./contests.js?v=t66u2";
+} from "./contests.js?v=t73u2";
 
 /** 校内规则示意：不是官方征集志愿名单，也不计入省控一本上线人数。 */
 export const SUPPLEMENT_SOURCE = "校内规则示意：离一本省控线很近的二本可能被弱一本院校的冷门专业征集，不是官方征集志愿名单，也不计入省控一本上线人数。";
@@ -467,7 +467,9 @@ export function admitCohort(students, scoreMap, year, opts = {}) {
       const no = Number(s.classNo);
       const already = classCount[no] || 0;
       const rawLine = tr === "wen" ? 644 : 686;
-      if (already >= 5 && (adm.usedConcession || sc.total < rawLine)) {
+      // 0 班单班清北帽 3，1 班（文科）帽 2，其余层次仍为 5。不把 0 班上限拆到 6–7。
+      const classCap = no === 0 ? 3 : (no === 1 ? 2 : 5);
+      if (already >= classCap && (adm.usedConcession || sc.total < rawLine)) {
         adm = admitStudent(s, sc.total, year, {
           ...ctx,
           recruit: { policy: recruitPolicy(year), eligible: true, applied: true, passed: false, university: "", concession: 0 },

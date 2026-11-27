@@ -2,11 +2,11 @@
  * 学生个人履历：职务、比赛、所处水平、单科异常优异、近几次发挥。
  * 只组织已有事实，不编造奖项、职务、分数或排名。老师默认看不到潜力。
  */
-import { selectClassOffices, officeTitlesOf } from "./classManage.js?v=t66u2";
-import { studentContestAwards, awardsByLevel, formatAward, recruitPolicy, recruitOutcome } from "./contests.js?v=t66u2";
-import { studentExamHistory, buildStudentExamSnapshot, tierName } from "./studentHistory.js?v=t66u2";
-import { formatRankTriple } from "./displayRanks.js?v=t66u2";
-import { subjectById } from "./config.js?v=t66u2";
+import { selectClassOffices, officeTitlesOf } from "./classManage.js?v=t73u2";
+import { studentContestAwards, awardsByLevel, formatAward, recruitPolicy, recruitOutcome } from "./contests.js?v=t73u2";
+import { studentExamHistory, buildStudentExamSnapshot, tierName } from "./studentHistory.js?v=t73u2";
+import { formatRankTriple } from "./displayRanks.js?v=t73u2";
+import { subjectById } from "./config.js?v=t73u2";
 
 function classmatesOf(state, student) {
   if (!state || !student) return [];
@@ -193,7 +193,9 @@ export function buildStudentResume(state, student, { date, revealPotential = fal
       concession: recruit.concession,
       reason: recruit.reason,
     },
+    disciplines: (student.disciplines || []).filter((d) => d && (d.text || d.disciplineLabel || d.discipline)),
   };
+  facts.disciplineLines = facts.disciplines.map((d) => d.text || `${d.examDate || d.date || ""}「${d.examName || "校本考试"}」因作弊查实，给予${d.disciplineLabel || "处分"}，该次成绩已取消。`.trim());
   return { ok: true, facts, localText: formatResumeLocal(facts, { revealPotential }), revealPotential: !!revealPotential };
 }
 
@@ -218,6 +220,8 @@ export function formatResumeLocal(facts, { revealPotential = false } = {}) {
   } else {
     lines.push("近几次考试：还没有可回顾的实考记录。");
   }
+  if (facts.disciplineLines?.length) lines.push(`已查实处分：${facts.disciplineLines.join(" ")}`);
+  else lines.push("已查实处分：档案里没有已查实的校内作弊处分。");
   if (facts.recruit?.eligible) lines.push(facts.recruit.reason);
   if (revealPotential) lines.push("（以上为写实履历。潜力数值仅在上帝模式另外标明，不写入本段。）");
   return lines.join("\n");
@@ -239,6 +243,7 @@ export function resumeAiPayload(facts, { revealPotential = false } = {}) {
     各层次对照: (facts.standing?.tiers || []).map((t) => t.line),
     单科异常优异: (facts.outstanding || []).map((x) => x.text),
     近几次考试: (facts.recent || []).map((x) => x.text),
+    已查实处分: facts.disciplineLines || [],
     特殊招生: facts.recruit?.reason || "",
     禁止: revealPotential ? [] : ["潜力", "接近潜力", "潜力数值"],
   };

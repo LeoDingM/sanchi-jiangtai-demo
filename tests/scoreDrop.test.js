@@ -20,6 +20,8 @@ function exam(partial) {
     classNo: partial.classNo ?? 16,
     classRank,
     classN: partial.classN ?? 74,
+    schoolRank: partial.schoolRank ?? null,
+    schoolN: partial.schoolN ?? 1696,
     total: partial.total ?? 580,
     maxTotal: 750,
     line: partial.line || "一本",
@@ -180,4 +182,54 @@ test("AI 失败或自动模式走本地文案，且自动模式不发起在线�
   assert.match(expl.localText, /学生自己阐述/);
   const noKey = await requestScoreDropPolish(scoreDropAiPayload(expl), { settings: { apiKey: "", hasKey: false } });
   assert.equal(noKey.ok, false);
+});
+
+test("校排相对平时退步 300 名及以上也会触发，即使平时不是班上前 5", () => {
+  const hist = [
+    exam({ date: "2018-10-20", classRank: 28, schoolRank: 400, total: 520, line: "二本" }),
+    exam({ date: "2018-11-15", classRank: 30, schoolRank: 410, total: 510, line: "二本" }),
+    exam({ date: "2018-12-18", classRank: 26, schoolRank: 420, total: 525, line: "二本" }),
+    exam({ date: "2019-03-15", examName: "高二下学期月考", classRank: 32, schoolRank: 720, total: 430, line: "未达二本" }),
+  ];
+  const detected = detectScoreDrop(hist);
+  assert.equal(detected.dropped, true);
+  assert.equal(detected.sharpSchool, true);
+  assert.ok((detected.dropSchoolRank - detected.usualSchoolRank) >= 300);
+  const expl = explainScoreDrop({ id: "s-geng", name: "庚" }, hist, { seed: 8 });
+  assert.equal(expl.dropped, true);
+  assert.match(expl.systemText, /720|退步/);
+  assert.doesNotMatch(expl.systemText, /作弊已经查实/);
+});
+
+test("校排只退 299 名、或没有可比较的校排基线时不触发", () => {
+  const almost = [
+    exam({ date: "2018-10-20", classRank: 28, schoolRank: 400, total: 520, line: "二本" }),
+    exam({ date: "2018-11-15", classRank: 30, schoolRank: 410, total: 510, line: "二本" }),
+    exam({ date: "2018-12-18", classRank: 26, schoolRank: 420, total: 525, line: "二本" }),
+    exam({ date: "2019-03-15", classRank: 32, schoolRank: 709, total: 450, line: "二本" }),
+  ];
+  assert.equal(detectScoreDrop(almost).dropped, false);
+
+  const firstOnly = [
+    exam({ date: "2018-10-20", classRank: 28, schoolRank: 800, total: 430, line: "未达二本" }),
+  ];
+  assert.equal(detectScoreDrop(firstOnly).dropped, false);
+
+  const noSchool = [
+    exam({ date: "2018-10-20", classRank: 28, total: 520, line: "二本" }),
+    exam({ date: "2018-11-15", classRank: 30, total: 510, line: "二本" }),
+    exam({ date: "2018-12-18", classRank: 26, total: 525, line: "二本" }),
+    exam({ date: "2019-03-15", classRank: 32, total: 450, line: "二本" }),
+  ];
+  assert.equal(detectScoreDrop(noSchool).dropped, false);
+});
+
+test("原有班排大退步规则仍然有效", () => {
+  const hist = [
+    ...usualFront,
+    exam({ date: "2019-03-15", examName: "高二下学期月考", classRank: 42, total: 468, line: "未达二本" }),
+  ];
+  const detected = detectScoreDrop(hist);
+  assert.equal(detected.dropped, true);
+  assert.equal(detected.sharp, true);
 });

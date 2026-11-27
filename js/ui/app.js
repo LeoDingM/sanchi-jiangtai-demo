@@ -78,32 +78,39 @@ import {
   suggestPaperSignIssue, suggestPaperSignRegister, suggestPaperSignInform,
   PAPER_SIGN_ACTIONS, PAPER_SIGN_SOURCE_NOTE, PAPER_SIGN_BATCH_MIN, PAPER_SIGN_BATCH_MAX,
   PAPER_SIGN_DAY_CAP,
-} from "../domain/simulation.js?v=t66u2";
-import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t66u2";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t66u2";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t66u2";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t66u2";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t66u2";
-import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t66u2";
-import { cohortIsNewGaokao, classTrackLabel, formatElectives } from "../domain/newGaokao.js?v=t66u2";
-import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t66u2";
-import { hydrateReport } from "../domain/simulation.js?v=t66u2";
-import { renderSeating } from "./classroom.js?v=t66u2";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t66u2";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t66u2";
-import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t66u2";
-import { buildStudentResume, resumeAiPayload, formatResumeLocal } from "../domain/resume.js?v=t66u2";
-import { buildAlumniBoostBoard, alumniBoostAiPayload, validateAlumniBoostText, ALUMNI_BOOST_TITLE, ALUMNI_BOOST_SOURCE_NOTE } from "../domain/alumniBoost.js?v=t66u2";
-import { explainScoreDrop, scoreDropAiPayload, validateScoreDropText } from "../domain/scoreDrop.js?v=t66u2";
-import { sameTierFirstBoard, classFirstBoard, formatStability } from "../domain/toppers.js?v=t66u2";
-import { decorateDisplayRanks, formatRankTriple, reportRankOpts, agendaStateKey, shouldRefreshAgenda } from "../domain/displayRanks.js?v=t66u2";
-import { classOfficesFor, officeTitlesOf, selectClassOffices } from "../domain/classManage.js?v=t66u2";
-import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t66u2";
-import { provincialLines, officialProvincialPack, provincialTrackLabel, provincialFirstShortLabel, provincialSecondShortLabel, provincialFirstLabel, provincialSecondLabel } from "../domain/jiangxi.js?v=t66u2";
-import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t66u2";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t66u2";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t66u2";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t66u2";
+} from "../domain/simulation.js?v=t73u2";
+import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t73u2";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t73u2";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t73u2";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t73u2";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t73u2";
+import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t73u2";
+import { classTrackLabel } from "../domain/newGaokao.js?v=t73u2";
+import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t73u2";
+import { hydrateReport } from "../domain/simulation.js?v=t73u2";
+import { renderSeating } from "./classroom.js?v=t73u2";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t73u2";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t73u2";
+import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t73u2";
+import { buildStudentResume, resumeAiPayload, formatResumeLocal } from "../domain/resume.js?v=t73u2";
+import { buildAlumniBoostBoard, alumniBoostAiPayload, validateAlumniBoostText, ALUMNI_BOOST_TITLE, ALUMNI_BOOST_SOURCE_NOTE } from "../domain/alumniBoost.js?v=t73u2";
+import { explainScoreDrop, scoreDropAiPayload, validateScoreDropText, listScoreDropEntries } from "../domain/scoreDrop.js?v=t73u2";
+import { formatDisciplineBoard } from "../domain/cheating.js?v=t73u2";
+import {
+  buildStudentScoreTrendFacts, formatLocalStudentScoreTrend, studentScoreTrendChartModel,
+  studentScoreTrendAiPayload, validateScoreTrendText,
+  buildClassScoreTrendFacts, formatLocalClassScoreTrend, classScoreTrendChartModel,
+  classScoreTrendAiPayload, SCORE_TREND_SOURCE_NOTE,
+} from "../domain/scoreTrend.js?v=t73u2";
+import { sameTierFirstBoard, classFirstBoard, formatStability } from "../domain/toppers.js?v=t73u2";
+import { decorateDisplayRanks, formatRankTriple, reportRankOpts, agendaStateKey, shouldRefreshAgenda } from "../domain/displayRanks.js?v=t73u2";
+import { classOfficesFor, officeTitlesOf, selectClassOffices } from "../domain/classManage.js?v=t73u2";
+import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t73u2";
+import { provincialLines, officialProvincialPack, provincialTrackLabel, provincialFirstShortLabel, provincialSecondShortLabel, provincialFirstLabel, provincialSecondLabel } from "../domain/jiangxi.js?v=t73u2";
+import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t73u2";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t73u2";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t73u2";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t73u2";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
@@ -112,7 +119,8 @@ import {
   parseAiCommentary, emptyAiCommentary,
   requestTalkAdvice, requestTeachingReflection, requestResumePolish,
   requestAlumniBoostPolish, requestScoreDropPolish,
-} from "../domain/examAi.js?v=t66u2";
+  requestStudentScoreTrend, requestClassScoreTrend,
+} from "../domain/examAi.js?v=t73u2";
 
 let state = null;
 let view = "classroom";
@@ -180,6 +188,7 @@ function resumePanelHtml(student, { compact = false } = {}) {
     ${tierExtra ? `<p class="muted">${escapeHtml(tierExtra)}</p>` : ""}
     <p><b>单科异常优异</b></p><ul>${outLi}</ul>
     <p><b>近几次考试发挥</b></p><ul>${recLi}</ul>
+    <p><b>已查实处分</b></p><ul>${(f.disciplineLines || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("") || "<li>档案里没有已查实的校内作弊处分。</li>"}</ul>
     ${recruit}
     <div class="row-actions"><button type="button" class="talk-btn" data-ai-resume="${escapeHtml(student.id)}">用 AI 润色履历</button></div>
     <p class="notice" id="resume-ai-status" hidden></p>
@@ -271,12 +280,20 @@ function scoreDropPanelHtml(student, { compact = false } = {}) {
   const expl = explainScoreDrop(student, studentExamHistory(state, student.id), { seed: state.seed ?? 1 });
   if (!expl.dropped) return "";
   const exam = expl.exam || {};
+  const schoolBit = expl.sharpSchool && expl.dropSchoolRank != null
+    ? `校排第 ${expl.dropSchoolRank} 名（平时大约第 ${Math.round(expl.usualSchoolRank)} 名）`
+    : "";
+  const classBit = expl.dropRank != null
+    ? `班排第 ${expl.dropRank} 名${expl.usualRank != null ? "，平时大约第 " + Math.round(expl.usualRank) + " 名" : ""}`
+    : "";
   const head = compact
-    ? `<p>${escapeHtml((exam.date || "") + "「" + (exam.examName || "这次考试") + "」班排第 " + (expl.dropRank ?? "—") + " 名，平时大约第 " + Math.round(expl.usualRank) + " 名。")}</p>`
+    ? `<p>${escapeHtml((exam.date || "") + "「" + (exam.examName || "这次考试") + "」" + [classBit, schoolBit].filter(Boolean).join("；") + "。")}</p>`
     : `<p class="muted">${escapeHtml(expl.sourceNote)}</p>`;
-  return `<div class="paper visit-panel score-drop-panel" data-score-drop-panel="${escapeHtml(student.id)}">
+  return `<div class="paper visit-panel score-drop-panel" id="score-drop-panel" data-score-drop-panel="${escapeHtml(student.id)}">
     <h3>${expl.title}</h3>
+    <p class="notice">该生这次考试明显退步。可先看下面的原因，或点「AI 分析近 5 次成绩」。若要当面询问，再用谈话按钮「询问学习 / 关注状态 / 谈心」（占用当日谈话次数）。查看原因本身不占用谈话次数。</p>
     ${head}
+    <div class="row-actions"><button type="button" data-open-trend="${escapeHtml(student.id)}">AI 分析近 5 次成绩</button></div>
     <p><b>系统说明</b></p>
     <p>${escapeHtml(expl.systemText)}</p>
     <p><b>学生自己阐述</b></p>
@@ -316,6 +333,225 @@ function bindScoreDropActions(host) {
       showLocal((err?.message || "润色失败") + " 已改用本地说明。");
     }
   };
+}
+
+
+function cohortReports() {
+  const year = state?.player?.cohortYear;
+  return listExamReports(state, year != null ? { entryYear: year } : {});
+}
+
+function playerScoreDropEntries(examId = null) {
+  return listScoreDropEntries(clsStudents(), cohortReports(), { seed: state.seed ?? 1, examId });
+}
+
+function openStudentProfile(id, hash) {
+  if (id) selectedId = id;
+  view = "profile";
+  render();
+  if (hash) {
+    const el = document.querySelector(hash);
+    if (el) el.scrollIntoView({ block: "nearest" });
+  }
+}
+
+function openClassScoreTrendView() {
+  view = "grades";
+  render();
+  const el = document.querySelector("#class-score-trend");
+  if (el) el.scrollIntoView({ block: "nearest" });
+}
+
+function disciplineBoardHtml(exam = null) {
+  const board = formatDisciplineBoard(state.disciplineNotices || [], exam);
+  const items = (n) => (n || []).map((x) => `<div class="discipline-item"><b>${escapeHtml(x.date || x.examDate || "")}</b> ${escapeHtml(x.title || "校内处分公告")}　${escapeHtml(x.body || "")}<div class="muted">${escapeHtml(x.source || "")}</div></div>`).join("");
+  const currentBlock = exam
+    ? (board.currentNote
+      ? `<p class="notice">${escapeHtml(board.currentNote)}</p>`
+      : (board.current.length ? items(board.current) : ""))
+    : "";
+  const histBlock = board.history.length
+    ? `<p><b>历史查实公告</b>（按时间倒序）</p>${items(board.history)}`
+    : `<p class="muted">还没有已查实的校内处分公告。未查实的举报不会出现在这里。</p>`;
+  return `<div class="paper discipline-board" id="discipline-board">
+    <h3>${escapeHtml(board.title)}</h3>
+    ${exam ? `<p class="muted">场次：${escapeHtml((exam.date || "") + "「" + (exam.examName || "") + "」")}</p>` : ""}
+    ${currentBlock}
+    ${histBlock}
+  </div>`;
+}
+
+function scoreDropBoardHtml({ exam = null, students = null, limit = 24 } = {}) {
+  const list = students || clsStudents();
+  const reports = cohortReports();
+  const entries = listScoreDropEntries(list, reports, { seed: state.seed ?? 1, examId: exam?.examId || null });
+  const rows = entries.slice(0, limit).map((e) => {
+    const bits = [];
+    if (e.dropRank != null) bits.push(`班排第 ${e.dropRank} 名`);
+    if (e.usualRank != null) bits.push(`平时约第 ${Math.round(e.usualRank)} 名`);
+    if (e.sharpSchool && e.schoolDelta != null) bits.push(`校排退步 ${e.schoolDelta} 名`);
+    return `<li>${escapeHtml(e.name)}（${e.classNo}班）「${escapeHtml(e.examName || "这次考试")}」${escapeHtml(bits.join("，"))}
+      <div class="row-actions">
+        <button type="button" data-open-drop="${escapeHtml(e.studentId)}">查看掉分原因</button>
+        <button type="button" data-open-trend="${escapeHtml(e.studentId)}">AI 分析近 5 次成绩</button>
+      </div>
+    </li>`;
+  }).join("");
+  const empty = exam
+    ? `<p class="muted">本次考试没有触发「大幅掉分」说明的学生。普通中游波动不会出现在这里。触发条件包括：平时班排稳定前 5 后突然大掉，或前列学生高考/模拟未达二本，或校排相对平时退步 300 名及以上。</p>`
+    : `<p class="muted">近几次没有触发大幅掉分说明的学生。普通中游波动不会出现在这里。</p>`;
+  return `<div class="paper score-drop-board" id="score-drop-board">
+    <h4>掉分需关注</h4>
+    <p>下列学生相对平时出现大幅退步。点「查看掉分原因」进入档案说明，不占用当日谈话次数。</p>
+    ${entries.length ? `<ul>${rows}</ul>` : empty}
+  </div>`;
+}
+
+function studentScoreTrendPanelHtml(student) {
+  if (!student) return "";
+  const facts = buildStudentScoreTrendFacts(student, studentExamHistory(state, student.id), { revealPotential: godReveal() });
+  const local = formatLocalStudentScoreTrend(facts);
+  if (!facts.ok) {
+    return `<div class="paper score-trend-panel" id="student-score-trend"><h3>近 5 次成绩分析</h3><p class="muted">${escapeHtml(facts.reason)}</p></div>`;
+  }
+  const model = studentScoreTrendChartModel(facts);
+  return `<div class="paper score-trend-panel" id="student-score-trend" data-score-trend-panel="${escapeHtml(student.id)}">
+    <h3>近 5 次成绩分析</h3>
+    <p class="muted">${escapeHtml(facts.examCountNote)} ${escapeHtml(SCORE_TREND_SOURCE_NOTE)} 不占用每日谈话次数。</p>
+    <div class="charts">
+      <div class="chart-card"><h4>总分走势（折合 750 分）</h4><canvas id="st-trend-total" width="640" height="200"></canvas></div>
+      <div class="chart-card"><h4>班排 / 校排（名次在上为靠前）</h4><canvas id="st-trend-rank" width="640" height="200"></canvas></div>
+      <div class="chart-card"><h4>${escapeHtml(model.subjects.title || "各科得分率")}</h4><canvas id="st-trend-subj" width="640" height="200"></canvas></div>
+    </div>
+    <h4>文字分析</h4>
+    <p class="score-trend-text" id="st-trend-text">${escapeHtml(local)}</p>
+    <div class="row-actions"><button type="button" class="talk-btn" data-ai-score-trend="${escapeHtml(student.id)}">AI 分析近 5 次成绩</button></div>
+    <p class="notice" id="st-trend-status" hidden></p>
+  </div>`;
+}
+
+function classScoreTrendPanelHtml() {
+  const classNo = state.player?.classNo;
+  if (classNo == null) return "";
+  const facts = buildClassScoreTrendFacts(cohortReports(), { classNo, className: `卓行${classNo}班`, revealPotential: godReveal() });
+  const local = formatLocalClassScoreTrend(facts);
+  if (!facts.ok) {
+    return `<div class="paper score-trend-panel" id="class-score-trend"><h3>全班成绩 AI 分析</h3><p class="muted">${escapeHtml(facts.reason)}</p></div>`;
+  }
+  const model = classScoreTrendChartModel(facts);
+  return `<div class="paper score-trend-panel" id="class-score-trend">
+    <h3>全班成绩 AI 分析</h3>
+    <p class="muted">${escapeHtml(facts.examCountNote)} ${escapeHtml(SCORE_TREND_SOURCE_NOTE)} 不占用每日谈话次数。无密钥或失败时仍显示图表和本地文字。</p>
+    <div class="charts">
+      <div class="chart-card"><h4>班级均分走势（折合 750 分）</h4><canvas id="cl-trend-avg" width="640" height="200"></canvas></div>
+      <div class="chart-card"><h4>班级均校排（名次在上为靠前）</h4><canvas id="cl-trend-rank" width="640" height="200"></canvas></div>
+      <div class="chart-card"><h4>校内上线人数变化</h4><canvas id="cl-trend-line" width="640" height="200"></canvas></div>
+      <div class="chart-card"><h4>${escapeHtml(model.bands.title || "分数段人数")}</h4><canvas id="cl-trend-bands" width="640" height="200"></canvas></div>
+    </div>
+    <h4>文字分析</h4>
+    <p class="score-trend-text" id="cl-trend-text">${escapeHtml(local)}</p>
+    <div class="row-actions"><button type="button" class="talk-btn" data-ai-class-trend="1">全班成绩 AI 分析</button></div>
+    <p class="notice" id="cl-trend-status" hidden></p>
+  </div>`;
+}
+
+function bindScoreTrendPanels(host) {
+  if (!host) return;
+  host.querySelectorAll("[data-open-drop]").forEach((b) => {
+    b.onclick = (ev) => { ev.stopPropagation(); openStudentProfile(b.dataset.openDrop, "#score-drop-panel"); };
+  });
+  host.querySelectorAll("[data-open-trend]").forEach((b) => {
+    b.onclick = (ev) => { ev.stopPropagation(); openStudentProfile(b.dataset.openTrend, "#student-score-trend"); };
+  });
+  host.querySelectorAll("[data-open-class-trend]").forEach((b) => {
+    b.onclick = (ev) => { ev.stopPropagation(); openClassScoreTrendView(); };
+  });
+  const stuCanvasT = host.querySelector("#st-trend-total");
+  const sid = host.querySelector("[data-score-trend-panel]")?.dataset.scoreTrendPanel || selectedId;
+  const student = sid ? (findStudent(sid) || findStudentInState(state, sid)) : null;
+  if (stuCanvasT && student) {
+    const facts = buildStudentScoreTrendFacts(student, studentExamHistory(state, student.id), { revealPotential: godReveal() });
+    if (facts.ok) {
+      const model = studentScoreTrendChartModel(facts);
+      drawLineChart(stuCanvasT, model.total);
+      const rk = host.querySelector("#st-trend-rank");
+      if (rk) drawLineChart(rk, model.ranks);
+      const sub = host.querySelector("#st-trend-subj");
+      if (sub) drawBarChart(sub, model.subjects);
+    }
+  }
+  const clAvg = host.querySelector("#cl-trend-avg");
+  if (clAvg) {
+    const facts = buildClassScoreTrendFacts(cohortReports(), { classNo: state.player.classNo, className: `卓行${state.player.classNo}班`, revealPotential: godReveal() });
+    if (facts.ok) {
+      const model = classScoreTrendChartModel(facts);
+      drawLineChart(clAvg, model.avg);
+      const rk = host.querySelector("#cl-trend-rank");
+      if (rk) drawLineChart(rk, model.ranks);
+      const ln = host.querySelector("#cl-trend-line");
+      if (ln) drawLineChart(ln, model.lines);
+      const bd = host.querySelector("#cl-trend-bands");
+      if (bd) drawBarChart(bd, model.bands);
+    }
+  }
+  const aiStu = host.querySelector("[data-ai-score-trend]");
+  if (aiStu) {
+    aiStu.onclick = async (ev) => {
+      ev.stopPropagation();
+      const id = aiStu.dataset.aiScoreTrend;
+      const stu = findStudent(id) || findStudentInState(state, id);
+      const status = host.querySelector("#st-trend-status");
+      const textEl = host.querySelector("#st-trend-text");
+      const facts = buildStudentScoreTrendFacts(stu, studentExamHistory(state, stu?.id), { revealPotential: godReveal() });
+      const local = formatLocalStudentScoreTrend(facts);
+      const showLocal = (reason) => {
+        if (status) { status.hidden = false; status.textContent = (reason ? reason + " " : "") + "以下为本地分析。"; }
+        if (textEl) textEl.textContent = local;
+      };
+      if (!facts.ok) { showLocal(facts.reason); return; }
+      const conf = loadAiSettings();
+      if (!conf.hasKey) { showLocal("尚未保存密钥。"); return; }
+      if (status) { status.hidden = false; status.textContent = "正在按档案生成文字分析…"; }
+      try {
+        const r = await requestStudentScoreTrend(studentScoreTrendAiPayload(facts), { settings: conf });
+        if (!r.ok) { showLocal(r.reason || "分析失败"); return; }
+        const checked = validateScoreTrendText(r.text, facts);
+        if (!checked.ok) { showLocal(checked.reason); return; }
+        if (status) { status.hidden = false; status.textContent = "已按档案核对，图表仍是真实成绩，文字未编造作弊或缺考。"; }
+        if (textEl) textEl.textContent = checked.text;
+      } catch (err) {
+        showLocal(err?.message || "分析失败");
+      }
+    };
+  }
+  const aiCls = host.querySelector("[data-ai-class-trend]");
+  if (aiCls) {
+    aiCls.onclick = async (ev) => {
+      ev.stopPropagation();
+      const status = host.querySelector("#cl-trend-status");
+      const textEl = host.querySelector("#cl-trend-text");
+      const facts = buildClassScoreTrendFacts(cohortReports(), { classNo: state.player.classNo, className: `卓行${state.player.classNo}班`, revealPotential: godReveal() });
+      const local = formatLocalClassScoreTrend(facts);
+      const showLocal = (reason) => {
+        if (status) { status.hidden = false; status.textContent = (reason ? reason + " " : "") + "以下为本地分析。"; }
+        if (textEl) textEl.textContent = local;
+      };
+      if (!facts.ok) { showLocal(facts.reason); return; }
+      const conf = loadAiSettings();
+      if (!conf.hasKey) { showLocal("尚未保存密钥。"); return; }
+      if (status) { status.hidden = false; status.textContent = "正在按本班档案生成文字分析…"; }
+      try {
+        const r = await requestClassScoreTrend(classScoreTrendAiPayload(facts), { settings: conf });
+        if (!r.ok) { showLocal(r.reason || "分析失败"); return; }
+        const checked = validateScoreTrendText(r.text, facts);
+        if (!checked.ok) { showLocal(checked.reason); return; }
+        if (status) { status.hidden = false; status.textContent = "已按档案核对，图表仍是真实成绩，文字未编造作弊或缺考。"; }
+        if (textEl) textEl.textContent = checked.text;
+      } catch (err) {
+        showLocal(err?.message || "分析失败");
+      }
+    };
+  }
 }
 
 function talkFactPayload(student, topic) {
@@ -948,6 +1184,7 @@ function examSourceNotice(report) {
 }
 
 function seatMarks(students) {
+  seatMarks._dropIds = null;
   const slot = currentSlot(state);
   const watch = new Set(homeworkWatchlist(state.homework, state).map((r) => r.id));
   const hands = slot?.isTutoring ? new Set(raisedHands(state, students).map((s) => s.id)) : new Set();
@@ -960,6 +1197,7 @@ function seatMarks(students) {
   const friendIds = new Set((peers.friends || []).map((f) => f.id));
   for (const s of students) {
     const lateNow = slot?.isMath && !slot?.isTutoring && lateSet.has(s.id);
+    const dropIds = seatMarks._dropIds || (seatMarks._dropIds = new Set(playerScoreDropEntries().map((e) => e.studentId)));
     marks[s.id] = {
       hand: hands.has(s.id),
       watch: watch.has(s.id),
@@ -969,6 +1207,7 @@ function seatMarks(students) {
       desk: !!(peers.deskMate && s.id === peers.deskMate.id),
       friend: friendIds.has(s.id),
       tense: !!(peers.tense && s.id === peers.tense.id),
+      scoreDrop: dropIds.has(s.id),
     };
   }
   return marks;
@@ -1310,6 +1549,7 @@ function deskPanelHtml(student, slot, scene) {
 
 function bindDeskAndTutor(host) {
   bindScoreDropActions(host);
+  bindScoreTrendPanels(host);
   host.querySelectorAll("[data-tutor]").forEach((b) => {
     b.onclick = (ev) => {
       ev.stopPropagation();
@@ -1375,7 +1615,8 @@ function viewClassroom(host) {
   const seatNote = placementSeatNotice(state);
   host.innerHTML = `<h3>教室座位表</h3>
     ${seatNote ? `<p class="notice">${seatNote}</p>` : ""}
-    <p class="notice">现在是${slotLine}${absenceNotice(sts)}。金圈是举手，红点是作业还要盯，颜色偏暗的是走神或精力不足，橙点是这节正课迟到，空灰位是今天请假。点开座位后，浅金圈是同桌，淡绿圈是要好的同学。点击座位按当前课时处理，不必先跳到档案。任教班为卓行16班，74 人。</p>
+    <p class="notice">现在是${slotLine}${absenceNotice(sts)}。金圈是举手，红点是作业还要盯，颜色偏暗的是走神或精力不足，橙点是这节正课迟到，座位下方橙三角是这次大幅掉分需关注，空灰位是今天请假。点开座位后，浅金圈是同桌，淡绿圈是要好的同学。点击座位按当前课时处理，不必先跳到档案。任教班为卓行16班，74 人。</p>
+    <div class="row-actions"><button type="button" data-open-class-trend="1">全班成绩 AI 分析</button></div>
     ${visitPanelHtml()}
     ${alumniBoostPanelHtml()}
     ${doorVisitPanelHtml()}
@@ -1392,6 +1633,7 @@ function viewClassroom(host) {
   const board = slot ? `${formatSlotLabel(slot)} · 卓行16班` : "宁川中学 · 卓行16班";
   renderSeating(c, sts, selectedId, (id) => { selectedId = id; render(); }, { boardTitle: board, marks });
   bindDeskAndTutor(host);
+  bindScoreTrendPanels(host);
   bindVisitActions(host);
   bindAlumniBoostActions(host);
   bindHomeVisitActions(host);
@@ -1546,6 +1788,7 @@ function viewProfile(host) {
       </div>
       <div class="paper">
         ${scoreDropPanelHtml(s)}
+        ${studentScoreTrendPanelHtml(s)}
         <p>谈话（${(() => { const sc = periodTalkScene(state); return `本时段还可 ${Math.max(0, sc.cap - (state.talksThisPeriod || 0))} 人，本日余 ${Math.max(0, 5 - (state.talksToday || 0))} 人`; })()}）</p>
         <div class="row-actions">
           ${["鼓励","询问学习","关注状态","谈心"].map((t)=>`<button type="button" class="talk-btn" data-talk="${t}">${t}</button>`).join("")}
@@ -1624,6 +1867,7 @@ function viewProfile(host) {
   });
   bindResumeActions(host, s);
   bindScoreDropActions(host);
+  bindScoreTrendPanels(host);
   const aiTalk = host.querySelector("#ai-talk");
   if (aiTalk) {
     aiTalk.onclick = async () => {
@@ -2719,6 +2963,7 @@ function viewClassManage(host) {
   const minutes = meetings.slice().reverse().map((m) => `<p class="muted">${m.date}　「${m.theme}」· ${m.mode === "assist" ? "协助" : "旁听"}<br/>${m.minutes}</p>`).join("")
     || `<p class="muted">还没有班会纪要。等到班会课再旁听或协助，纪要会记在这里。</p>`;
   host.innerHTML = `<h3>班级管理 · ${state.player.cohortYear}级卓行${state.player.classNo}班</h3>
+    <div class="row-actions"><button type="button" data-open-class-trend="1">全班成绩 AI 分析</button></div>
     <p class="notice">${state.player.official ? "你是本班数学教师（已转正）" : "你是本班数学实习教师"}，协助班主任${home}管理日常事务：查看班委和值日、整理班情、在班会课旁听或协助。班委由本班学生特质硬定，一人一职；分班后若人员变化会按新名单重算。你不能代替班主任主持班会，也不能随意撤换班委。</p>
     <div class="kpi">
       <div><span>班主任</span><b>${home}</b></div>
@@ -2774,6 +3019,7 @@ function viewClassManage(host) {
   const hostBtn = host.querySelector("#cm-host");
   if (hostBtn) hostBtn.onclick = () => { const r = hostClassMeeting(state); toast(r.ok ? r.text : r.reason); persist(); render(); };
   bindHomeVisitActions(host);
+  bindScoreTrendPanels(host);
 }
 
 function viewTeach(host) {
@@ -2915,32 +3161,31 @@ function viewPlacement(host) {
   const report = listExamReports(state, { entryYear: state.player.cohortYear })[0];
   const classRows = (report?.classes || []).filter((x) => !x.repeat).sort((a, b) => a.classNo - b.classNo);
   const sameTier = classRows.filter((x) => x.tier === (mine[0]?.tier || "zhuoxing"));
-  const newGk = cohortIsNewGaokao(state.player.cohortYear);
-  const trackName = (tr) => classTrackLabel(newGk ? "new-3+1+2" : "wenli-batches", tr);
+  const trackName = (tr) => classTrackLabel("wenli-batches", tr);
   host.innerHTML = `<h3>分班调整</h3>
-    <p class="notice">两次分班不得混为一谈。第一次在高一上期末后：${newGk ? "按江西新高考 3+1+2 选科（首选物理或历史，再选两门），不是文理分科" : "文理分科"}，并在凌霄及以下做梯队晋级淘汰；云岫 0/1 班不按普通淘汰踢出实验班，2—4 班保持顶尖梯队。第二次在高一下期末后：${newGk ? "不改首选、不跨梯队，只在同首选（物理类/历史类）同层次内部均衡重组" : "不再分文理、不跨梯队，只在同科类同层次内部均衡重组"}，0/1 班保持稳定。</p>
+    <p class="notice">两次分班不得混为一谈。第一次在高一上期末后：文理分科，并在凌霄及以下做梯队晋级淘汰；云岫 0/1 班不按普通淘汰踢出实验班，2—4 班保持顶尖梯队。第二次在高一下期末后：不再分文理、不跨梯队，只在同科类同层次内部均衡重组，0/1 班保持稳定。</p>
     <div class="kpi">
-      <div><span>第一次分班（${newGk ? "选科+梯队" : "文理+梯队"}）</span><b>${p1done ? "已完成" : "未到或未做"}</b></div>
+      <div><span>第一次分班（文理+梯队）</span><b>${p1done ? "已完成" : "未到或未做"}</b></div>
       <div><span>第二次分班（同层均衡）</span><b>${p2done ? "已完成" : "未到或未做"}</b></div>
       <div><span>任教班</span><b>${state.player.cohortYear}级卓行${state.player.classNo}班 · ${mine.length}人</b></div>
     </div>
     ${p1done ? `<p class="notice">${placementSeatNotice(state) || "这是分班后的新座次。"}教室座位表已按新座号排列。</p>` : ""}
     <div class="paper">
-      <h3>当前编制（${p1done ? (newGk ? "已选科" : "已分科") : (newGk ? "选科前" : "分科前")}）</h3>
+      <h3>当前编制（${p1done ? "已分科" : "分科前"}）</h3>
       <table><thead><tr><th>科类</th><th>层次</th><th>人数</th><th>班级</th></tr></thead>
       <tbody>${Object.values(byTier).sort((a,b)=>String(a.tier).localeCompare(String(b.tier))).map((g)=>`<tr><td>${trackName(g.track)}</td><td>${tierLabel(g.tier)}</td><td>${g.n}</td><td>${Object.entries(g.classes).sort((a,b)=>a[0]-b[0]).map(([n,c])=>`${n}班${c}人`).join("、")}</td></tr>`).join("")}</tbody></table>
     </div>
     <h3>第一次分班去向</h3>
-    ${p1done ? `<p class="notice">全年级跨班调整 ${p1moves.length} 人。进入卓行${state.player.classNo}班 ${in16.length} 人，从本班调出 ${out16.length} 人。${newGk ? "0/1 班只做首选物理/历史互换，不按普通淘汰降到卓行或笃学。" : "0/1 班只做文理互换，不按普通淘汰降到卓行或笃学。"}</p>
+    ${p1done ? `<p class="notice">全年级跨班调整 ${p1moves.length} 人。进入卓行${state.player.classNo}班 ${in16.length} 人，从本班调出 ${out16.length} 人。0/1 班只做文理互换，不按普通淘汰降到卓行或笃学。</p>
       <div class="scroll-table paper"><table><thead><tr><th>姓名</th><th>原班</th><th>新班</th><th>科类</th></tr></thead>
       <tbody>${[...in16, ...out16].slice(0, 80).map((s)=>`<tr class="${s.classNo===state.player.classNo?"me":""}"><td>${s.name}</td><td>${s.placement1.from}班</td><td>${s.placement1.to}班</td><td>${trackName(s.track)}</td></tr>`).join("") || "<tr><td colspan='4'>本班名单未发生跨班调整。</td></tr>"}</tbody></table></div>` : `<p class="notice">还没做第一次分班。用「下一阶段」推到高一上期末后的分班事件即可自动结算。</p>`}
     <h3>第二次分班（同层同科类均衡）</h3>
-    ${p2done ? `<p class="notice">只在同一层次、同一科类的原有班级之间蛇形重组，${newGk ? "不重新改选科首选，也不跨到凌霄或笃学。" : "不重新分文理，也不跨到凌霄或笃学。"}全年级同层换班 ${p2moves.length} 人；进入本班 ${p2in.length} 人，调出 ${p2out.length} 人。0/1 班保持不动。</p>
+    ${p2done ? `<p class="notice">只在同一层次、同一科类的原有班级之间蛇形重组，不重新分文理，也不跨到凌霄或笃学。全年级同层换班 ${p2moves.length} 人；进入本班 ${p2in.length} 人，调出 ${p2out.length} 人。0/1 班保持不动。</p>
       ${sameTier.length ? `<div class="paper"><p class="muted">同层次班级对照（最近一场考试均分，由个人成绩加总）</p>
         <table><thead><tr><th>班</th><th>人数</th><th>均分</th><th>最高</th></tr></thead>
         <tbody>${sameTier.map((x)=>`<tr class="${x.classNo===state.player.classNo?"me":""}"><td>${x.name||x.classNo+"班"}</td><td>${x.count}</td><td>${x.avg}</td><td>${x.max}</td></tr>`).join("")}</tbody></table></div>` : ""}
       <div class="scroll-table paper"><table><thead><tr><th>姓名</th><th>原班</th><th>新班</th><th>层次</th><th>科类</th></tr></thead>
-      <tbody>${[...p2in, ...p2out].map((s)=>`<tr class="${s.classNo===state.player.classNo?"me":""}"><td>${s.name}</td><td>${s.placement2.from}班</td><td>${s.placement2.to}班</td><td>${tierLabel(s.tier)}</td><td>${trackName(s.track)}</td></tr>`).join("") || "<tr><td colspan='5'>本班在第二次分班中没有换到其他卓行班。</td></tr>"}</tbody></table></div>` : `<p class="notice">第二次分班要等第一次完成、并且高一下学期期末之后。推进校历时会按规则自动重组，可在本页查看换班名单和同层对照，${newGk ? "不会与第一次的选科、跨梯队调整混在一起。" : "不会与第一次的文理分科、跨梯队调整混在一起。"}</p>`}`;
+      <tbody>${[...p2in, ...p2out].map((s)=>`<tr class="${s.classNo===state.player.classNo?"me":""}"><td>${s.name}</td><td>${s.placement2.from}班</td><td>${s.placement2.to}班</td><td>${tierLabel(s.tier)}</td><td>${trackName(s.track)}</td></tr>`).join("") || "<tr><td colspan='5'>本班在第二次分班中没有换到其他卓行班。</td></tr>"}</tbody></table></div>` : `<p class="notice">第二次分班要等第一次完成、并且高一下学期期末之后。推进校历时会按规则自动重组，可在本页查看换班名单和同层对照，不会与第一次的文理分科、跨梯队调整混在一起。</p>`}`;
 }
 
 function clickStudentHint() {
@@ -3089,7 +3334,7 @@ function viewGrades(host) {
   const passN = isHk ? mine.filter((r)=>r.huikaoPass).length : null;
   const jointKpi = isJoint ? jointLinesBlock(report) : "";
   const gradeTrack = report.split ? (mine[0]?.track === "wen" ? "wen" : "li") : "mixed";
-  const gradeCols = (report.scheme === "new-3+1+2" || usesComprehensive(report.scale || report.grade, { scheme: report.scheme }))
+  const gradeCols = usesComprehensive(report.scale || report.grade, { scheme: report.scheme })
     ? displayScoreColumns(report.scale || report.grade, gradeTrack, report.subjectIds, { scheme: report.scheme })
     : [];
   const gradeColHead = gradeCols.map((c) => c.name);
@@ -3118,6 +3363,9 @@ function viewGrades(host) {
     : isGk ? officialLinesBlock(report, track) + schoolLinesKpi(report, track) + `<p class="muted">${schoolLinesNote(report, track)}</p>`
     : `<div class="kpi"><div><span>试卷难度</span><b>${(report.difficulty||1).toFixed(3)}</b></div></div>` + schoolLinesKpi(report, track) + `<p class="notice">${schoolLinesNote(report, track)}</p>`;
   const payload = examAnalysisPayload(report);
+  const dropIds = new Set(listScoreDropEntries(clsStudents(), cohortReports(), { seed: state.seed ?? 1, examId: report.examId }).map((e) => e.studentId));
+  const named = (r) => `${r.name}${dropIds.has(r.studentId) ? '<span class="drop-flag">掉分</span>' : ""}`;
+  const rowHtml = mine.map((r) => `<tr data-id="${r.studentId}">${rowCells(r).replace(`<td>${r.name}</td>`, `<td>${named(r)}</td>`)}</tr>`).join("");
   host.innerHTML = `<h3>考试成绩 · 任教班</h3>
     <div class="filters"><label>场次 <select id="exsel">${examOptions()}</select></label></div>
     ${godNote}
@@ -3126,13 +3374,17 @@ function viewGrades(host) {
     ${mainKpi}
     ${!isHk?`<p class="notice">${lineCompareNotice(report)}</p><p class="notice">${classPassSummary(report, state.player.classNo)}</p>`:""}
     ${isJoint?`<p class="muted">${schoolLinesNote(report, track)}</p>`:""}
+    ${disciplineBoardHtml(report)}
+    ${scoreDropBoardHtml({ exam: report, students: clsStudents() })}
+    ${classScoreTrendPanelHtml()}
     <div class="paper"><table><thead><tr>${head.map((h)=>`<th>${h}</th>`).join("")}</tr></thead>
-    <tbody>${mine.map((r)=>`<tr data-id="${r.studentId}">${rowCells(r)}</tr>`).join("")}</tbody></table></div>
+    <tbody>${rowHtml}</tbody></table></div>
     ${toppersPanelHtml(report, listExamReports(state, { entryYear: state.player.cohortYear }), { track })}
     ${examAiPanel(report)}`;
   host.querySelector("#exsel").onchange = (e) => { examPick = e.target.value; repaintViewOnly(); };
   bindExamAi(host, report, payload);
   bindToppersCharts(host, report, listExamReports(state, { entryYear: state.player.cohortYear }), { track, classNo: state.player.classNo });
+  bindScoreTrendPanels(host);
 }
 
 function viewSettings(host) {
@@ -3631,6 +3883,9 @@ function viewOffice(host) {
       ${isHk?"":`<p class="notice">${lineCompareNotice(live, state.player.classNo)}</p>`}
       ${mainKpi}
       <p class="notice">${topLine}</p>
+      ${disciplineBoardHtml(live)}
+      ${scoreDropBoardHtml({ exam: live, students: clsStudents() })}
+      ${classScoreTrendPanelHtml()}
       <h3>各班对照</h3>
       ${board.addedRepeat ? `<p class="muted">同日高三补习班已列入本表，成绩来自这场考试的高三场次。</p>` : ""}
       <div class="paper"><table><thead><tr>${classHead.map((h)=>`<th>${h}</th>`).join("")}</tr></thead>
@@ -3641,6 +3896,7 @@ function viewOffice(host) {
       <tbody>${rows.slice(0,400).map((r)=>`<tr data-id="${r.studentId}"><td>${r.rank}</td><td>${r.name}</td><td>${r.classNo}班</td><td>${r.total}</td>${scoreCols.map(c=>`<td>${displayScoreCell(r,c)}</td>`).join("")}${lineCells(r)}${isJoint?`<td>${live.examKind==="province"?(r.cityRank??"—"):(r.countyRank??"—")}</td>${live.examKind==="province"?`<td>${r.countyRank??"—"}</td>`:""}<td>${r.jointLine?.city||"—"}</td>`:""}${live.examKind==="province"?`<td>${r.jointLine?.province||"—"}</td>`:""}</tr>`).join("")}</tbody></table>
       ${rows.length>400?`<p class='muted'>名单较长，这里先列出前 400 人。请用层次或科类筛选查看其余 ${rows.length-400} 人。点击姓名可看该生档案曲线。</p>`:""}</div>`;
       /* 点行进档案由 #view 委托处理 */
+    bindScoreTrendPanels(host);
   };
   draw();
 }
@@ -3693,7 +3949,7 @@ function viewAdmission(host) {
       <input id="q" placeholder="搜索姓名、大学或专业" />
     </div>
     <div class="kpi" id="adm-count-kpi"></div>
-    <p class="notice">顶部${officialProvincialPack(pack.year, { seed: state.seed }).simulated ? "模拟省控（模拟线，非正式官方省控）" : "公开省控"}数字${officialProvincialPack(pack.year, { seed: state.seed }).simulated ? "按规则生成" : "是官方口径"}，不随筛选变化。下列清北、上线、补录和公布人数按当前班级、层次、科类和搜索统计。未筛选时，公布人数是本届应届与复读全员（含专科及未达专科线），不是本科以上人数。上线人数按江西${pack.year}年${officialProvincialPack(pack.year, { seed: state.seed }).simulated ? "模拟省控（模拟线，非正式官方省控）" : "公开省控（国家线）"}统计，不是校内线。${officialProvincialPack(pack.year, { seed: state.seed }).scheme === "new-3+1+2" ? "「特控（省控）」只计分数达到特殊类型招生控制线的人，「本科以上」计达到本科线的人；江西从2024年起合并本科批次，不再按旧文理一批/二批点名。" : "「一批（省控）」只计分数达到官方一本省控的人；「一本补录」是离一本线很近的二本可能被弱一本院校的冷门专业征集，属于校内规则示意，不是官方征集名单，也不计入省控一本上线人数。"}</p>
+    <p class="notice">顶部${officialProvincialPack(pack.year, { seed: state.seed }).simulated ? "模拟省控（模拟线，非正式官方省控）" : "公开省控"}数字${officialProvincialPack(pack.year, { seed: state.seed }).simulated ? "按规则生成" : "是官方口径"}，不随筛选变化。下列清北、上线、补录和公布人数按当前班级、层次、科类和搜索统计。未筛选时，公布人数是本届应届与复读全员（含专科及未达专科线），不是本科以上人数。上线人数按江西${pack.year}年${officialProvincialPack(pack.year, { seed: state.seed }).simulated ? "模拟省控（模拟线，非正式官方省控）" : "公开省控（国家线）"}统计，不是校内线。「一批（省控）」只计分数达到当年一本省控（公开线或标明的模拟线）的人；「一本补录」是离一本线很近的二本可能被弱一本院校的冷门专业征集，属于校内规则示意，不是官方征集名单，也不计入省控一本上线人数。</p>
     <div class="paper" id="adm-table"></div>`;
   const yearSel = host.querySelector("#adm-year");
   if (yearSel) yearSel.onchange = () => { admissionPick = yearSel.value; repaintViewOnly(); };
@@ -3709,9 +3965,9 @@ function viewAdmission(host) {
     const rows = filterAdmissionResults(list, admissionFilter);
     const kpi = admissionCountKpis(rows);
     const lpK = officialProvincialPack(pack.year, { seed: state.seed });
-    const firstKpi = lpK.scheme === "new-3+1+2" ? "特控（省控）" : "一批（省控）";
-    const secondKpi = lpK.scheme === "new-3+1+2" ? "本科以上（省控）" : "二本以上（省控）";
-    const suppKpi = lpK.scheme === "new-3+1+2" ? "补录（不适用）" : "一本补录";
+    const firstKpi = "一批（省控）";
+    const secondKpi = "二本以上（省控）";
+    const suppKpi = "一本补录";
     host.querySelector("#adm-count-kpi").innerHTML = `<div><span>清北</span><b>${kpi.qingbei}</b></div><div><span>${firstKpi}</span><b>${kpi.first}</b></div><div><span>${suppKpi}</span><b>${kpi.supplement}</b></div><div><span>${secondKpi}</span><b>${kpi.second}</b></div><div><span>公布人数</span><b>${kpi.published}</b></div>`;
     const table = host.querySelector("#adm-table");
     if (!rows.length) {
@@ -3786,7 +4042,8 @@ function viewLog(host) {
   const facultyBlock = facultyMinutes.join("");
   const gradeBlock = gradeMinutes.join("");
   const paperSignBlock = paperSignMinutes.join("");
-  host.innerHTML = `<h3>近期校历</h3>${cal || "<p class=\"muted\">暂无后续安排</p>"}
+  const logExam = (typeof currentReport === 'function' ? currentReport() : null);
+  host.innerHTML = `${disciplineBoardHtml(logExam)}<h3>近期校历</h3>${cal || "<p class=\"muted\">暂无后续安排</p>"}
     ${minutes ? `<h3>备课组会议纪要</h3>${minutes}` : ""}
     ${facultyBlock ? `<h3>教职工大会纪要</h3>${facultyBlock}` : ""}
     ${gradeBlock ? `<h3>年级会纪要</h3>${gradeBlock}` : ""}

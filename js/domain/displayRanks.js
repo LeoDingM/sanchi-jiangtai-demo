@@ -4,7 +4,7 @@
  *
  * decorateDisplayRanks 按池建立一次名次索引再回填，避免对每个学生重复全表排序。
  */
-import { rankRows } from "./scores.js?v=t66u2";
+import { rankRows } from "./scores.js?v=t73u2";
 
 function schoolPool(rows, row, { split, includeRepeat } = {}) {
   return (rows || []).filter((r) => {

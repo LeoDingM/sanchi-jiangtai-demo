@@ -4,9 +4,9 @@
  * 2018/2019 高考走自主招生，2020 起走强基计划（2017 级高考在 2020，不得再叫自招）。
  * 通过后是降分录取，优惠只用于对照投档线，不写进高考总分。
  */
-import { hash01 } from "./prng.js?v=t66u2";
-import { QINGBEI } from "./jiangxi.js?v=t66u2";
-import { formatSchoolName } from "./schoolNames.js?v=t66u2";
+import { hash01 } from "./prng.js?v=t73u2";
+import { QINGBEI } from "./jiangxi.js?v=t73u2";
+import { formatSchoolName } from "./schoolNames.js?v=t73u2";
 
 export const CONTEST_SUBJECTS = [
   { id: "math", name: "数学竞赛", tracks: ["li", "wen", "mixed"] },

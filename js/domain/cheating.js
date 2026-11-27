@@ -4,8 +4,8 @@
  * 未查实不出公告、不写入履历已确认处分。高考/会考/官方联考不做校内处分文件。
  * 查实后取消该次作弊所得分数并重算名次，不改省控或校内线口径。
  */
-import { hash01 } from "./prng.js?v=t66u2";
-import { addDays } from "./calendar.js?v=t66u2";
+import { hash01 } from "./prng.js?v=t73u2";
+import { addDays } from "./calendar.js?v=t73u2";
 
 /** 只对校本考试建模校内处分；高考、会考、市/省联考不伪造考试院文件。 */
 export const SCHOOL_CHEAT_KINDS = new Set(["monthly", "midterm", "final", "mock1", "mock2", "mock3"]);
@@ -177,4 +177,51 @@ export function composeDisciplineNotice(caseRow, exam, student) {
 export function resumeDisciplineLine(notice) {
   if (!notice) return "";
   return `${notice.examDate || notice.date}「${notice.examName}」因作弊查实，给予${notice.disciplineLabel || "处分"}，该次成绩已取消。`;
+}
+
+/** 按时间倒序列出查实后的校内处分公告；未查实的不在此列。 */
+export function sortDisciplineNotices(notices) {
+  return (notices || []).slice().sort((a, b) => {
+    const dd = String(b.date || b.examDate || "").localeCompare(String(a.date || a.examDate || ""));
+    if (dd) return dd;
+    const ed = String(b.examDate || "").localeCompare(String(a.examDate || ""));
+    if (ed) return ed;
+    return String(a.id || "").localeCompare(String(b.id || ""));
+  });
+}
+
+export function noticesForExam(notices, exam) {
+  if (!exam) return [];
+  const examId = exam.examId || exam.id;
+  const date = exam.date || exam.examDate;
+  return sortDisciplineNotices(notices).filter((n) => {
+    if (examId && n.examId && n.examId === examId) return true;
+    if (examId && n.id && String(n.id).startsWith(String(examId) + "|")) return true;
+    if (!examId && date && n.examDate === date && (n.examName === exam.examName || n.examKind === exam.examKind)) return true;
+    return false;
+  });
+}
+
+/**
+ * 教务处 / 成绩 / 日志用的处分公告栏数据。
+ * 校本考试若本场无查实公告，也要给出清楚说明，避免以为功能不存在。
+ * 未查实举报不得进入 current / history。
+ */
+export function formatDisciplineBoard(notices, exam = null) {
+  const history = sortDisciplineNotices(notices);
+  const current = exam ? noticesForExam(history, exam) : [];
+  const schoolExam = exam ? isSchoolExamKind(exam.examKind) : false;
+  let currentNote = "";
+  if (exam && !schoolExam) currentNote = "高考、会考或官方联考不做校内处分文件。";
+  else if (exam && schoolExam && !current.length) currentNote = "本次校本考试无查实作弊公告";
+  return {
+    title: "校内处分公告",
+    current,
+    history,
+    currentNote,
+    emptyAll: !history.length,
+    schoolExam,
+    examName: exam?.examName || "",
+    examDate: exam?.date || exam?.examDate || "",
+  };
 }

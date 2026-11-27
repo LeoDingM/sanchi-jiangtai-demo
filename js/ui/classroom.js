@@ -1,5 +1,5 @@
 /** 教室座位表（Canvas）：7 列 × 若干排，点击查看档案或当堂处理。 */
-import { seatOf, columnsForClass } from "../domain/school.js?v=t66u2";
+import { seatOf, columnsForClass } from "../domain/school.js?v=t73u2";
 
 function fitText(ctx, text, maxWidth, maxSize, family) {
   let size = maxSize;
@@ -102,6 +102,18 @@ export function renderSeating(canvas, students, selectedId, onPick, opts = {}) {
       ctx.fillStyle = "#d08a2a";
       ctx.arc(x - radius * 0.7, y - radius * 0.7, 4, 0, Math.PI * 2);
       ctx.fill();
+    }
+    if (mk.scoreDrop && !sel) {
+      ctx.beginPath();
+      ctx.fillStyle = "#d08a2a";
+      ctx.moveTo(x, y + radius + 7);
+      ctx.lineTo(x - 5.5, y + radius - 1);
+      ctx.lineTo(x + 5.5, y + radius - 1);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "#f3efe0";
+      ctx.lineWidth = 1;
+      ctx.stroke();
     }
     if (mk.absent) {
       ctx.beginPath();

@@ -1,18 +1,18 @@
 /** 江西公开分数线与一分一段查询。 */
-import { JX_DATA } from "../data/jiangxi2020.js?v=t66u2";
-import { hash01 } from "./prng.js?v=t66u2";
-import { UNI_985 as OFFICIAL_UNI_985, UNI_211 as OFFICIAL_UNI_211, schoolNameTier } from "./schoolNames.js?v=t66u2";
-export { formatSchoolName, universityMark, schoolNameTier, is985Name, is211Name, OFFICIAL_985, OFFICIAL_211, OFFICIAL_985_COUNT, OFFICIAL_211_COUNT, SCHOOL_NAME_SOURCE } from "./schoolNames.js?v=t66u2";
+import { JX_DATA } from "../data/jiangxi2020.js?v=t73u2";
+import { hash01 } from "./prng.js?v=t73u2";
+import { UNI_985 as OFFICIAL_UNI_985, UNI_211 as OFFICIAL_UNI_211, schoolNameTier } from "./schoolNames.js?v=t73u2";
+export { formatSchoolName, universityMark, schoolNameTier, is985Name, is211Name, OFFICIAL_985, OFFICIAL_211, OFFICIAL_985_COUNT, OFFICIAL_211_COUNT, SCHOOL_NAME_SOURCE } from "./schoolNames.js?v=t73u2";
 
 export const PROVINCIAL = JX_DATA.provincial;
 export const JX_SOURCE_NOTES = JX_DATA.sourceNotes;
 
 /**
- * 2021 及以后已公布的官方省控。单独收录，不改动 PROVINCIAL 里锁定的 2016–2020 数字。
- * 2021–2023 仍是文理一批/二批；2024 起江西实行 3+1+2 新高考，一本二本合并为本科批次，
- * 对照特殊类型招生控制线与本科线，不能再写成旧文理一本二本。
+ * 2021–2023 已公布的官方文理省控。单独收录，不改动 PROVINCIAL 里锁定的 2016–2020 数字。
+ * 游戏内 2024 及以后不采用 3+1+2 特控/本科线，也不把那些公布分包装成旧一本/二本；
+ * 改按 2020 一分一段一本/二本对应省排卡模拟线（非正式官方省控）。
  */
-export const LATEST_OFFICIAL_PROVINCIAL_YEAR = 2026;
+export const LATEST_OFFICIAL_PROVINCIAL_YEAR = 2023;
 export const OFFICIAL_PROVINCIAL_AFTER_2020 = {
   2021: {
     official: true,
@@ -38,30 +38,6 @@ export const OFFICIAL_PROVINCIAL_AFTER_2020 = {
     wen: { first: 533, second: 472, special: 200 },
     li: { first: 518, second: 445, special: 200 },
   },
-  2024: {
-    official: true,
-    scheme: "new-3+1+2",
-    source: "江西省教育厅2024-06-25公布，学信网转载；江西省教育考试院。当年一本二本合并为本科批次",
-    published: "2024-06-25",
-    wen: { first: 532, second: 463, special: 270 },
-    li: { first: 520, second: 448, special: 240 },
-  },
-  2025: {
-    official: true,
-    scheme: "new-3+1+2",
-    source: "省教育厅新闻发布会2025-06-25，江西省教育考试院发布（江西省教育厅网站）",
-    published: "2025-06-25",
-    wen: { first: 539, second: 486, special: 290 },
-    li: { first: 505, second: 429, special: 240 },
-  },
-  2026: {
-    official: true,
-    scheme: "new-3+1+2",
-    source: "省教育厅/江西省教育考试院新闻发布会2026-06-25，人民网江西频道、央视网、中国教育在线、赣州市教育局转载",
-    published: "2026-06-25",
-    wen: { first: 535, second: 479, special: 220 },
-    li: { first: 505, second: 412, special: 200 },
-  },
 };
 
 export function isOfficialProvincialYear(year) {
@@ -70,39 +46,45 @@ export function isOfficialProvincialYear(year) {
 }
 
 export function gaokaoScheme(year) {
-  return Number(year) >= 2024 ? "new-3+1+2" : "wenli-batches";
+  void year;
+  // 各年份一律旧文理一批/二批，不启用 3+1+2 科目组或合并本科批。
+  return "wenli-batches";
 }
 
 export function provincialTrackLabel(year, track) {
-  if (gaokaoScheme(year) === "new-3+1+2") return track === "wen" ? "历史科目组" : "物理科目组";
+  void year;
   return track === "wen" ? "文科" : "理科";
 }
 
 export function provincialFirstLabel(year) {
-  return gaokaoScheme(year) === "new-3+1+2" ? "特殊类型招生控制线" : "一本";
+  void year;
+  return "一本";
 }
 
 export function provincialSecondLabel(year) {
-  return gaokaoScheme(year) === "new-3+1+2" ? "本科线" : "二本";
+  void year;
+  return "二本";
 }
 
 /** 过线对照用的短标签（人数统计、成绩格）。 */
 export function provincialFirstShortLabel(year) {
-  return gaokaoScheme(year) === "new-3+1+2" ? "特控" : "一本";
+  void year;
+  return "一本";
 }
 
 export function provincialSecondShortLabel(year) {
-  return gaokaoScheme(year) === "new-3+1+2" ? "本科" : "二本";
+  void year;
+  return "二本";
 }
 
 /**
- * 录取显示批次：新高考合并本科批后，过特控或过本科线都属本科批。
+ * 录取显示批次。游戏内各年都按一批/二批，不写成合并本科批。
  * band 为 first / second / special / none。
  */
 export function provincialEnrollmentBatch(year, band) {
+  void year;
   if (band === "special") return "专科";
   if (band === "none" || !band) return "未达专科线";
-  if (gaokaoScheme(year) === "new-3+1+2") return "本科批";
   return band === "first" ? "一批" : "二批";
 }
 
@@ -115,8 +97,9 @@ function clampScore(n, lo, hi) {
 }
 
 /**
- * 尚未公布的未来年份：按 2016–2026 官方波动和当次难度生成可复现模拟省控。
- * 2024 起江西已是 3+1+2，模拟年份沿用该口径，不退回旧文理一本二本。
+ * 尚未采用官方文理省控的年份（含游戏内的 2024 及以后）：
+ * 按 2020 一分一段一本/二本对应省排卡线，并结合 2016–2023 公开一本/二本波动和当次难度生成模拟省控。
+ * 标明「模拟线，非正式官方省控」，不把 3+1+2 特控/本科线写成旧一本/二本。
  */
 export function simulateProvincialYear(year, opts = {}) {
   const y = Number(year) || 0;
@@ -135,26 +118,23 @@ export function simulateProvincialYear(year, opts = {}) {
     const raw = m + 0.2 * (last - m) + 0.15 * slope(recent) * yearsAhead + diffAdj + wave(tag, spread) + jitter(tag, 8);
     return clampScore(raw, lo, hi);
   };
-  // 锚定 2024–2026 官方特控/本科/专科，并做轻度均值回归，避免沿最近跌势滑出合理区间。
-  let liFirst = project([520, 505, 505], "li-st", 490, 540);
-  let liSecond = project([448, 429, 412], "li-ba", 395, 465, 24);
-  let wenFirst = project([532, 539, 535], "wen-st", 515, 560, 18);
-  let wenSecond = project([463, 486, 479], "wen-ba", 440, 510, 20);
-  if (liFirst - liSecond < 70) liSecond = clampScore(liFirst - 70, 395, 465);
-  if (liFirst - liSecond > 110) liSecond = clampScore(liFirst - 110, 395, 465);
-  if (liFirst - liSecond < 70) liFirst = clampScore(liSecond + 70, 490, 540);
-  if (wenFirst - wenSecond < 45) wenSecond = clampScore(wenFirst - 45, 440, 510);
-  if (wenFirst - wenSecond > 85) wenSecond = clampScore(wenFirst - 85, 440, 510);
-  if (wenFirst - wenSecond < 45) wenFirst = clampScore(wenSecond + 45, 515, 560);
-  let liSpecial = project([240, 240, 200], "li-sp", 180, 270, 28);
-  let wenSpecial = project([270, 290, 220], "wen-sp", 190, 300, 28);
-  if (liSpecial > liSecond - 80) liSpecial = clampScore(liSecond - 80, 180, 270);
-  if (wenSpecial > wenSecond - 80) wenSpecial = clampScore(wenSecond - 80, 190, 300);
+  const anchor = PROVINCIAL[2020];
+  const liGap = anchor.li.first - anchor.li.second;
+  const wenGap = anchor.wen.first - anchor.wen.second;
+  // 2016–2023 公开一本，分数可随年波动；二本按 2020 一本/二本省排分差卡住，使上线按同一套省排判定。
+  const liFirst = project([529, 503, 527, 522, 535, 519, 509, 518], "li-1", 495, 555);
+  const wenFirst = project([523, 533, 568, 558, 547, 559, 529, 533], "wen-1", 515, 575, 18);
+  const liSecond = liFirst - liGap;
+  const wenSecond = wenFirst - wenGap;
+  let liSpecial = project([150, 150, 160, 160, 150, 150, 150, 200], "li-sp", 140, 220, 20);
+  let wenSpecial = project([150, 150, 160, 160, 150, 150, 150, 200], "wen-sp", 140, 220, 20);
+  if (liSpecial > liSecond - 80) liSpecial = clampScore(liSecond - 80, 140, 220);
+  if (wenSpecial > wenSecond - 80) wenSpecial = clampScore(wenSecond - 80, 140, 220);
   return {
     official: false,
     simulated: true,
-    scheme: "new-3+1+2",
-    source: "模拟线，非正式官方省控。按2016–2026江西公开省控波动及当次高考试卷难度生成，可复现，不是省教育考试院公布数字。",
+    scheme: "wenli-batches",
+    source: "模拟线，非正式官方省控。按2020年江西一分一段理科一本、文科一本及对应二本的省排卡线，并结合2016–2023公开一本/二本波动及当次高考试卷难度生成，可复现，不是省教育考试院公布数字。",
     wen: { first: wenFirst, second: wenSecond, special: wenSpecial },
     li: { first: liFirst, second: liSecond, special: liSpecial },
   };
@@ -189,8 +169,8 @@ export function provincialYearRecord(year, opts = {}) {
 }
 
 /**
- * 返回当年文理（或新高考物理/历史）省控。2016–2020 仍返回 PROVINCIAL 原对象，数字锁定。
- * 缺年不再静默套用 2020 官方线；已公布年份用官方数字，未公布年份给出可复现模拟线。
+ * 返回当年文理省控。2016–2020 仍返回 PROVINCIAL 原对象，数字锁定。
+ * 缺年不再静默套用 2020 官方线；2021–2023 用已公布文理省控，2024 及以后给出按省排卡定的模拟线。
  */
 export function provincialLines(year, track, opts = {}) {
   const tr = track === "wen" ? "wen" : "li";
@@ -202,9 +182,6 @@ export function provincialLines(year, track, opts = {}) {
 
 function officialNon2020SourceNote(year) {
   const y = Number(year);
-  if (y >= 2024) {
-    return "分数线来自江西省教育考试院公开省控线。江西从2024年起实行3+1+2新高考，一本与二本合并为本科批次；对照特殊类型招生控制线和本科线，不把新高考年份写成旧文理一本二本。当年完整一分一段未收入，这里不把平移到 2020 表的估算位次写成官方位次。";
-  }
   if (y >= 2021) {
     return "分数线来自江西省教育考试院公开省控线。当年仍为文史/理工一批、二批。当年完整一分一段未收入，这里不把平移到 2020 表的估算位次写成官方位次。";
   }
@@ -224,7 +201,7 @@ export function officialProvincialPack(year, opts = {}) {
     ? (displayYear === 2020
       ? "分数线和位次来自江西省教育考试院公开分数线及2020年一分一段累计人数。"
       : officialNon2020SourceNote(displayYear))
-    : "模拟线，非正式官方省控。按2016–2026江西公开省控的波动幅度和当次高考试卷难度生成，可复现；不是省教育考试院公布的分数线。不伪造当年完整投档表，院校线仍按省控分差平移2020投档结构。";
+    : "模拟线，非正式官方省控。按2020年江西一分一段理科一本、文科一本及对应二本的省排卡线，并结合2016–2023公开一本/二本波动和当次高考试卷难度生成，可复现；不是省教育考试院公布的分数线。不伪造当年完整投档表，院校线仍按省控分差平移2020投档结构。";
   const packYear = official || simulated ? displayYear : displayYear;
   return {
     year: packYear,
@@ -267,7 +244,7 @@ export function extrapolateRankAboveOfficial(score, maxOfficialScore, rankAtOffi
   return Math.max(1, rankAtOfficial - (s - maxOfficialScore));
 }
 
-/** 用 2020 一分一段查位次；其他年份先按一本线（或新高考特控线）分差平移到 2020 分。 */
+/** 用 2020 一分一段查位次；其他年份先按当年一本线与 2020 一本线的分差平移到 2020 分。 */
 export function provincialRank(score, track, year = 2020, opts = {}) {
   const table = track === "wen" ? JX_DATA.rankWen : JX_DATA.rankLi;
   let s = Math.round(Number(score));

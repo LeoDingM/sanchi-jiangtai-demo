@@ -3,18 +3,18 @@
  * 建议名单和辅导摘记由已有事实与确定性 PRNG 生成，不用 LLM，不改能力、分数或省控。
  * 这不是补习班或校外培训，日期按宁川中学校内安排。
  */
-import { clamp, hash01 } from "./prng.js?v=t66u2";
-import { schoolYearOf, termOf, weekday } from "./calendar.js?v=t66u2";
+import { clamp, hash01 } from "./prng.js?v=t73u2";
+import { schoolYearOf, termOf, weekday } from "./calendar.js?v=t73u2";
 import {
   activityEventOn, currentSlot, isEveningPeriodId, majorEventOn,
-} from "./timetable.js?v=t66u2";
-import { allHomeworkRows, isOpenHomework, studentTeachingContext } from "./teaching.js?v=t66u2";
-import { composeParentBrief, isParentsMeetingOpen } from "./parents.js?v=t66u2";
-import { playerClassStudents } from "./visits.js?v=t66u2";
-import { isOfficeSittingSlot } from "./homeVisit.js?v=t66u2";
-import { isAwayFromClass, leaveCovering } from "./health.js?v=t66u2";
-import { hasLargeRoom, subjectRoom, WIDE_ROOM } from "./potential.js?v=t66u2";
-import { seatLabel } from "./school.js?v=t66u2";
+} from "./timetable.js?v=t73u2";
+import { allHomeworkRows, isOpenHomework, studentTeachingContext } from "./teaching.js?v=t73u2";
+import { composeParentBrief, isParentsMeetingOpen } from "./parents.js?v=t73u2";
+import { playerClassStudents } from "./visits.js?v=t73u2";
+import { isOfficeSittingSlot } from "./homeVisit.js?v=t73u2";
+import { isAwayFromClass, leaveCovering } from "./health.js?v=t73u2";
+import { hasLargeRoom, subjectRoom, WIDE_ROOM } from "./potential.js?v=t73u2";
+import { seatLabel } from "./school.js?v=t73u2";
 
 export const COACH_DAY_CAP = 1;
 export const COACH_TERM_CAP = 18;

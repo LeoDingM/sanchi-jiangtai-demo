@@ -3,12 +3,13 @@
  * 为谈话整理「系统说明」和「学生自己阐述」。
  * 只根据已有考试与档案事实，不编造作弊或缺考，也不改分数、作弊发生率或省控。
  */
-import { hash01 } from "./prng.js?v=t66u2";
-import { subjectById } from "./config.js?v=t66u2";
-import { formatDiscipline } from "./cheating.js?v=t66u2";
-import { addDays } from "./calendar.js?v=t66u2";
+import { hash01 } from "./prng.js?v=t73u2";
+import { subjectById } from "./config.js?v=t73u2";
+import { formatDiscipline } from "./cheating.js?v=t73u2";
+import { addDays } from "./calendar.js?v=t73u2";
 
 export const SCORE_DROP_USUAL_TOP = 5;
+export const SCORE_DROP_SCHOOL_DELTA = 300;
 export const SCORE_DROP_SOURCE_NOTE = "原因优先依据已有考试档案。没有作弊或缺考记录就不会那么写。依据分数结构作出的判断会标明是推测，不是已查实的处分。";
 
 const HIGH_LINE_RE = /一本|特控|本科/;
@@ -28,6 +29,11 @@ function median(nums) {
 
 function classRankOf(h) {
   return h?.classRank ?? h?.class?.rank ?? null;
+}
+
+function schoolRankOf(h) {
+  const v = h?.schoolRank ?? h?.school?.rank ?? null;
+  return v == null || v === "" ? null : Number(v);
 }
 
 function isRepeatRow(r) {
@@ -171,17 +177,40 @@ export function historyFromReports(reports, studentId) {
     if (me.subjects && typeof me.subjects === "object" && !Array.isArray(me.subjects)) {
       Object.assign(subjects, me.subjects);
     }
+    const schoolPool = (() => {
+      const sameRepeat = rows.filter((r) => !isRepeatRow(r) === !isRepeatRow(me));
+      const pool = sameRepeat.length ? sameRepeat : rows;
+      const tr = me.track === "wen" ? "wen" : (me.track === "li" ? "li" : null);
+      if ((report.split || tr) && tr) {
+        const same = pool.filter((r) => (r.track === "wen" ? "wen" : (r.track === "li" ? "li" : tr)) === tr);
+        if (same.length) return same;
+      }
+      return pool;
+    })();
+    let schoolRank = me.schoolRank ?? me.rank ?? null;
+    let schoolN = me.schoolN ?? schoolPool.length;
+    if (schoolRank == null && schoolPool.length) {
+      const sortedSch = schoolPool.slice().sort((a, b) => (b.total ?? -1) - (a.total ?? -1) || String(a.studentId).localeCompare(String(b.studentId)));
+      let rk = 1;
+      for (let i = 0; i < sortedSch.length; i++) {
+        if (i > 0 && (sortedSch[i].total ?? -1) < (sortedSch[i - 1].total ?? -1)) rk = i + 1;
+        if (sortedSch[i].studentId === studentId) { schoolRank = rk; schoolN = sortedSch.length; }
+      }
+    }
     out.push({
       date: report.date,
       examId: report.examId || me.examId,
       examName: report.examName,
       examKind: report.examKind,
       classNo: me.classNo,
+      track: me.track,
       total: me.total,
       maxTotal: me.maxTotal,
       line: me.line,
       classRank: mine.rank,
       classN: mine.n,
+      schoolRank,
+      schoolN,
       subjects,
       subjectIds: Object.keys(subjects),
       cheat: me.cheat || null,
@@ -217,21 +246,37 @@ export function isSharpClassDrop(usualRank, dropRank, classN) {
   return far && delta >= 12;
 }
 
+export function isSharpSchoolDrop(usualSchoolRank, dropSchoolRank) {
+  if (usualSchoolRank == null || dropSchoolRank == null) return false;
+  if (!Number.isFinite(Number(usualSchoolRank)) || !Number.isFinite(Number(dropSchoolRank))) return false;
+  return (Number(dropSchoolRank) - Number(usualSchoolRank)) >= SCORE_DROP_SCHOOL_DELTA;
+}
+
+function usualSchoolFromPrior(prior) {
+  const ranks = (prior || []).map(schoolRankOf).filter((n) => n != null && Number.isFinite(n));
+  return {
+    schoolRanks: ranks,
+    usualSchoolRank: median(ranks),
+    hasBaseline: ranks.length >= 1,
+  };
+}
+
 export function detectScoreDrop(history, { lookBack = 2 } = {}) {
   const hist = (history || []).filter(Boolean).slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-  if (hist.length < 3) return { dropped: false, reason: "可对照的考试次数不够。" };
+  if (hist.length < 2) return { dropped: false, reason: "可对照的考试次数不够。" };
   const start = Math.max(0, hist.length - lookBack);
   for (let i = hist.length - 1; i >= start; i--) {
     const exam = hist[i];
     const prior = hist.slice(Math.max(0, i - 5), i).filter((h) => h.classNo == null || exam.classNo == null || Number(h.classNo) === Number(exam.classNo));
     const used = prior.length >= 2 ? prior : hist.slice(0, i);
-    if (used.length < 2) continue;
-    const usual = usualFromPrior(used);
-    if (!usual.usuallyFront) continue;
+    const usual = used.length >= 2 ? usualFromPrior(used) : usualFromPrior(used);
     const dropRank = classRankOf(exam);
-    const sharp = isSharpClassDrop(usual.usualRank, dropRank, exam.classN || usual.exams[0]?.classN);
-    const missSecond = MOCK_OR_GAOKAO.has(exam.examKind) && lineMissesSecond(exam.line) && (usual.usuallyClearedSecond || usual.usuallyFront);
-    if (!sharp && !missSecond) continue;
+    const sharp = !!(usual.usuallyFront && isSharpClassDrop(usual.usualRank, dropRank, exam.classN || usual.exams[0]?.classN));
+    const missSecond = !!(usual.usuallyFront && MOCK_OR_GAOKAO.has(exam.examKind) && lineMissesSecond(exam.line) && (usual.usuallyClearedSecond || usual.usuallyFront));
+    const schoolUsual = usualSchoolFromPrior(hist.slice(0, i));
+    const dropSchoolRank = schoolRankOf(exam);
+    const sharpSchool = !!(schoolUsual.hasBaseline && isSharpSchoolDrop(schoolUsual.usualSchoolRank, dropSchoolRank));
+    if (!sharp && !missSecond && !sharpSchool) continue;
     return {
       dropped: true,
       exam,
@@ -241,9 +286,13 @@ export function detectScoreDrop(history, { lookBack = 2 } = {}) {
       usualRank: usual.usualRank,
       sharp,
       missSecond,
+      sharpSchool,
+      dropSchoolRank,
+      usualSchoolRank: schoolUsual.usualSchoolRank,
+      schoolUsual,
     };
   }
-  return { dropped: false, reason: "近几次没有「平时稳定前 5、突然大幅掉名次或高考/模拟未达二本」的情况。" };
+  return { dropped: false, reason: "近几次没有「平时稳定前 5、突然大幅掉名次或高考/模拟未达二本」，也没有校排退步 300 名及以上的情况。" };
 }
 
 function pronoun(student) {
@@ -260,11 +309,19 @@ export function explainScoreDrop(student, history, { seed = 1 } = {}) {
   const p = pronoun(student);
   const name = student?.name || "该生";
   const examLabel = `${exam.date || ""}「${exam.examName || "这次考试"}」`.trim();
-  const usualBit = `近 ${usual.ranks.length} 次班排中位是第 ${Math.round(usual.usualRank)} 名，其中 ${usual.frontCount} 次在前 ${SCORE_DROP_USUAL_TOP}`;
+  const usualBit = usual.usualRank != null
+    ? `近 ${usual.ranks.length} 次班排中位是第 ${Math.round(usual.usualRank)} 名，其中 ${usual.frontCount} 次在前 ${SCORE_DROP_USUAL_TOP}`
+    : "近几次班排没有稳定前 5 的对照";
   const dropBit = detected.dropRank != null
     ? `这次班排第 ${detected.dropRank}${exam.classN ? "/" + exam.classN : ""} 名`
-    : "这次班排名次明显后退";
+    : (detected.sharp || detected.missSecond ? "这次班排名次明显后退" : "");
   const lineBit = detected.missSecond ? `，且${exam.line || "未达二本"}` : (exam.line ? `，校内对照为${exam.line}` : "");
+  const schoolDelta = detected.sharpSchool && detected.usualSchoolRank != null && detected.dropSchoolRank != null
+    ? Math.round(detected.dropSchoolRank - detected.usualSchoolRank)
+    : null;
+  const schoolBit = detected.sharpSchool
+    ? `近 ${detected.schoolUsual?.schoolRanks?.length || 0} 次校排中位是第 ${Math.round(detected.usualSchoolRank)} 名，这次校排第 ${detected.dropSchoolRank} 名，退步 ${schoolDelta} 名`
+    : "";
 
   const facts = [];
   const cheat = cheatRecordOf(exam);
@@ -368,12 +425,15 @@ export function explainScoreDrop(student, history, { seed = 1 } = {}) {
     collapse.system += " 档案没有查实的作弊或缺考，上述单科下滑只是依据成绩作的推测。";
   }
 
-  const head = `${name}平时${usualBit}，${dropBit}${lineBit}。`;
+  const head = detected.sharpSchool && !detected.sharp && !detected.missSecond
+    ? `${name}${schoolBit}。`
+    : `${name}平时${usualBit}，${dropBit}${lineBit}${schoolBit ? "。" + schoolBit : ""}。`;
   const systemText = [head, ...facts.map((f) => f.system), SCORE_DROP_SOURCE_NOTE].join("");
   const tone = hash01(seed, student?.id || name, exam.examId || exam.date, "drop-talk") < 0.5 ? 0 : 1;
+  const openingDrop = dropBit || (schoolBit ? `这次校排退步${schoolDelta}名` : "这次掉分");
   const opening = tone
     ? `老师，${examLabel}我自己也知道掉得很厉害。`
-    : `老师，这次${dropBit}，我来说一下原因。`;
+    : `老师，这次${openingDrop}，我来说一下原因。`;
   const studentText = [opening, ...facts.map((f) => f.student)].join("");
 
   return {
@@ -385,6 +445,9 @@ export function explainScoreDrop(student, history, { seed = 1 } = {}) {
     usualRank: usual.usualRank,
     sharp: detected.sharp,
     missSecond: detected.missSecond,
+    sharpSchool: !!detected.sharpSchool,
+    dropSchoolRank: detected.dropSchoolRank,
+    usualSchoolRank: detected.usualSchoolRank,
     facts,
     speculation,
     hasCheatFact: facts.some((f) => f.id === "cheat-voided" || f.id === "cheat-pattern-recorded" || f.id === "cheat-earlier"),
@@ -440,4 +503,36 @@ export function validateScoreDropText(text, expl) {
 
 export function shouldShowScoreDrop(expl) {
   return !!expl?.dropped;
+}
+
+export function listScoreDropEntries(students, reports, { seed = 1, examId = null } = {}) {
+  const out = [];
+  for (const s of students || []) {
+    if (!s) continue;
+    const hist = historyFromReports(reports, s.id);
+    const expl = explainScoreDrop(s, hist, { seed });
+    if (!expl.dropped) continue;
+    if (examId && expl.exam?.examId && expl.exam.examId !== examId) continue;
+    const schoolDelta = expl.sharpSchool && expl.usualSchoolRank != null && expl.dropSchoolRank != null
+      ? Math.round(expl.dropSchoolRank - expl.usualSchoolRank)
+      : null;
+    out.push({
+      studentId: s.id,
+      name: s.name,
+      classNo: s.classNo,
+      examId: expl.exam?.examId || "",
+      examName: expl.exam?.examName || "",
+      examDate: expl.exam?.date || "",
+      dropRank: expl.dropRank,
+      usualRank: expl.usualRank,
+      dropSchoolRank: expl.dropSchoolRank,
+      usualSchoolRank: expl.usualSchoolRank,
+      schoolDelta,
+      sharp: !!expl.sharp,
+      missSecond: !!expl.missSecond,
+      sharpSchool: !!expl.sharpSchool,
+      title: expl.title,
+    });
+  }
+  return out;
 }

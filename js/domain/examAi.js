@@ -2,16 +2,16 @@
  * 考后 AI 分析：只根据已算好的成绩和排名写评语，不改分、不改排名、不上线人数。
  * API 密钥只放在独立的 localStorage 项里，与游戏存档 JSON 分开。
  */
-import { subjectById, TIER } from "./config.js?v=t66u2";
-import { usesComprehensive, comprehensiveMeta, comprehensiveScore } from "./scores.js?v=t66u2";
-import { subjectRanks } from "./scores.js?v=t66u2";
+import { subjectById, TIER } from "./config.js?v=t73u2";
+import { usesComprehensive, comprehensiveMeta, comprehensiveScore } from "./scores.js?v=t73u2";
+import { subjectRanks } from "./scores.js?v=t73u2";
 import {
   describeSchoolCutoff, describeClassProvincial, describeSchoolProvincial,
   describeZhuoxingPeers, classProvincialCounts, scaledTotal750, provincialCompareYear,
-} from "./schoolLines.js?v=t66u2";
-import { provincialLines } from "./jiangxi.js?v=t66u2";
-import { buildStudentExamSnapshot, strongerTiers, tierName } from "./studentHistory.js?v=t66u2";
-import { sameTierFirstBoard, classFirstBoard, formatStability } from "./toppers.js?v=t66u2";
+} from "./schoolLines.js?v=t73u2";
+import { provincialLines } from "./jiangxi.js?v=t73u2";
+import { buildStudentExamSnapshot, strongerTiers, tierName } from "./studentHistory.js?v=t73u2";
+import { sameTierFirstBoard, classFirstBoard, formatStability } from "./toppers.js?v=t73u2";
 
 export const AI_SETTINGS_KEY = "sanchi-jiangtai-ai-settings-v1";
 export const AI_KEY_KEY = "sanchi-jiangtai-ai-key-v1";
@@ -1245,4 +1245,62 @@ export async function requestExamAnalysis(payload, { fetchImpl, settings, signal
   if (!r.ok) return r;
   const parsed = parseAiCommentary(r.text);
   return { ok: true, text: r.text, commentary: parsed.comments, fromJson: parsed.fromJson, ignoredMarkdown: parsed.ignoredMarkdown, model: r.model };
+}
+
+export function buildStudentScoreTrendMessages(payload) {
+  return [
+    {
+      role: "system",
+      content: [
+        "你是高中教师的成绩分析助手。根据已有考试档案，用简明、易懂的中文写学生近几次成绩的波动判断、可能原因、建议和评价。",
+        "分点短句，避免空话和专业黑话。只根据材料里的分数、排名和已记录事实。",
+        "不得编造分数、排名、作弊、缺考、疾病或处分。没有查实记录就不能写成处分。推测必须标明不是已查实。",
+        "不要写潜力，除非材料明确允许并要求标明是上帝模式。不要编造图表坐标或人数，图表由系统按真实成绩另画。",
+        "不要写 markdown。只输出一个 JSON 对象：{\"分析\":\"文本\"}。",
+      ].join(""),
+    },
+    { role: "user", content: JSON.stringify(payload) },
+  ];
+}
+
+export function buildClassScoreTrendMessages(payload) {
+  return [
+    {
+      role: "system",
+      content: [
+        "你是高中班主任的班级成绩分析助手。根据已有全班统计，用简明、易懂的中文写波动判断、可能原因、建议和评价。",
+        "分点短句，避免空话。只根据材料里的均分、人数、排名和已记录事实。",
+        "不得编造分数、人数、作弊、缺考或处分。未查实举报不能写成处分。推测必须标明不是已查实。",
+        "不要写潜力，除非材料明确允许。不要编造图表坐标或人数。不要写 markdown。",
+        "只输出一个 JSON 对象：{\"分析\":\"文本\"}。",
+      ].join(""),
+    },
+    { role: "user", content: JSON.stringify(payload) },
+  ];
+}
+
+export async function requestStudentScoreTrend(payload, opts = {}) {
+  if (opts.autoMode) return { ok: false, reason: "自动模式不发起在线调用。", fallback: true };
+  if (!payload?.ok) return { ok: false, reason: payload?.reason || "没有可分析的成绩。", fallback: true };
+  const r = await requestChatCompletion(buildStudentScoreTrendMessages(payload), { ...opts, temperature: 0.3, maxTokens: 900 });
+  if (!r.ok) return { ...r, fallback: true };
+  const obj = extractJsonObject(r.text);
+  let text = "";
+  if (obj) text = String(obj.分析 || obj.说明 || obj.短评 || obj.text || "").trim();
+  if (!text) text = parseShortText(r.text).text;
+  if (!text) return { ok: false, reason: formatAiError(new Error("EMPTY")), fallback: true };
+  return { ok: true, text, model: r.model, fallback: false };
+}
+
+export async function requestClassScoreTrend(payload, opts = {}) {
+  if (opts.autoMode) return { ok: false, reason: "自动模式不发起在线调用。", fallback: true };
+  if (!payload?.ok) return { ok: false, reason: payload?.reason || "没有可分析的本班成绩。", fallback: true };
+  const r = await requestChatCompletion(buildClassScoreTrendMessages(payload), { ...opts, temperature: 0.3, maxTokens: 900 });
+  if (!r.ok) return { ...r, fallback: true };
+  const obj = extractJsonObject(r.text);
+  let text = "";
+  if (obj) text = String(obj.分析 || obj.说明 || obj.短评 || obj.text || "").trim();
+  if (!text) text = parseShortText(r.text).text;
+  if (!text) return { ok: false, reason: formatAiError(new Error("EMPTY")), fallback: true };
+  return { ok: true, text, model: r.model, fallback: false };
 }

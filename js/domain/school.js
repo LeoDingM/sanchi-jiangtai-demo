@@ -3,14 +3,14 @@ import {
   CLASS_BLUEPRINT, TIER, SUBJECT_IDS, PERSONALITIES, FAMILY_TYPES,
   PLAYER_CLASS_NO, GRADE_YEAR, LI_SUBJECTS, WEN_SUBJECTS,
   REPEAT_CLASS_SIZE, REPEAT_WEN_NOS, REPEAT_LI_NOS, INSERT_REPEAT_CLASS_NOS,
-} from "./config.js?v=t66u2";
-import { clamp, gauss, hash01, pick, rngFrom, shuffle } from "./prng.js?v=t66u2";
-import { generateName } from "./names.js?v=t66u2";
-import { gradeStudent, scaleOf, packLastGaokao } from "./scores.js?v=t66u2";
-import { provincialLines } from "./jiangxi.js?v=t66u2";
-import { admitStudent, canInsertRepeat, packLastAdmission } from "./admission.js?v=t66u2";
-import { examParams } from "./calendar.js?v=t66u2";
-import { cohortIsNewGaokao, ensureCohortElectives, isNewGaokaoYear } from "./newGaokao.js?v=t66u2";
+} from "./config.js?v=t73u2";
+import { clamp, gauss, hash01, pick, rngFrom, shuffle } from "./prng.js?v=t73u2";
+import { generateName } from "./names.js?v=t73u2";
+import { gradeStudent, scaleOf, packLastGaokao } from "./scores.js?v=t73u2";
+import { provincialLines } from "./jiangxi.js?v=t73u2";
+import { admitStudent, canInsertRepeat, packLastAdmission } from "./admission.js?v=t73u2";
+import { examParams } from "./calendar.js?v=t73u2";
+import { cohortIsNewGaokao, ensureCohortElectives, isNewGaokaoYear } from "./newGaokao.js?v=t73u2";
 
 export const ALL_SUBJECTS = [...SUBJECT_IDS, "biology"];
 
@@ -114,6 +114,7 @@ export function makeStudent({ rng, usedNames, entryYear, classNo, seq, tier, hin
   const tp = TIER[tier] || TIER.zhuoxing;
   let mean = tp.abilityMean + quality;
   // 云岫实验班每班至多一两位特别突出的苗子，而不是全班拉满。不给笃学做一本兜底。
+  // 0 班整班底盘与前十、1 班天花板改由 ensureYunxiuExpDominance 按 hash 提升，以免改能力后牵动 pickTrack 的随机消耗、打乱后续班级和补习班。
   if (tier === "yunxiu_exp" && hint === "li" && seq <= 2 && rng() < 0.7) mean += 7 + rng() * 5;
   // 少数人的头尾交叠，不抬整层均值：卓行上沿可摸到校排 130–180，笃学上沿可到 400–560，重点左尾可掉出校内一本。
   if (tier === "zhuoxing" && rng() < 0.04) mean += 6 + rng() * 5;
@@ -176,6 +177,114 @@ export function ensureZhuoxingClassSpread(students, seed = "zx-spread") {
   return students;
 }
 
+/**
+ * 落实 0 班统治力：整班底盘明显高于云岫重点/凌霄，前十为天才级。
+ * 压低重点/凌霄因标准差过大冲到 0 班之上的尾部，仍保留重点班尖子。
+ * 1 班只抬最前面一两人的天花板，便于偶尔出文科清北，但不去抢理科全校第一。
+ * 目标按学生 id 确定，生成与分班重复调用不会叠加上去。不改卓行/笃学。
+ */
+export function ensureYunxiuExpDominance(students, seed = "yx-dom") {
+  if (!students?.length) return students;
+  const tag = "yx-dom-v1";
+  const jit = (...parts) => hash01(tag, seed, ...parts);
+  const era = eraQuality(students.find((s) => !s.repeat && s.entryYear != null)?.entryYear);
+  const class0 = students.filter((s) => !s.repeat && Number(s.classNo) === 0);
+  const class1 = students.filter((s) => !s.repeat && Number(s.classNo) === 1);
+  const byAbility = (list) => list.slice().sort((a, b) => examAbilityMean(b) - examAbilityMean(a) || String(a.id).localeCompare(String(b.id)));
+
+  const firmAt = (st, lo, hi, key) => {
+    const v = lo + jit(st.id, key, "stab") * Math.max(0, hi - lo);
+    st.stability = round1(clamp(Math.max(st.stability || 0, v), 28, 97));
+  };
+  const liftTo = (st, target, cap, key) => {
+    const cur = examAbilityMean(st);
+    if (cur < target) shiftAbilityToward(st, target, cap, 20);
+    return st;
+  };
+  const capTo = (st, capVal, hardCap) => {
+    const cur = examAbilityMean(st);
+    if (cur > capVal) shiftAbilityToward(st, capVal, hardCap ?? capVal + 0.6, 16);
+    return st;
+  };
+
+  if (class0.length) {
+    const ordered = byAbility(class0);
+    ordered.forEach((s, i) => {
+      if (i < 3) {
+        const target = 96.4 + era + jit(s.id, "c0-top3") * 1.6;
+        liftTo(s, target, 99, "c0-top3");
+        firmAt(s, 88, 96, "c0-top3");
+      } else if (i < 10) {
+        const target = 93.2 + era + jit(s.id, "c0-top10") * 1.8;
+        liftTo(s, target, 97.2, "c0-top10");
+        firmAt(s, 84, 94, "c0-top10");
+      } else {
+        const floor = 88.2 + era * 1.6 + jit(s.id, "c0-floor") * 1.4;
+        liftTo(s, floor, 93.5, "c0-floor");
+        if ((s.stability ?? 60) < 80) firmAt(s, 80, 90, "c0-floor");
+      }
+    });
+  }
+
+  if (class1.length) {
+    const ordered = byAbility(class1);
+    const best = ordered[0];
+    const second = ordered[1];
+    const liftBest = !!(best && jit(best.id, "c1-top-roll") < 0.42);
+    const liftSecond = !!(second && jit(second.id, "c1-second-roll") < 0.08);
+    // 大多数年份把文科实验上沿压在清北线附近以下；只在部分种子放开一号位天花板。
+    const wenCap = 93.6 + era;
+    for (const s of ordered) {
+      if (s === best && liftBest) continue;
+      if (s === second && liftSecond) continue;
+      capTo(s, wenCap, 94.2);
+    }
+    if (liftBest) {
+      const target = 95.6 + era + jit(best.id, "c1-top") * 1.6;
+      liftTo(best, target, 98.4, "c1-top");
+      firmAt(best, 86, 95, "c1-top");
+    }
+    if (liftSecond) {
+      const target = 94.4 + era + jit(second.id, "c1-second") * 1.2;
+      liftTo(second, target, 97.0, "c1-second");
+    }
+  }
+
+  const c0ord = byAbility(class0);
+  const c0First = c0ord[0] ? examAbilityMean(c0ord[0]) : 96.4;
+  const c0Tenth = c0ord[9] ? examAbilityMean(c0ord[9]) : Math.max(92, c0First - 4);
+  const keyCapFirst = Math.min(c0First - 3.2, c0Tenth - 0.6, 92.6 + era);
+  const keyCapRest = Math.min(keyCapFirst - 1.8, 89.8 + era);
+  const keyMap = new Map();
+  for (const s of students) {
+    if (s.repeat || s.tier !== "yunxiu_key") continue;
+    const no = Number(s.classNo);
+    if (!keyMap.has(no)) keyMap.set(no, []);
+    keyMap.get(no).push(s);
+  }
+  for (const list of keyMap.values()) {
+    const ordered = byAbility(list);
+    if (ordered[0]) capTo(ordered[0], keyCapFirst, keyCapFirst + 0.5);
+    for (const s of ordered.slice(1)) capTo(s, keyCapRest, keyCapRest + 0.4);
+  }
+
+  const lxCapFirst = Math.min(c0First - 8.0, 88.0 + era);
+  const lxCapRest = Math.min(lxCapFirst - 2.0, 85.2 + era);
+  const lxMap = new Map();
+  for (const s of students) {
+    if (s.repeat || s.tier !== "lingxiao") continue;
+    const no = Number(s.classNo);
+    if (!lxMap.has(no)) lxMap.set(no, []);
+    lxMap.get(no).push(s);
+  }
+  for (const list of lxMap.values()) {
+    const ordered = byAbility(list);
+    if (ordered[0]) capTo(ordered[0], lxCapFirst, lxCapFirst + 0.5);
+    for (const s of ordered.slice(1)) capTo(s, lxCapRest, lxCapRest + 0.4);
+  }
+  return students;
+}
+
 export function generateCohort(entryYear, seed, { quality = 0, alreadySplit = false, withRepeat = false } = {}) {
   const rng = rngFrom(seed, "cohort", entryYear, quality);
   const usedNames = new Set();
@@ -209,9 +318,11 @@ export function generateCohort(entryYear, seed, { quality = 0, alreadySplit = fa
       cls.size = cls.studentIds.length;
     }
     if (alreadySplit && cohortIsNewGaokao(entryYear)) ensureCohortElectives(students, seed);
+    ensureYunxiuExpDominance(students, [seed, entryYear, "gen-repeat"].join("|"));
     return { entryYear, students: applyRepeaterSeating(students), classes };
   }
   if (alreadySplit && cohortIsNewGaokao(entryYear)) ensureCohortElectives(students, seed);
+  ensureYunxiuExpDominance(students, [seed, entryYear, "gen"].join("|"));
   return { entryYear, students, classes };
 }
 

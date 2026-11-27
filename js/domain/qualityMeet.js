@@ -5,16 +5,16 @@
  * 不改能力、分数、排名或省控，也不生成或改写成绩图、考后 AI。
  * 由备课组长主持，玩家以任课（实习或正式）数学老师身份参加，不是接任备课组长。
  */
-import { hash01 } from "./prng.js?v=t66u2";
-import { addDays, SCHOOL_CALENDAR, schoolYearOf, weekday } from "./calendar.js?v=t66u2";
+import { hash01 } from "./prng.js?v=t73u2";
+import { addDays, SCHOOL_CALENDAR, schoolYearOf, weekday } from "./calendar.js?v=t73u2";
 import {
   activityEventOn, currentSlot, isEveningPeriodId, majorEventOn,
-} from "./timetable.js?v=t66u2";
-import { allHomeworkRows, topicsForGrade } from "./teaching.js?v=t66u2";
-import { isParentsMeetingOpen } from "./parents.js?v=t66u2";
-import { isOfficeSittingSlot } from "./homeVisit.js?v=t66u2";
-import { isTeachersDayPlayDate } from "./teachersDay.js?v=t66u2";
-import { MENTOR_NAME } from "./config.js?v=t66u2";
+} from "./timetable.js?v=t73u2";
+import { allHomeworkRows, topicsForGrade } from "./teaching.js?v=t73u2";
+import { isParentsMeetingOpen } from "./parents.js?v=t73u2";
+import { isOfficeSittingSlot } from "./homeVisit.js?v=t73u2";
+import { isTeachersDayPlayDate } from "./teachersDay.js?v=t73u2";
+import { MENTOR_NAME } from "./config.js?v=t73u2";
 
 export const QUALITY_MEET_ACTIONS = [
   { id: "listen", label: "先听记录" },

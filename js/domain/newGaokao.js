@@ -1,10 +1,10 @@
 /**
- * 江西新高考（3+1+2）制度与再选等级赋分。
- * 官方时间表：赣府发〔2021〕20 号，从 2021 年秋季入学的高一年级实施，2024 年首考。
- * 2021–2023 年高考仍是旧文理分科，不得提前改成 3+1+2。
+ * 江西新高考（3+1+2）制度与再选等级赋分的参考实现仍保留在本文件，
+ * 但游戏内各年份一律关闭：2021–2023 以及 2024 年以后都沿用旧文理高考
+ * （文科/理科、文综/理综、一本/二本），不启用选课、赋分或科目组。
  * 2016–2020 结构与省控锁定，本文件不改那些数字。
  */
-import { hash01, rngFrom, gauss, clamp } from "./prng.js?v=t66u2";
+import { hash01, rngFrom, gauss, clamp } from "./prng.js?v=t73u2";
 
 /** 江西新高考首考年份（2021 级高一，2024 年高考）。 */
 export const JIANGXI_NEW_GAOKAO_FIRST_YEAR = 2024;
@@ -33,11 +33,15 @@ export const ASSIGN_BANDS = [
 ];
 
 export function isNewGaokaoYear(year) {
-  return Number(year) >= JIANGXI_NEW_GAOKAO_FIRST_YEAR;
+  void year;
+  // 游戏内不启用 3+1+2：2024 及以后仍按旧文理高考处理。
+  return false;
 }
 
 export function cohortIsNewGaokao(entryYear) {
-  return Number(entryYear) >= JIANGXI_NEW_GAOKAO_FIRST_ENTRY;
+  void entryYear;
+  // 2021 级及以后入学也不改成选课赋分，分班仍是文理分科。
+  return false;
 }
 
 export function gaokaoYearOfEntry(entryYear) {

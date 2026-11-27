@@ -5,17 +5,17 @@
  * 不改能力、分数、排名或省控，不能代替个人备课（prepareLesson）或上课，
  * 玩家也不是备课组长。
  */
-import { hash01 } from "./prng.js?v=t66u2";
-import { addDays, eventsOn, SCHOOL_CALENDAR, schoolYearOf, termOf, weekday } from "./calendar.js?v=t66u2";
+import { hash01 } from "./prng.js?v=t73u2";
+import { addDays, eventsOn, SCHOOL_CALENDAR, schoolYearOf, termOf, weekday } from "./calendar.js?v=t73u2";
 import {
   activityEventOn, currentSlot, isEveningPeriodId, majorEventOn, weekStart,
-} from "./timetable.js?v=t66u2";
-import { allHomeworkRows, isOpenHomework, suggestedTopic, topicProgress, topicsForGrade } from "./teaching.js?v=t66u2";
-import { isParentsMeetingOpen } from "./parents.js?v=t66u2";
-import { isOfficeSittingSlot } from "./homeVisit.js?v=t66u2";
-import { isTeachersDayPlayDate } from "./teachersDay.js?v=t66u2";
-import { isQualityMeetOpen } from "./qualityMeet.js?v=t66u2";
-import { MENTOR_NAME } from "./config.js?v=t66u2";
+} from "./timetable.js?v=t73u2";
+import { allHomeworkRows, isOpenHomework, suggestedTopic, topicProgress, topicsForGrade } from "./teaching.js?v=t73u2";
+import { isParentsMeetingOpen } from "./parents.js?v=t73u2";
+import { isOfficeSittingSlot } from "./homeVisit.js?v=t73u2";
+import { isTeachersDayPlayDate } from "./teachersDay.js?v=t73u2";
+import { isQualityMeetOpen } from "./qualityMeet.js?v=t73u2";
+import { MENTOR_NAME } from "./config.js?v=t73u2";
 
 export const GROUP_PREP_WEEK_CAP = 1;
 export const GROUP_PREP_TERM_CAP = 12;
