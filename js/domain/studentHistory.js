@@ -1,7 +1,7 @@
 /** 从各次真实考试成绩汇总一名学生的分数与排名轨迹。不另造统计。 */
-import { TIER } from "./config.js?v=t74u2";
-import { listExamReports } from "./simulation.js?v=t74u2";
-import { subjectsFor, usesComprehensive, comprehensiveMeta, comprehensiveScore } from "./scores.js?v=t74u2";
+import { TIER } from "./config.js?v=t75u2";
+import { listExamReports } from "./simulation.js?v=t75u2";
+import { subjectsFor, usesComprehensive, comprehensiveMeta, comprehensiveScore } from "./scores.js?v=t75u2";
 
 export const TIER_ORDER = ["yunxiu_exp", "yunxiu_key", "lingxiao", "zhuoxing", "duxue", "yiti", "fuzhuo"];
 

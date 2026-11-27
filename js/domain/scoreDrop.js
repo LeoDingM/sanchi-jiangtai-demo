@@ -3,10 +3,10 @@
  * 为谈话整理「系统说明」和「学生自己阐述」。
  * 只根据已有考试与档案事实，不编造作弊或缺考，也不改分数、作弊发生率或省控。
  */
-import { hash01 } from "./prng.js?v=t74u2";
-import { subjectById } from "./config.js?v=t74u2";
-import { formatDiscipline } from "./cheating.js?v=t74u2";
-import { addDays } from "./calendar.js?v=t74u2";
+import { hash01 } from "./prng.js?v=t75u2";
+import { subjectById } from "./config.js?v=t75u2";
+import { formatDiscipline } from "./cheating.js?v=t75u2";
+import { addDays } from "./calendar.js?v=t75u2";
 
 export const SCORE_DROP_USUAL_TOP = 5;
 export const SCORE_DROP_SCHOOL_DELTA = 300;

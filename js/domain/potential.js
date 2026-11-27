@@ -3,8 +3,8 @@
  * 谈话和课堂纪要也不使用「潜力」「接近潜力」这类词。上帝模式可显示并标明。
  * 不改写能力或潜力，也不参与计分公式。
  */
-import { subjectById, SUBJECT_IDS } from "./config.js?v=t74u2";
-import { hash01 } from "./prng.js?v=t74u2";
+import { subjectById, SUBJECT_IDS } from "./config.js?v=t75u2";
+import { hash01 } from "./prng.js?v=t75u2";
 
 const SUBJECT_NAMES = {
   chinese: "语文",

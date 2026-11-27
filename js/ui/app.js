@@ -78,43 +78,43 @@ import {
   suggestPaperSignIssue, suggestPaperSignRegister, suggestPaperSignInform,
   PAPER_SIGN_ACTIONS, PAPER_SIGN_SOURCE_NOTE, PAPER_SIGN_BATCH_MIN, PAPER_SIGN_BATCH_MAX,
   PAPER_SIGN_DAY_CAP,
-} from "../domain/simulation.js?v=t74u2";
-import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t74u2";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t74u2";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t74u2";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t74u2";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t74u2";
-import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t74u2";
-import { classTrackLabel } from "../domain/newGaokao.js?v=t74u2";
-import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t74u2";
-import { hydrateReport } from "../domain/simulation.js?v=t74u2";
-import { renderSeating } from "./classroom.js?v=t74u2";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t74u2";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t74u2";
-import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t74u2";
-import { buildStudentResume, resumeAiPayload, formatResumeLocal } from "../domain/resume.js?v=t74u2";
-import { buildAlumniBoostBoard, alumniBoostAiPayload, validateAlumniBoostText, ALUMNI_BOOST_TITLE, ALUMNI_BOOST_SOURCE_NOTE } from "../domain/alumniBoost.js?v=t74u2";
-import { explainScoreDrop, scoreDropAiPayload, validateScoreDropText, listScoreDropEntries } from "../domain/scoreDrop.js?v=t74u2";
+} from "../domain/simulation.js?v=t75u2";
+import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t75u2";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t75u2";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t75u2";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t75u2";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t75u2";
+import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t75u2";
+import { classTrackLabel } from "../domain/newGaokao.js?v=t75u2";
+import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t75u2";
+import { hydrateReport } from "../domain/simulation.js?v=t75u2";
+import { renderSeating } from "./classroom.js?v=t75u2";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t75u2";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t75u2";
+import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t75u2";
+import { buildStudentResume, resumeAiPayload, formatResumeLocal } from "../domain/resume.js?v=t75u2";
+import { buildAlumniBoostBoard, alumniBoostAiPayload, validateAlumniBoostText, ALUMNI_BOOST_TITLE, ALUMNI_BOOST_SOURCE_NOTE } from "../domain/alumniBoost.js?v=t75u2";
+import { explainScoreDrop, scoreDropAiPayload, validateScoreDropText, listScoreDropEntries } from "../domain/scoreDrop.js?v=t75u2";
 import {
   formatDisciplineBoard, filterDisciplineNotices, enrichDisciplineNotice,
   disciplineNoticeFilterOptions, disciplineBoardButtonLabel, disciplineBoardEmptyNote,
   filtersAreActive,
-} from "../domain/cheating.js?v=t74u2";
+} from "../domain/cheating.js?v=t75u2";
 import {
   buildStudentScoreTrendFacts, formatLocalStudentScoreTrend, studentScoreTrendChartModel,
   studentScoreTrendAiPayload, validateScoreTrendText,
   buildClassScoreTrendFacts, formatLocalClassScoreTrend, classScoreTrendChartModel,
   classScoreTrendAiPayload, SCORE_TREND_SOURCE_NOTE,
-} from "../domain/scoreTrend.js?v=t74u2";
-import { sameTierFirstBoard, classFirstBoard, formatStability } from "../domain/toppers.js?v=t74u2";
-import { decorateDisplayRanks, formatRankTriple, reportRankOpts, agendaStateKey, shouldRefreshAgenda } from "../domain/displayRanks.js?v=t74u2";
-import { classOfficesFor, officeTitlesOf, selectClassOffices } from "../domain/classManage.js?v=t74u2";
-import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t74u2";
-import { provincialLines, officialProvincialPack, provincialTrackLabel, provincialFirstShortLabel, provincialSecondShortLabel, provincialFirstLabel, provincialSecondLabel } from "../domain/jiangxi.js?v=t74u2";
-import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t74u2";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t74u2";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t74u2";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t74u2";
+} from "../domain/scoreTrend.js?v=t75u2";
+import { sameTierFirstBoard, classFirstBoard, formatStability } from "../domain/toppers.js?v=t75u2";
+import { decorateDisplayRanks, formatRankTriple, reportRankOpts, agendaStateKey, shouldRefreshAgenda } from "../domain/displayRanks.js?v=t75u2";
+import { classOfficesFor, officeTitlesOf, selectClassOffices } from "../domain/classManage.js?v=t75u2";
+import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t75u2";
+import { provincialLines, officialProvincialPack, provincialTrackLabel, provincialFirstShortLabel, provincialSecondShortLabel, provincialFirstLabel, provincialSecondLabel } from "../domain/jiangxi.js?v=t75u2";
+import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t75u2";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t75u2";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t75u2";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t75u2";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
@@ -124,7 +124,7 @@ import {
   requestTalkAdvice, requestTeachingReflection, requestResumePolish,
   requestAlumniBoostPolish, requestScoreDropPolish,
   requestStudentScoreTrend, requestClassScoreTrend,
-} from "../domain/examAi.js?v=t74u2";
+} from "../domain/examAi.js?v=t75u2";
 
 let state = null;
 let view = "classroom";
@@ -427,9 +427,12 @@ function openAppDialog({ title, bodyHtml, onBind } = {}) {
     <div class="app-dialog" role="dialog" aria-modal="true" aria-labelledby="app-dialog-title">
       <div class="app-dialog-head">
         <h3 id="app-dialog-title">${escapeHtml(title || "")}</h3>
-        <button type="button" class="app-dialog-close" data-close-dialog="1">关闭</button>
+        <button type="button" class="app-dialog-close accent" data-close-dialog="1">关闭</button>
       </div>
       <div class="app-dialog-body" id="app-dialog-body">${bodyHtml || ""}</div>
+      <div class="app-dialog-foot">
+        <button type="button" class="app-dialog-close app-dialog-close-bottom accent" data-close-dialog="1">关闭</button>
+      </div>
     </div>`;
   document.body.appendChild(root);
   document.body.style.overflow = "hidden";

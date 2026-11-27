@@ -1,8 +1,8 @@
 /** 江西公开分数线与一分一段查询。 */
-import { JX_DATA } from "../data/jiangxi2020.js?v=t74u2";
-import { hash01 } from "./prng.js?v=t74u2";
-import { UNI_985 as OFFICIAL_UNI_985, UNI_211 as OFFICIAL_UNI_211, schoolNameTier } from "./schoolNames.js?v=t74u2";
-export { formatSchoolName, universityMark, schoolNameTier, is985Name, is211Name, OFFICIAL_985, OFFICIAL_211, OFFICIAL_985_COUNT, OFFICIAL_211_COUNT, SCHOOL_NAME_SOURCE } from "./schoolNames.js?v=t74u2";
+import { JX_DATA } from "../data/jiangxi2020.js?v=t75u2";
+import { hash01 } from "./prng.js?v=t75u2";
+import { UNI_985 as OFFICIAL_UNI_985, UNI_211 as OFFICIAL_UNI_211, schoolNameTier } from "./schoolNames.js?v=t75u2";
+export { formatSchoolName, universityMark, schoolNameTier, is985Name, is211Name, OFFICIAL_985, OFFICIAL_211, OFFICIAL_985_COUNT, OFFICIAL_211_COUNT, SCHOOL_NAME_SOURCE } from "./schoolNames.js?v=t75u2";
 
 export const PROVINCIAL = JX_DATA.provincial;
 export const JX_SOURCE_NOTES = JX_DATA.sourceNotes;

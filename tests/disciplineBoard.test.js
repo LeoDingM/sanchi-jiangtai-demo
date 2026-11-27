@@ -166,3 +166,19 @@ test("成绩、教务处、日志默认只放公告按钮，点开后同一套�
   assert.match(log, /bindBoardDialogs/);
   assert.match(app, /function bindBoardDialogs/);
 });
+
+test("处分和掉分弹窗共用模板，顶部和底部都有可见的「关闭」按钮", () => {
+  const app = readFileSync(new URL("../js/ui/app.js", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../css/style.css", import.meta.url), "utf8");
+  const open = functionSource(app, "openAppDialog");
+  assert.match(open, /app-dialog-head[\s\S]*app-dialog-close[\s\S]*>关闭</);
+  assert.match(open, /app-dialog-foot[\s\S]*app-dialog-close-bottom[\s\S]*>关闭</);
+  const labels = open.match(/>关闭</g) || [];
+  assert.ok(labels.length >= 2, `顶部和底部都应写明「关闭」，实际 ${labels.length} 处`);
+  assert.match(functionSource(app, "openDisciplineDialog"), /openAppDialog\(/);
+  assert.match(functionSource(app, "openScoreDropDialog"), /openAppDialog\(/);
+  assert.match(css, /safe-area-inset-top/);
+  assert.match(css, /app-dialog-foot/);
+  assert.match(css, /app-dialog-close-bottom/);
+  assert.doesNotMatch(css, /\.app-dialog-root \{ padding: 0; place-items: stretch; \}/);
+});

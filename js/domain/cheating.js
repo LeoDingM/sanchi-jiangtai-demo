@@ -4,8 +4,8 @@
  * 未查实不出公告、不写入履历已确认处分。高考/会考/官方联考不做校内处分文件。
  * 查实后取消该次作弊所得分数并重算名次，不改省控或校内线口径。
  */
-import { hash01 } from "./prng.js?v=t74u2";
-import { addDays } from "./calendar.js?v=t74u2";
+import { hash01 } from "./prng.js?v=t75u2";
+import { addDays } from "./calendar.js?v=t75u2";
 
 /** 只对校本考试建模校内处分；高考、会考、市/省联考不伪造考试院文件。 */
 export const SCHOOL_CHEAT_KINDS = new Set(["monthly", "midterm", "final", "mock1", "mock2", "mock3"]);

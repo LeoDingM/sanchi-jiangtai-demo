@@ -1,9 +1,9 @@
 /** 学校活动：秋季运动会、迎新年（元旦）。
  * 日期是宁川中学校内安排，不是某所真实中学或教育行政部门的公告日期。
  */
-import { clamp, pick, rngFrom, shuffle } from "./prng.js?v=t74u2";
-import { formatCohortGrade } from "./calendar.js?v=t74u2";
-import { seatLabel } from "./school.js?v=t74u2";
+import { clamp, pick, rngFrom, shuffle } from "./prng.js?v=t75u2";
+import { formatCohortGrade } from "./calendar.js?v=t75u2";
+import { seatLabel } from "./school.js?v=t75u2";
 
 export const ACTIVITY_SOURCE_NOTE = "校内日期安排，按普通高中在第一次月考后举行秋季运动会、在第二次月考后举行迎新年（元旦）活动的惯例排入宁川中学校历，不是某所实校或教育行政部门公告的逐年日期。";
 

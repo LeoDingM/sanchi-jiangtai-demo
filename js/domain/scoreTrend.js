@@ -3,8 +3,8 @@
  * 只根据档案里的真实分数、排名和已记录事实；图表坐标也只由此计算，不让 AI 编造。
  * 潜力默认不对教师展示，也不写入分析正文（上帝模式除外且须标明）。
  */
-import { subjectById } from "./config.js?v=t74u2";
-import { cheatRecordOf, absentSubjectsOf } from "./scoreDrop.js?v=t74u2";
+import { subjectById } from "./config.js?v=t75u2";
+import { cheatRecordOf, absentSubjectsOf } from "./scoreDrop.js?v=t75u2";
 
 export const SCORE_TREND_LIMIT = 5;
 export const SCORE_TREND_SOURCE_NOTE = "图表按档案里的真实分数和排名绘制。文字只解释这些已有数据；没有查实记录就不会写成作弊、缺考或处分。推测会标明不是已查实。";

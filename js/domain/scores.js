@@ -5,10 +5,10 @@
 import {
   SUBJECTS_G1, SUBJECT_IDS, SUBJECT_MAX, G1_TOTAL, CUTOFF_FIRST_RANK, CUTOFF_SECOND_RANK,
   LI_SUBJECTS, WEN_SUBJECTS, TIER, examById,
-} from "./config.js?v=t74u2";
-import { clamp, gauss, hash01, rngFrom, round1, round2 } from "./prng.js?v=t74u2";
-import { resolveSchoolQuota } from "./schoolLines.js?v=t74u2";
-import { newGaokaoSubjects, defaultElectivesForTrack, isReelectiveId, isNewGaokaoYear, formatElectives, SUBJECT_NAMES as NG_NAMES } from "./newGaokao.js?v=t74u2";
+} from "./config.js?v=t75u2";
+import { clamp, gauss, hash01, rngFrom, round1, round2 } from "./prng.js?v=t75u2";
+import { resolveSchoolQuota } from "./schoolLines.js?v=t75u2";
+import { newGaokaoSubjects, defaultElectivesForTrack, isReelectiveId, isNewGaokaoYear, formatElectives, SUBJECT_NAMES as NG_NAMES } from "./newGaokao.js?v=t75u2";
 
 export const SCALE_G1 = "g1-950";
 export const SCALE_G2 = "g2-750";

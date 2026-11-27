@@ -4,7 +4,7 @@
  * （文科/理科、文综/理综、一本/二本），不启用选课、赋分或科目组。
  * 2016–2020 结构与省控锁定，本文件不改那些数字。
  */
-import { hash01, rngFrom, gauss, clamp } from "./prng.js?v=t74u2";
+import { hash01, rngFrom, gauss, clamp } from "./prng.js?v=t75u2";
 
 /** 江西新高考首考年份（2021 级高一，2024 年高考）。 */
 export const JIANGXI_NEW_GAOKAO_FIRST_YEAR = 2024;
