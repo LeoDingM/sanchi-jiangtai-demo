@@ -78,32 +78,32 @@ import {
   suggestPaperSignIssue, suggestPaperSignRegister, suggestPaperSignInform,
   PAPER_SIGN_ACTIONS, PAPER_SIGN_SOURCE_NOTE, PAPER_SIGN_BATCH_MIN, PAPER_SIGN_BATCH_MAX,
   PAPER_SIGN_DAY_CAP,
-} from "../domain/simulation.js?v=t69u1";
-import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t69u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t69u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t69u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t69u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t69u1";
-import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t69u1";
-import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t69u1";
-import { hydrateReport } from "../domain/simulation.js?v=t69u1";
-import { renderSeating } from "./classroom.js?v=t69u1";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t69u1";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t69u1";
-import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t69u1";
-import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t69u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t69u1";
-import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t69u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t69u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t69u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t69u1";
+} from "../domain/simulation.js?v=t70u1";
+import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t70u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t70u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t70u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t70u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t70u1";
+import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t70u1";
+import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t70u1";
+import { hydrateReport } from "../domain/simulation.js?v=t70u1";
+import { renderSeating } from "./classroom.js?v=t70u1";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t70u1";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t70u1";
+import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t70u1";
+import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t70u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t70u1";
+import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t70u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t70u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t70u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t70u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
   parseAiCommentary, emptyAiCommentary,
-} from "../domain/examAi.js?v=t69u1";
+} from "../domain/examAi.js?v=t70u1";
 
 let state = null;
 let view = "classroom";
@@ -597,7 +597,11 @@ function examSourceNotice(report) {
     return report.sourceNote || "此为高二学业水平考试的校内合格记载：单科达到卷面满分 60% 记为合格。日期为校历示意，未按某年省教育考试院公告逐条核对；未收录公开会考合格线，不以校内一本/二本线作为本场主要结果。文理交叉科目尚未单独建模。";
   }
   if (report.examKind === "city" || report.examKind === "province") {
-    return report.sourceNote || "按公开高考规模模拟的联考位次/划线，不是当年官方联考一分一段。校内线按该科类划线池约第 520、第 1100 名划，只作校内对照，不冒充市线或省线。";
+    const senior = report.grade >= 3 || report.cutoffs?.includeRepeat;
+    const school = senior
+      ? "校内线按该科类应届与补习班同一池约第 520、第 1100 名划，只作校内对照，不冒充市线或省线。"
+      : "校内线按本年级应届池比例折算，不能套用高三的第 520、第 1100 名，只作校内对照，不冒充市线或省线。";
+    return report.sourceNote || `按公开高考规模模拟的联考位次/划线，不是当年官方联考一分一段。${school}`;
   }
   return report.sourceNote || "";
 }
@@ -2624,10 +2628,10 @@ function schoolLinesNote(report, track = "li") {
   const why = ordinary
     ? (withRepeat
         ? "平时考试没有国家线。校内线按应届与补习班同一池约第 520、第 1100 名划，只作对照，不是省控。"
-        : "平时考试没有国家线，校内线按该科类或年级划线池约第 520、第 1100 名划，池不足则收束，以上是校内对照，不是省控。")
+        : "平时考试没有国家线。本年级没有补习班，校内线按应届池比例折算，不能套用高三的第 520、第 1100 名，以上是校内对照，不是省控。")
     : (withRepeat
         ? "以上校内线按应届与补习班同一池约第 520、第 1100 名取分（池人数不足时按池内规模收束），只作对照，不是国家线。"
-        : "以上校内线按本场该科类或年级划线池约第 520、第 1100 名取分（池人数不足时按池内规模收束），只作对照，不是国家线。");
+        : "以上校内线按本年级应届池比例折算取分，本年级没有补习班，不能套用高三的第 520、第 1100 名（池人数不足时按池内规模收束），只作对照，不是国家线。");
   const extra = cutW ? `文科${cutW.firstTitle} ${cutW.firstLine}，${cutW.secondTitle} ${cutW.secondLine}，分差 ${cutW.gap}。` : "";
   return `${cut.firstTitle} ${cut.firstLine}，${cut.secondTitle} ${cut.secondLine}，分差 ${cut.gap}。${extra}${why}`;
 }
@@ -3196,8 +3200,12 @@ function viewOffice(host) {
       if (live.examKind==="city") return `<td>${r.cityRank??"—"}</td>`;
       return `<td>${r.line||""}</td>`;
     };
+    const seniorCut = live.grade >= 3 || live.cutoffs?.includeRepeat;
+    const ordinaryCutNote = seniorCut
+      ? "平时考试没有国家线，校内线按该科类应届与补习班同一池约第 520、第 1100 名划，只作校内对照，不是省控。"
+      : "平时考试没有国家线，校内线按本年级应届池比例折算，不能套用高三的第 520、第 1100 名，只作校内对照，不是省控。";
     body.innerHTML = `
-      <p class="notice">难度 ${(live.difficulty||1).toFixed(3)}　离散 ${(live.dispersion||1).toFixed(3)}。${isJoint?"市/省/县线由模拟考生池位次算出，校内线只作校内对照。":isGk?"高考上线以公开省控（国家线）为主，校内线只作对照。":"平时考试没有国家线，校内线按该科类划线池约第 520、第 1100 名划，只作校内对照，不是省控。"}班级汇总全部由个人成绩加总，不另造统计。${examSourceNotice(live)?" "+examSourceNotice(live):""}</p>
+      <p class="notice">难度 ${(live.difficulty||1).toFixed(3)}　离散 ${(live.dispersion||1).toFixed(3)}。${isJoint?"市/省/县线由模拟考生池位次算出，校内线只作校内对照。":isGk?"高考上线以公开省控（国家线）为主，校内线只作对照。":ordinaryCutNote}班级汇总全部由个人成绩加总，不另造统计。${examSourceNotice(live)?" "+examSourceNotice(live):""}</p>
       ${isHk?"":`<p class="notice">${lineCompareNotice(live, state.player.classNo)}</p>`}
       ${mainKpi}
       <p class="notice">${topLine}</p>

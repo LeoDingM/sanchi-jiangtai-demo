@@ -1,10 +1,11 @@
 /**
- * 校内一本/二本按该科类划线池约第 520、第 1100 名取分。
- * 高三池为应届与补习班同一池。应届省控上线人数仍只统应届，只作对照统计，不再当作校内划线名额。
+ * 校内一本/二本：只有高三按该科类应届与补习班同一池约第 520、第 1100 名取分。
+ * 高一高二没有补习班，按 520/1696、1100/1696 折算到本年级应届池，不能套用这两个绝对名次。
+ * 应届省控上线人数仍只统应届，只作对照统计，不再当作校内划线名额。
  */
-import { FALLBACK_SCHOOL_QUOTA, SCHOOL_LINE_FIRST_RANK, SCHOOL_LINE_SECOND_RANK } from "./config.js?v=t69u1";
-import { provincialLines, officialProvincialPack } from "./jiangxi.js?v=t69u1";
-import { hash01 } from "./prng.js?v=t69u1";
+import { FALLBACK_SCHOOL_QUOTA, SCHOOL_LINE_FIRST_RANK, SCHOOL_LINE_SECOND_RANK } from "./config.js?v=t70u1";
+import { provincialLines, officialProvincialPack } from "./jiangxi.js?v=t70u1";
+import { hash01 } from "./prng.js?v=t70u1";
 
 function clampRank(want, n) {
   const cap = Math.max(1, n);
@@ -42,10 +43,19 @@ export function schoolQuotaFromPrior(prior) {
   };
 }
 
-/** 一本目标约第 520 名、二本约第 1100 名。池不足时收束，绝不伪造人数。 */
+/**
+ * 高三理科应届+补习班参考池约 1696 人。一本/二本硬口径仅用于高三。
+ * 高一高二按同一比例折算到本年级应届池。池不足时收束，绝不伪造人数。
+ */
+const SENIOR_LI_POOL_REF = 1696;
 const FIRST_RATE_CAP = 0.50;
-const FIRST_RATE_REF = SCHOOL_LINE_FIRST_RANK / 1696;
+const FIRST_RATE_REF = SCHOOL_LINE_FIRST_RANK / SENIOR_LI_POOL_REF;
+const SECOND_RATE_REF = SCHOOL_LINE_SECOND_RANK / SENIOR_LI_POOL_REF;
 const LATE_FRAC = 0.90;
+
+function isSeniorCutoff(opts = {}) {
+  return !!(opts.senior ?? opts.includeRepeat);
+}
 
 function jitterAround(base, amplitude, salt) {
   if (salt == null || salt === "") return Math.round(base);
@@ -53,9 +63,26 @@ function jitterAround(base, amplitude, salt) {
   return Math.round(base + t * amplitude);
 }
 
-export function adaptSchoolCutoffRanks(n, { salt } = {}) {
+/** 高一高二：按 520/1696、1100/1696 折算，可围着折算名次做很小抖动，不能抖回 520/1100。 */
+function ratioCutoffRanks(size, { salt } = {}) {
+  let firstWant = size * FIRST_RATE_REF;
+  let secondWant = size * SECOND_RATE_REF;
+  if (salt) {
+    const firstAmp = Math.min(8, Math.max(1, Math.round(20 * firstWant / SCHOOL_LINE_FIRST_RANK)));
+    const secondAmp = Math.min(16, Math.max(1, Math.round(40 * secondWant / SCHOOL_LINE_SECOND_RANK)));
+    firstWant = jitterAround(firstWant, firstAmp, `${salt}|first`);
+    secondWant = jitterAround(secondWant, secondAmp, `${salt}|second`);
+  }
+  let firstN = clampRank(Math.round(firstWant), size);
+  let secondN = clampRank(Math.round(secondWant), size);
+  if (secondN <= firstN) secondN = Math.min(size, firstN + 1);
+  return { firstN, secondN, poolN: size, adapted: true, senior: false };
+}
+
+export function adaptSchoolCutoffRanks(n, { salt, senior, includeRepeat } = {}) {
   const size = Math.max(0, Math.round(Number(n) || 0));
-  if (size <= 0) return { firstN: 1, secondN: 1, poolN: 0, adapted: true };
+  if (size <= 0) return { firstN: 1, secondN: 1, poolN: 0, adapted: true, senior: isSeniorCutoff({ senior, includeRepeat }) };
+  if (!isSeniorCutoff({ senior, includeRepeat })) return ratioCutoffRanks(size, { salt });
   let firstWant = SCHOOL_LINE_FIRST_RANK;
   let secondWant = SCHOOL_LINE_SECOND_RANK;
   if (salt) {
@@ -83,20 +110,22 @@ export function adaptSchoolCutoffRanks(n, { salt } = {}) {
     }
     if (secondN <= firstN) secondN = Math.min(size, firstN + 1);
   }
-  return { firstN, secondN, poolN: size, adapted };
+  return { firstN, secondN, poolN: size, adapted, senior: true };
 }
 
-/** 算出本场一本/二本名额。按该科类划线池约第 520、第 1100 名；池不足则收束。高三池含补习班。 */
-export function resolveSchoolQuota({ split, track, regularN, trackN, salt } = {}) {
+/** 算出本场一本/二本名额。高三按约第 520、第 1100 名；高一高二按应届池比例折算。高三池含补习班。 */
+export function resolveSchoolQuota({ split, track, regularN, trackN, salt, senior, includeRepeat } = {}) {
   const n = split ? (trackN ?? regularN) : (regularN ?? trackN);
   const kind = split ? (track === "wen" ? "wen" : "li") : "mixed";
-  const ranks = adaptSchoolCutoffRanks(n, { salt: salt ? `${salt}|${kind}` : "" });
+  const isSenior = isSeniorCutoff({ senior, includeRepeat });
+  const ranks = adaptSchoolCutoffRanks(n, { salt: salt ? `${salt}|${kind}` : "", senior: isSenior });
   return {
     firstN: ranks.firstN,
     secondN: ranks.secondN,
     track: kind,
     adapted: ranks.adapted,
     poolN: ranks.poolN,
+    senior: isSenior,
   };
 }
 
@@ -268,26 +297,39 @@ export function schoolCutoffView(report, track = "li") {
 }
 
 export function describeSchoolCutoff(cutOrQuota, split, opts = {}) {
-  const pool = opts.includeRepeat
+  const senior = isSeniorCutoff(opts);
+  const pool = senior
     ? "高三校内名次按应届与补习班同一池划"
-    : "校内名次按本场考生排序";
+    : "本年级没有补习班，不能套用高三的第 520、第 1100 名，按应届池比例折算";
   const cut = opts.cutoffs || cutOrQuota || {};
   const mixed = opts.mixed || cut.mixed;
   const li = opts.li || cut.li;
   const wen = opts.wen || cut.wen;
   if (!split) {
-    const firstN = mixed?.firstN ?? opts.firstN ?? SCHOOL_LINE_FIRST_RANK;
-    const secondN = mixed?.secondN ?? opts.secondN ?? SCHOOL_LINE_SECOND_RANK;
-    return `分科前校内一本取该年级划线池第 ${firstN} 名，二本取第 ${secondN} 名（目标约全校第 520、第 1100 名，池人数不足时按池内规模收束；${pool}），只作对照，不是国家线`;
+    const firstN = mixed?.firstN ?? opts.firstN ?? (senior ? SCHOOL_LINE_FIRST_RANK : null);
+    const secondN = mixed?.secondN ?? opts.secondN ?? (senior ? SCHOOL_LINE_SECOND_RANK : null);
+    const ranks = firstN != null && secondN != null
+      ? `分科前校内一本取该年级划线池第 ${firstN} 名，二本取第 ${secondN} 名`
+      : "分科前校内一本、二本按该年级应届划线池比例折算取分";
+    if (senior) {
+      return `${ranks}（按该科类应届与补习班同一池约第 520、第 1100 名，池人数不足时按池内规模收束；${pool}），只作对照，不是国家线`;
+    }
+    return `${ranks}（${pool}），只作对照，不是国家线`;
   }
-  const lf = li?.firstN ?? opts.firstN ?? SCHOOL_LINE_FIRST_RANK;
-  const ls = li?.secondN ?? opts.secondN ?? SCHOOL_LINE_SECOND_RANK;
+  const lf = li?.firstN ?? opts.firstN;
+  const ls = li?.secondN ?? opts.secondN;
   const wf = wen?.firstN;
   const ws = wen?.secondN;
+  const liPart = (lf != null && ls != null) ? `本场理科第 ${lf}、第 ${ls} 名` : "本场理科按应届池比例折算";
   const wenPart = (wf != null && ws != null)
     ? `；文科第 ${wf}、第 ${ws} 名`
-    : "；文科同样按该科类池约第 520、第 1100 名，池不足时二本取靠后名次、一本取靠前名次且不超出池规模";
-  return `校内一本、二本按该科类划线池约第 520、第 1100 名取分（本场理科第 ${lf}、第 ${ls} 名${wenPart}；${pool}），只作对照，不是国家线`;
+    : (senior
+      ? "；文科同样按该科类池约第 520、第 1100 名，池不足时二本取靠后名次、一本取靠前名次且不超出池规模"
+      : "；文科同样按应届池比例折算，二本不超过池规模，不伪造人数");
+  if (senior) {
+    return `校内一本、二本按该科类应届与补习班同一池约第 520、第 1100 名取分（${liPart}${wenPart}；${pool}），只作对照，不是国家线`;
+  }
+  return `校内一本、二本按本年级应届池比例折算取分（${liPart}${wenPart}；${pool}），只作对照，不是国家线`;
 }
 
 export function provincialCompareNote(report) {

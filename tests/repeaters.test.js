@@ -143,6 +143,14 @@ test("高三/高考校内二本池含补习班，应届省控统计不含；高�
   assert.equal(g2.cutoffs.includeRepeat, false);
   assert.equal((g2.cutoffs.ranked.li || []).filter((r) => r.repeat).length, 0);
   assert.equal((g2.cutoffs.ranked.wen || []).filter((r) => r.repeat).length, 0);
+  assert.ok(g2.cutoffs.li.count >= 1276 && g2.cutoffs.li.count <= 1330, `理科高二应届池应约 1276 人，实际 ${g2.cutoffs.li.count}`);
+  const g2First = Math.round(g2.cutoffs.li.count * 520 / 1696);
+  const g2Second = Math.round(g2.cutoffs.li.count * 1100 / 1696);
+  assert.ok(Math.abs(g2.cutoffs.li.firstN - g2First) <= 20, `理科高二不得硬套 520，应约 ${g2First}，实际 ${g2.cutoffs.li.firstN}`);
+  assert.ok(Math.abs(g2.cutoffs.li.secondN - g2Second) <= 40, `理科高二不得硬套 1100，应约 ${g2Second}，实际 ${g2.cutoffs.li.secondN}`);
+  assert.notEqual(g2.cutoffs.li.firstN, 520);
+  assert.notEqual(g2.cutoffs.li.secondN, 1100);
+  assert.ok(g2.cutoffs.wen.secondN <= g2.cutoffs.wen.count, "高二文科二本不超过池规模");
 
   const gk = runExam(c, { id: "gk", name: "高考", examKind: "gaokao", difficulty: 1.003, dispersion: 1, date: "2018-06-07" }, { grade: 3, split: true });
   assert.equal(gk.cutoffs.includeRepeat, true);
@@ -150,7 +158,9 @@ test("高三/高考校内二本池含补习班，应届省控统计不含；高�
   assert.equal((gk.cutoffs.ranked.wen || []).filter((r) => r.repeat).length, 420);
   assert.equal(gk.cutoffs.li.count, g2.cutoffs.li.count + 420 + insertLi);
   assert.equal(gk.cutoffs.wen.count, g2.cutoffs.wen.count + 420);
+  assert.ok(gk.cutoffs.li.firstN >= 500 && gk.cutoffs.li.firstN <= 540, `高三理科一本约第 520 名，实际 ${gk.cutoffs.li.firstN}`);
   assert.ok(gk.cutoffs.li.secondN >= 1060 && gk.cutoffs.li.secondN <= 1140, `高三理科二本约第 1100 名，实际 ${gk.cutoffs.li.secondN}`);
+  assert.ok(gk.cutoffs.wen.secondN <= gk.cutoffs.wen.count, "高三文科池不足时二本不超出池规模");
   const pack = provincialPassCounts(c.students, gk.scoreMap, 2018);
   const regular = c.students.filter((s) => !s.repeat);
   assert.equal(pack.li.n + pack.wen.n, regular.length);

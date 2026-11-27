@@ -11,9 +11,20 @@ import {
 } from "../js/domain/schoolLines.js";
 import { SCHOOL_LINE_FIRST_RANK, SCHOOL_LINE_SECOND_RANK } from "../js/domain/config.js";
 
-test("校内一本/二本按约第 520、第 1100 名取分，不再按上一届省控人数或 400 分摊", () => {
-  const li = resolveSchoolQuota({ split: true, track: "li", regularN: 2000, trackN: 1696 });
-  const mixed = resolveSchoolQuota({ split: false, track: "mixed", regularN: 2000, trackN: 2000 });
+const SENIOR_LI_POOL_REF = 1696;
+function ratioRanks(n) {
+  return {
+    firstN: Math.round(n * 520 / SENIOR_LI_POOL_REF),
+    secondN: Math.round(n * 1100 / SENIOR_LI_POOL_REF),
+  };
+}
+function assertNearRatio(actual, expected, amp, label) {
+  assert.ok(Math.abs(actual - expected) <= amp, `${label}应约等于 ${expected}（允许很小抖动），实际 ${actual}`);
+}
+
+test("高三按约第 520、第 1100 名取分；高一高二按应届池比例折算，不再按上一届省控或 400 分摊", () => {
+  const li = resolveSchoolQuota({ split: true, track: "li", regularN: 2000, trackN: 1696, senior: true });
+  const mixed = resolveSchoolQuota({ split: false, track: "mixed", regularN: 2000, trackN: 2000, senior: true });
   assert.equal(li.firstN, 520);
   assert.equal(li.secondN, 1100);
   assert.equal(mixed.firstN, 520);
@@ -21,39 +32,60 @@ test("校内一本/二本按约第 520、第 1100 名取分，不再按上一届
   const oldShare = Math.round(400 * 1267 / 2000);
   assert.notEqual(li.firstN, oldShare);
 
-  const li2 = cutoffRanks(1980, true, 1696, { track: "li" });
-  const mix2 = cutoffRanks(1980, false, 1980, { track: "mixed" });
+  const li2 = cutoffRanks(1980, true, 1696, { track: "li", senior: true });
+  const mix2 = cutoffRanks(1980, false, 1980, { track: "mixed", senior: true });
   assert.equal(li2.firstN, 520);
   assert.equal(li2.secondN, 1100);
   assert.equal(mix2.firstN, 520);
   assert.equal(mix2.secondN, 1100);
 
   const g2li = resolveSchoolQuota({ split: true, track: "li", regularN: 2000, trackN: 1276 });
-  assert.equal(g2li.firstN, 520);
-  assert.equal(g2li.secondN, 1100);
+  const expectG2 = ratioRanks(1276);
+  assert.equal(g2li.firstN, expectG2.firstN);
+  assert.equal(g2li.secondN, expectG2.secondN);
+  assert.notEqual(g2li.firstN, 520);
+  assert.notEqual(g2li.secondN, 1100);
+  assert.equal(g2li.senior, false);
+
+  const juniorMixed = resolveSchoolQuota({ split: false, track: "mixed", regularN: 2000, trackN: 2000 });
+  const expectMix = ratioRanks(2000);
+  assert.equal(juniorMixed.firstN, expectMix.firstN);
+  assert.equal(juniorMixed.secondN, expectMix.secondN);
+  assert.notEqual(juniorMixed.firstN, 520);
+  assert.notEqual(juniorMixed.secondN, 1100);
 
   const smallLi = resolveSchoolQuota({ split: true, track: "li", regularN: 900, trackN: 800 });
+  const expectSmall = ratioRanks(800);
   assert.ok(smallLi.secondN <= 800, "二本不超过该划线池人数");
-  assert.ok(smallLi.firstN < 520, "池明显小于 1100 且一本占比过高时不应硬套 520");
+  assert.equal(smallLi.firstN, expectSmall.firstN);
+  assert.equal(smallLi.secondN, expectSmall.secondN);
+  assert.ok(smallLi.firstN < 520);
   assert.ok(smallLi.secondN < 1100);
 });
 
-test("文科池不足 1100 时二本不超出池规模，一本不肿胀", () => {
+test("文科池不足 1100 时二本不超出池规模，一本不肿胀；高三与高一高二口径不同", () => {
   const wenG2 = adaptSchoolCutoffRanks(720);
   assert.ok(wenG2.secondN <= 720, "不得伪造人数");
-  assert.ok(wenG2.adapted);
+  assert.equal(wenG2.firstN, ratioRanks(720).firstN);
+  assert.equal(wenG2.secondN, ratioRanks(720).secondN);
   assert.ok(wenG2.firstN < 520, "文科 720 人池硬套 520 会肿胀");
-  assert.ok(wenG2.firstN / 720 <= 0.40, `一本应靠前且占比受限，实际 ${wenG2.firstN}`);
-  assert.ok(wenG2.secondN >= Math.round(720 * 0.8), `二本应靠后，实际 ${wenG2.secondN}`);
 
   const wenTiny = adaptSchoolCutoffRanks(400);
   assert.ok(wenTiny.secondN <= 400);
-  assert.ok(wenTiny.firstN < 400 && wenTiny.firstN < 200, "400 人池不应几乎全员一本");
+  assert.equal(wenTiny.firstN, ratioRanks(400).firstN);
+  assert.equal(wenTiny.secondN, ratioRanks(400).secondN);
+  assert.ok(wenTiny.firstN < 200, "400 人池不应几乎全员一本");
 
-  const wenG3 = adaptSchoolCutoffRanks(1140);
+  const wenG3 = adaptSchoolCutoffRanks(1140, { senior: true });
   assert.equal(wenG3.firstN, 520);
   assert.equal(wenG3.secondN, 1100);
   assert.ok(wenG3.secondN <= 1140);
+
+  const wenG3small = adaptSchoolCutoffRanks(720, { senior: true });
+  assert.ok(wenG3small.secondN <= 720, "高三文科池不足时不得伪造人数");
+  assert.ok(wenG3small.firstN < 520, "高三文科 720 人池硬套 520 会肿胀");
+  assert.ok(wenG3small.firstN / 720 <= 0.40, `一本应靠前且占比受限，实际 ${wenG3small.firstN}`);
+  assert.ok(wenG3small.secondN >= Math.round(720 * 0.8), `高三文科二本应靠后，实际 ${wenG3small.secondN}`);
 });
 
 test("复读不计入应届省控上线人数", () => {
@@ -104,15 +136,28 @@ test("开局补上 2014 级 2017 年高考统计，不进入可玩年级，且�
 
   let c = generateCohort(2017, 20170901);
   const pre = runExam(c, { id: "pre", name: "期末考试", examKind: "final", difficulty: 1, dispersion: 1, date: "2018-01-16" }, { grade: 1, split: false });
-  assert.ok(pre.cutoffs.mixed.firstN >= 500 && pre.cutoffs.mixed.firstN <= 540, `高一分科前一本约第 520 名，实际 ${pre.cutoffs.mixed.firstN}`);
-  assert.ok(pre.cutoffs.mixed.secondN >= 1060 && pre.cutoffs.mixed.secondN <= 1140, `高一分科前二本约第 1100 名，实际 ${pre.cutoffs.mixed.secondN}`);
+  assert.equal(pre.cutoffs.includeRepeat, false);
+  const preN = pre.cutoffs.mixed.count;
+  const preExpect = ratioRanks(preN);
+  assertNearRatio(pre.cutoffs.mixed.firstN, preExpect.firstN, 20, `高一分科前混合池 ${preN} 人一本`);
+  assertNearRatio(pre.cutoffs.mixed.secondN, preExpect.secondN, 40, `高一分科前混合池 ${preN} 人二本`);
+  assert.notEqual(pre.cutoffs.mixed.firstN, 520);
+  assert.notEqual(pre.cutoffs.mixed.secondN, 1100);
   c = { ...c, students: firstPlacement(c.students, pre.scoreMap, { seed: 20170901 }).students };
   c.classes = rebuildClasses(c.students);
   const mid = runExam(c, { id: "f2", name: "下学期期末", examKind: "final", difficulty: 1, dispersion: 1, date: "2018-06-25" }, { grade: 1, split: true });
-  assert.ok(mid.cutoffs.li.firstN >= 500 && mid.cutoffs.li.firstN <= 540);
+  assert.equal(mid.cutoffs.includeRepeat, false);
+  const midLiExpect = ratioRanks(mid.cutoffs.li.count);
+  assertNearRatio(mid.cutoffs.li.firstN, midLiExpect.firstN, 20, `高一分科后理科池 ${mid.cutoffs.li.count} 人一本`);
+  assertNearRatio(mid.cutoffs.li.secondN, midLiExpect.secondN, 40, `高一分科后理科池 ${mid.cutoffs.li.count} 人二本`);
+  assert.notEqual(mid.cutoffs.li.firstN, 520);
+  assert.notEqual(mid.cutoffs.li.secondN, 1100);
   assert.ok(mid.cutoffs.li.secondN === Math.min(mid.cutoffs.li.secondN, mid.cutoffs.li.count));
   assert.ok(mid.cutoffs.wen.secondN <= mid.cutoffs.wen.count, "文科二本不超出池规模");
   assert.ok(mid.cutoffs.wen.secondN < 1100 || mid.cutoffs.wen.count >= 1100);
+  const midWenExpect = ratioRanks(mid.cutoffs.wen.count);
+  assertNearRatio(mid.cutoffs.wen.firstN, midWenExpect.firstN, 20, "高一文科一本");
+  assertNearRatio(mid.cutoffs.wen.secondN, midWenExpect.secondN, 40, "高一文科二本");
 
   const cls = mid.classes.find((x) => x.classNo === 16);
   const text = examResultLogText(mid, { classSummary: cls, classNo: 16, schoolQuota: q });
@@ -120,6 +165,8 @@ test("开局补上 2014 级 2017 年高考统计，不进入可玩年级，且�
   assert.match(text, /对照2018年省控/);
   assert.match(text, /950/);
   assert.match(text, /卓行/);
+  assert.match(text, /没有补习班|比例折算/);
+  assert.doesNotMatch(text, /目标约全校第 520/);
 });
 
 test("2015 级 2018 年高考之后，校内线改用刚结束那届实际人数", () => {
@@ -138,7 +185,7 @@ test("2015 级 2018 年高考之后，校内线改用刚结束那届实际人数
   assert.ok(after.wen.secondN < 1100);
 });
 
-test("校内线目标名次是约第 520、第 1100 名，说明不再用旧口径", () => {
+test("高三说明写含补习班约第 520、第 1100 名；高一高二说明按比例折算，不再用旧口径", () => {
   assert.equal(SCHOOL_LINE_FIRST_RANK, 520);
   assert.equal(SCHOOL_LINE_SECOND_RANK, 1100);
   const text = describeSchoolCutoff({ li: { firstN: 518, secondN: 1092 }, wen: { firstN: 520, secondN: 1100 } }, true, { includeRepeat: true });
@@ -146,6 +193,13 @@ test("校内线目标名次是约第 520、第 1100 名，说明不再用旧口�
   assert.match(text, /第 1100/);
   assert.match(text, /应届与补习班同一池/);
   assert.doesNotMatch(text, /约 460|前 1000 名|上一届.*省控一本/);
+  const junior = describeSchoolCutoff({ li: { firstN: 391, secondN: 828 }, wen: { firstN: 226, secondN: 477 } }, true, { includeRepeat: false });
+  assert.match(junior, /没有补习班/);
+  assert.match(junior, /比例折算/);
+  assert.doesNotMatch(junior, /目标约全校第 520/);
+  const juniorPre = describeSchoolCutoff({ mixed: { firstN: 632, secondN: 1338 } }, false, { includeRepeat: false });
+  assert.match(juniorPre, /没有补习班|比例折算/);
+  assert.doesNotMatch(juniorPre, /目标约全校第 520/);
   const fb = fallbackSchoolQuota();
   assert.ok(fb.fallback);
   assert.match(fb.source, /不是官方精确名额|不是校内划线名额/);
@@ -161,4 +215,23 @@ test("高三理科校内一本约第 500-540 名、二本约 1060-1140 名", () 
   if (gk.cutoffs.wen.count < 1100) {
     assert.ok(gk.cutoffs.wen.secondN <= gk.cutoffs.wen.count, "文科池不足时二本不超出池规模");
   }
+});
+
+test("高一高二带 salt 的折算名次只做很小抖动，不能回到 520/1100", () => {
+  const expect = ratioRanks(1276);
+  for (const salt of ["2018-06-25|g2|final|2", "a", "b", "c", "d"]) {
+    const ranks = adaptSchoolCutoffRanks(1276, { salt });
+    assertNearRatio(ranks.firstN, expect.firstN, 20, `理科高二 ${salt} 一本`);
+    assertNearRatio(ranks.secondN, expect.secondN, 40, `理科高二 ${salt} 二本`);
+    assert.notEqual(ranks.firstN, 520);
+    assert.notEqual(ranks.secondN, 1100);
+    assert.ok(ranks.secondN > ranks.firstN);
+    assert.ok(ranks.secondN <= 1276);
+  }
+  const mixed = adaptSchoolCutoffRanks(2000, { salt: "g1-mixed" });
+  const expectMix = ratioRanks(2000);
+  assertNearRatio(mixed.firstN, expectMix.firstN, 20, "分科前混合池一本");
+  assertNearRatio(mixed.secondN, expectMix.secondN, 40, "分科前混合池二本");
+  assert.notEqual(mixed.firstN, 520);
+  assert.notEqual(mixed.secondN, 1100);
 });

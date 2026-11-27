@@ -6,18 +6,18 @@
  * 也不能改成主持班会或数学晚自习答疑/点名。
  * 未看班的自习不挡住自动推进或「下一节」。
  */
-import { clamp, hash01 } from "./prng.js?v=t69u1";
-import { addDays, SCHOOL_CALENDAR, weekday } from "./calendar.js?v=t69u1";
+import { clamp, hash01 } from "./prng.js?v=t70u1";
+import { addDays, SCHOOL_CALENDAR, weekday } from "./calendar.js?v=t70u1";
 import {
   activityEventOn, currentSlot, formatSlotLabel, majorEventOn,
-} from "./timetable.js?v=t69u1";
-import { allHomeworkRows, isOpenHomework, suggestedTopic } from "./teaching.js?v=t69u1";
-import { isParentsMeetingOpen } from "./parents.js?v=t69u1";
-import { isAwayFromClass } from "./health.js?v=t69u1";
-import { playerClassStudents } from "./visits.js?v=t69u1";
-import { deskChatPairs, deskMateOf } from "./peers.js?v=t69u1";
-import { seatLabel } from "./school.js?v=t69u1";
-import { HOMEROOM_NAME, PLAYER_CLASS_NO } from "./config.js?v=t69u1";
+} from "./timetable.js?v=t70u1";
+import { allHomeworkRows, isOpenHomework, suggestedTopic } from "./teaching.js?v=t70u1";
+import { isParentsMeetingOpen } from "./parents.js?v=t70u1";
+import { isAwayFromClass } from "./health.js?v=t70u1";
+import { playerClassStudents } from "./visits.js?v=t70u1";
+import { deskChatPairs, deskMateOf } from "./peers.js?v=t70u1";
+import { seatLabel } from "./school.js?v=t70u1";
+import { HOMEROOM_NAME, PLAYER_CLASS_NO } from "./config.js?v=t70u1";
 
 export const STUDY_HALL_ACTIONS = [
   { id: "patrol", label: "巡视纪律" },

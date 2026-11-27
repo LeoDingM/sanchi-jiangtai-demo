@@ -4,20 +4,20 @@
  * 贺卡、问候和摘记由已有事实与确定性 PRNG 生成，不用 LLM，不改能力、分数、排名或省控。
  * 这不是某所实校或教育行政部门的表彰大会，也不套用某台晚会流程。
  */
-import { clamp, hash01 } from "./prng.js?v=t69u1";
-import { addDays, eventsOn, schoolYearOf, weekday, ymd, SCHOOL_CALENDAR } from "./calendar.js?v=t69u1";
+import { clamp, hash01 } from "./prng.js?v=t70u1";
+import { addDays, eventsOn, schoolYearOf, weekday, ymd, SCHOOL_CALENDAR } from "./calendar.js?v=t70u1";
 import {
   activityEventOn, currentSlot, isEveningPeriodId, majorEventOn,
-} from "./timetable.js?v=t69u1";
-import { studentTeachingContext } from "./teaching.js?v=t69u1";
-import { isParentsMeetingOpen } from "./parents.js?v=t69u1";
-import { playerClassStudents } from "./visits.js?v=t69u1";
-import { isOfficeSittingSlot } from "./homeVisit.js?v=t69u1";
-import { isAwayFromClass, leaveCovering } from "./health.js?v=t69u1";
-import { seatLabel } from "./school.js?v=t69u1";
-import { classCommittee, committeeTitleOf } from "./classManage.js?v=t69u1";
-import { HOMEROOM_NAME, MENTOR_NAME } from "./config.js?v=t69u1";
-import { MATH_COLLEAGUES } from "./observe.js?v=t69u1";
+} from "./timetable.js?v=t70u1";
+import { studentTeachingContext } from "./teaching.js?v=t70u1";
+import { isParentsMeetingOpen } from "./parents.js?v=t70u1";
+import { playerClassStudents } from "./visits.js?v=t70u1";
+import { isOfficeSittingSlot } from "./homeVisit.js?v=t70u1";
+import { isAwayFromClass, leaveCovering } from "./health.js?v=t70u1";
+import { seatLabel } from "./school.js?v=t70u1";
+import { classCommittee, committeeTitleOf } from "./classManage.js?v=t70u1";
+import { HOMEROOM_NAME, MENTOR_NAME } from "./config.js?v=t70u1";
+import { MATH_COLLEAGUES } from "./observe.js?v=t70u1";
 
 export const TEACHERS_DAY_CARD_MIN = 3;
 export const TEACHERS_DAY_CARD_MAX = 6;

@@ -5,9 +5,9 @@
 import {
   SUBJECTS_G1, SUBJECT_IDS, SUBJECT_MAX, G1_TOTAL, CUTOFF_FIRST_RANK, CUTOFF_SECOND_RANK,
   LI_SUBJECTS, WEN_SUBJECTS, TIER, examById,
-} from "./config.js?v=t69u1";
-import { clamp, gauss, hash01, rngFrom, round1, round2 } from "./prng.js?v=t69u1";
-import { resolveSchoolQuota } from "./schoolLines.js?v=t69u1";
+} from "./config.js?v=t70u1";
+import { clamp, gauss, hash01, rngFrom, round1, round2 } from "./prng.js?v=t70u1";
+import { resolveSchoolQuota } from "./schoolLines.js?v=t70u1";
 
 export const SCALE_G1 = "g1-950";
 export const SCALE_G2 = "g2-750";
@@ -394,19 +394,23 @@ export function subjectRanks(rows, subjectId) {
 }
 
 /**
- * 校内一本/二本名额：该科类划线池约第 520、第 1100 名取分。
- * 高三池为应届加补习班；池人数不足 1100 时二本取靠后名次且不超过池规模，
+ * 校内一本/二本名额：只有高三按该科类应届与补习班同一池约第 520、第 1100 名取分。
+ * 高一高二按 520/1696、1100/1696 折算到应届池，不能套用这两个绝对名次。
+ * 高三池人数不足 1100 时二本取靠后名次且不超过池规模，
  * 不足 520 或一本占比过高时一本取靠前名次，避免文科池被撑得像理科。
- * 第四个参数可以是 { track, salt }。
+ * 第四个参数可以是 { track, salt, senior, includeRepeat }。
  */
 export function cutoffRanks(n, split, trackSize, firstOrOpts, secondTarget) {
   const opts = firstOrOpts && typeof firstOrOpts === "object" ? firstOrOpts : {};
+  const senior = !!(opts.senior ?? opts.includeRepeat);
   return resolveSchoolQuota({
     split: !!split,
     track: opts.track || (split ? "li" : "mixed"),
     regularN: n,
     trackN: trackSize ?? n,
     salt: opts.salt,
+    senior,
+    includeRepeat: opts.includeRepeat ?? senior,
   });
 }
 

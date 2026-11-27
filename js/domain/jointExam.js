@@ -3,8 +3,8 @@
  * 分数线由当次模拟池实考分和位次算出，不手写；也不把模拟池伪装成
  * 江西省教育考试院正式公布的联考一分一段。
  */
-import { JX_DATA } from "../data/jiangxi2020.js?v=t69u1";
-import { clamp } from "./prng.js?v=t69u1";
+import { JX_DATA } from "../data/jiangxi2020.js?v=t70u1";
+import { clamp } from "./prng.js?v=t70u1";
 
 const PIVOT = Math.round(0.62 * 750); // 与 scores.js 难度平移支点一致
 
@@ -261,7 +261,7 @@ function buildLayer(track, difficulty, dispersion, schoolScores, meta, { shift =
 
 /**
  * 为市联考/省联考的本校考生写入市/县（及省）位次，并返回各层划线。
- * 校内线仍由 examService 按该科类划线池约第 520、第 1100 名单独计算，不用来冒充市线或省线。
+ * 校内线仍由 examService 单独计算：高三按该科类应届与补习班同一池约第 520、第 1100 名，高一高二按应届池比例折算，不用来冒充市线或省线。
  */
 export function attachJointExam(rows, exam) {
   const kind = exam.examKind;

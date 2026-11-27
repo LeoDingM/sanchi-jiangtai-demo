@@ -3,17 +3,17 @@
  * 建议名单由已有事实与确定性 PRNG 生成，不用 LLM，不改能力、分数或省控。
  * 这不是班主任走访全班，也不是某所实校或教育局规定的家访周。
  */
-import { clamp, hash01 } from "./prng.js?v=t69u1";
-import { parseYmd, schoolYearOf, termOf, weekday } from "./calendar.js?v=t69u1";
+import { clamp, hash01 } from "./prng.js?v=t70u1";
+import { parseYmd, schoolYearOf, termOf, weekday } from "./calendar.js?v=t70u1";
 import {
   activityEventOn, currentSlot, daySchedule, isClassPeriodId, isEveningPeriodId, majorEventOn,
-} from "./timetable.js?v=t69u1";
-import { isOpenHomework, studentTeachingContext } from "./teaching.js?v=t69u1";
-import { composeParentBrief, parentTalkPriority, isParentsMeetingOpen } from "./parents.js?v=t69u1";
-import { playerClassStudents } from "./visits.js?v=t69u1";
-import { classPeersOf } from "./peers.js?v=t69u1";
-import { isAwayFromClass, leaveCovering } from "./health.js?v=t69u1";
-import { seatLabel } from "./school.js?v=t69u1";
+} from "./timetable.js?v=t70u1";
+import { isOpenHomework, studentTeachingContext } from "./teaching.js?v=t70u1";
+import { composeParentBrief, parentTalkPriority, isParentsMeetingOpen } from "./parents.js?v=t70u1";
+import { playerClassStudents } from "./visits.js?v=t70u1";
+import { classPeersOf } from "./peers.js?v=t70u1";
+import { isAwayFromClass, leaveCovering } from "./health.js?v=t70u1";
+import { seatLabel } from "./school.js?v=t70u1";
 
 export const PHONE_DAY_CAP = 2;
 export const PHONE_TERM_CAP = 30;

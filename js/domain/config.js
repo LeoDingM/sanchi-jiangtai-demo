@@ -35,7 +35,7 @@ export const GAOKAO_WEN = { chinese: 150, math: 150, english: 150, politics: 100
 export const CUTOFF_FIRST_RANK = 400;
 export const CUTOFF_SECOND_RANK = 1000;
 
-/** 现行校内一本/二本目标名次：该科类划线池约第 520、第 1100 名（允许小幅波动）。 */
+/** 高三校内一本/二本硬口径名次：该科类应届与补习班同一池约第 520、第 1100 名（允许小幅波动）。高一高二按 520/1696、1100/1696 折算到应届池。 */
 export const SCHOOL_LINE_FIRST_RANK = 520;
 export const SCHOOL_LINE_SECOND_RANK = 1100;
 

@@ -1,12 +1,12 @@
 /** 组织一次考试：出分、文理分列排名、分数线、层次筛选、单科第一。 */
-import { CUTOFF_FIRST_RANK, CUTOFF_SECOND_RANK } from "./config.js?v=t69u1";
+import { CUTOFF_FIRST_RANK, CUTOFF_SECOND_RANK } from "./config.js?v=t70u1";
 import {
   attachStudentMeta, cutoffRanks, cutoffsFromRanked, gradeStudent, rankRows,
   scaleOf, subjectRanks, summarizeClass, subjectsFor,
-} from "./scores.js?v=t69u1";
-import { provincialLines } from "./jiangxi.js?v=t69u1";
-import { attachJointExam, JOINT_SOURCE_NOTE } from "./jointExam.js?v=t69u1";
-import { fallbackSchoolQuota, classProvincialCounts, provincialCompareYear } from "./schoolLines.js?v=t69u1";
+} from "./scores.js?v=t70u1";
+import { provincialLines } from "./jiangxi.js?v=t70u1";
+import { attachJointExam, JOINT_SOURCE_NOTE } from "./jointExam.js?v=t70u1";
+import { fallbackSchoolQuota, classProvincialCounts, provincialCompareYear } from "./schoolLines.js?v=t70u1";
 
 export function studentTrackForExam(student, split) {
   if (!split || student.track === "mixed" || !student.track) return "mixed";
@@ -23,8 +23,8 @@ export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0
   }
   const regular = rows.filter((r) => !r.repeat);
   const repeaters = rows.filter((r) => r.repeat);
-  // 高三（含高考校内对照）把补习班算进同一个校内名次池；高一高二教务处榜单会并入同日高三补习班。
-  // 校内一本/二本按该池约第 520、第 1100 名取分，池不足则收束。
+  // 高三（含高考校内对照）把补习班算进同一个校内名次池；高一高二不把补习班划进本年级。
+  // 只有高三按该池约第 520、第 1100 名取分；高一高二按 520/1696、1100/1696 折算到应届池。
   const reallySplit = !!split;
   const includeRepeat = Number(grade) >= 3;
   const pool = includeRepeat ? rows : regular;
@@ -36,7 +36,7 @@ export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0
   if (!reallySplit) {
     const ranked = rankRows(pool);
     const n = pool.length;
-    const { firstN, secondN } = cutoffRanks(n, false, n, { track: "mixed", salt });
+    const { firstN, secondN } = cutoffRanks(n, false, n, { track: "mixed", salt, senior: includeRepeat, includeRepeat });
     cut.mixed = { ...cutoffsFromRanked(ranked, firstN, secondN), track: "mixed", firstN, secondN, count: n };
     applyLineFlags(ranked, cut.mixed);
     cut.ranked = { mixed: ranked };
@@ -46,7 +46,7 @@ export function runExam(cohort, exam, { grade, split, teachingBonusFor = () => 0
     for (const track of ["li", "wen"]) {
       const list = byTrack[track];
       const ranked = rankRows(list);
-      const { firstN, secondN } = cutoffRanks(totalN, true, list.length, { track, salt });
+      const { firstN, secondN } = cutoffRanks(totalN, true, list.length, { track, salt, senior: includeRepeat, includeRepeat });
       const c = { ...cutoffsFromRanked(ranked, firstN, secondN), track, firstN, secondN, count: list.length };
       applyLineFlags(ranked, c);
       cut[track] = c;
