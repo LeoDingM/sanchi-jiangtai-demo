@@ -4,7 +4,7 @@
  * 2021–2023 年高考仍是旧文理分科，不得提前改成 3+1+2。
  * 2016–2020 结构与省控锁定，本文件不改那些数字。
  */
-import { hash01, rngFrom, gauss, clamp } from "./prng.js?v=t65u1";
+import { hash01, rngFrom, gauss, clamp } from "./prng.js?v=t66u2";
 
 /** 江西新高考首考年份（2021 级高一，2024 年高考）。 */
 export const JIANGXI_NEW_GAOKAO_FIRST_YEAR = 2024;

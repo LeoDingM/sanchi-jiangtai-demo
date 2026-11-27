@@ -3,14 +3,14 @@ import {
   CLASS_BLUEPRINT, TIER, SUBJECT_IDS, PERSONALITIES, FAMILY_TYPES,
   PLAYER_CLASS_NO, GRADE_YEAR, LI_SUBJECTS, WEN_SUBJECTS,
   REPEAT_CLASS_SIZE, REPEAT_WEN_NOS, REPEAT_LI_NOS, INSERT_REPEAT_CLASS_NOS,
-} from "./config.js?v=t65u1";
-import { clamp, gauss, hash01, pick, rngFrom, shuffle } from "./prng.js?v=t65u1";
-import { generateName } from "./names.js?v=t65u1";
-import { gradeStudent, scaleOf, packLastGaokao } from "./scores.js?v=t65u1";
-import { provincialLines } from "./jiangxi.js?v=t65u1";
-import { admitStudent, canInsertRepeat, packLastAdmission } from "./admission.js?v=t65u1";
-import { examParams } from "./calendar.js?v=t65u1";
-import { cohortIsNewGaokao, ensureCohortElectives, isNewGaokaoYear } from "./newGaokao.js?v=t65u1";
+} from "./config.js?v=t66u2";
+import { clamp, gauss, hash01, pick, rngFrom, shuffle } from "./prng.js?v=t66u2";
+import { generateName } from "./names.js?v=t66u2";
+import { gradeStudent, scaleOf, packLastGaokao } from "./scores.js?v=t66u2";
+import { provincialLines } from "./jiangxi.js?v=t66u2";
+import { admitStudent, canInsertRepeat, packLastAdmission } from "./admission.js?v=t66u2";
+import { examParams } from "./calendar.js?v=t66u2";
+import { cohortIsNewGaokao, ensureCohortElectives, isNewGaokaoYear } from "./newGaokao.js?v=t66u2";
 
 export const ALL_SUBJECTS = [...SUBJECT_IDS, "biology"];
 

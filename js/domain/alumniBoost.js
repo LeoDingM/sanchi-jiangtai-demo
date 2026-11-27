@@ -3,10 +3,10 @@
  * 只使用档案里已有的录取结果，不虚构清北或其他名校。
  * 自动模式不生成、不发布、不操作本板块。AI 只润色已有事实，失败则用本地语录。
  */
-import { hash01 } from "./prng.js?v=t65u1";
-import { addDays, schoolYearOf, ymd, SCHOOL_CALENDAR } from "./calendar.js?v=t65u1";
-import { formatSchoolName, schoolNameTier, is985Name, canonicalSchoolName } from "./schoolNames.js?v=t65u1";
-import { isQingbeiName } from "./contests.js?v=t65u1";
+import { hash01 } from "./prng.js?v=t66u2";
+import { addDays, schoolYearOf, ymd, SCHOOL_CALENDAR } from "./calendar.js?v=t66u2";
+import { formatSchoolName, schoolNameTier, is985Name, canonicalSchoolName } from "./schoolNames.js?v=t66u2";
+import { isQingbeiName } from "./contests.js?v=t66u2";
 
 export const ALUMNI_BOOST_TITLE = "学长学姐助力高考";
 export const ALUMNI_BOOST_CAP = 12;

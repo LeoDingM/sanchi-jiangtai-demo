@@ -4,7 +4,8 @@ import { test } from "node:test";
 
 test("app.js 的页面映射函数都必须有定义，避免开局后主界面空白", () => {
   const src = readFileSync(new URL("../js/ui/app.js", import.meta.url), "utf8");
-  const map = src.match(/const map = \{([\s\S]*?)\};/);
+  const map = src.match(/const map = \{([\s\S]*?)\};/)
+    || src.match(/const VIEW_MAP = \(\) => \(\{([\s\S]*?)\}\);/);
   assert.ok(map, "找不到 render() 里的页面映射");
   const names = [...map[1].matchAll(/:\s*([A-Za-z_$][\w$]*)/g)].map((m) => m[1]);
   assert.ok(names.includes("viewGrades"), "映射里应有 viewGrades");

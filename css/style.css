@@ -643,3 +643,5 @@ button[data-talk]:disabled {
 .score-drop-panel { border-left-color: var(--warn, #b36b00); }
 .score-drop-panel h3 { color: var(--warn, #b36b00); }
 .score-drop-ai-text { white-space: pre-wrap; line-height: 1.65; }
+
+tr[data-id] { cursor: pointer; }

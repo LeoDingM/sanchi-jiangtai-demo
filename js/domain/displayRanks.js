@@ -1,8 +1,10 @@
 /**
  * 展示用班排 / 同层次排 / 校排。只补展示，不改排名计算口径。
  * 校排、同层次排在分科后按该科类池，与 runExam 已有口径一致。
+ *
+ * decorateDisplayRanks 按池建立一次名次索引再回填，避免对每个学生重复全表排序。
  */
-import { rankRows } from "./scores.js?v=t65u1";
+import { rankRows } from "./scores.js?v=t66u2";
 
 function schoolPool(rows, row, { split, includeRepeat } = {}) {
   return (rows || []).filter((r) => {
@@ -24,19 +26,54 @@ function classPool(rows, row, { includeRepeat } = {}) {
   });
 }
 
-function rankOf(pool, studentId) {
-  const ranked = rankRows(pool || []);
-  const hit = ranked.find((r) => r.studentId === studentId);
-  return { rank: hit?.rank ?? null, n: ranked.length };
+function indexPool(pool, rankRowsFn) {
+  const ranked = rankRowsFn(pool || []);
+  const map = new Map();
+  for (const r of ranked) {
+    if (!map.has(r.studentId)) map.set(r.studentId, r.rank);
+  }
+  return { map, n: ranked.length };
+}
+
+function rankFromIndex(index, studentId) {
+  if (!index) return { rank: null, n: 0 };
+  const rank = index.map.has(studentId) ? index.map.get(studentId) : null;
+  return { rank, n: index.n };
 }
 
 /** 为展示行补齐 classRank / tierRank / schoolRank（及对应人数）。 */
-export function decorateDisplayRanks(rows, allRows, { split, includeRepeat } = {}) {
+export function decorateDisplayRanks(rows, allRows, { split, includeRepeat, rankRows: rankRowsFn } = {}) {
   const source = allRows || rows || [];
-  return (rows || []).map((r) => {
-    const school = rankOf(schoolPool(source, r, { split, includeRepeat }), r.studentId);
-    const classR = rankOf(classPool(source, r, { includeRepeat }), r.studentId);
-    const tierR = rankOf(tierPool(source, r, { split, includeRepeat }), r.studentId);
+  const list = rows || [];
+  const rankFn = rankRowsFn || rankRows;
+  const schoolIdx = new Map();
+  const tierIdx = new Map();
+  const classIdx = new Map();
+
+  const schoolKey = (row) => `${includeRepeat ? 1 : 0}|${split && row.track ? row.track : ""}`;
+  const tierKey = (row) => `${schoolKey(row)}|${row.tier || ""}`;
+  const classKey = (row) => `${includeRepeat ? 1 : 0}|${row.classNo}`;
+
+  const getSchool = (row) => {
+    const k = schoolKey(row);
+    if (!schoolIdx.has(k)) schoolIdx.set(k, indexPool(schoolPool(source, row, { split, includeRepeat }), rankFn));
+    return schoolIdx.get(k);
+  };
+  const getTier = (row) => {
+    const k = tierKey(row);
+    if (!tierIdx.has(k)) tierIdx.set(k, indexPool(tierPool(source, row, { split, includeRepeat }), rankFn));
+    return tierIdx.get(k);
+  };
+  const getClass = (row) => {
+    const k = classKey(row);
+    if (!classIdx.has(k)) classIdx.set(k, indexPool(classPool(source, row, { includeRepeat }), rankFn));
+    return classIdx.get(k);
+  };
+
+  return list.map((r) => {
+    const school = rankFromIndex(getSchool(r), r.studentId);
+    const classR = rankFromIndex(getClass(r), r.studentId);
+    const tierR = rankFromIndex(getTier(r), r.studentId);
     return {
       ...r,
       classRank: classR.rank,
@@ -60,4 +97,24 @@ export function reportRankOpts(report) {
     split: !!report?.split,
     includeRepeat: Number(report?.grade) >= 3 || !!report?.cutoffs?.includeRepeat,
   };
+}
+
+/** 侧栏课表是否需要随主界面一起刷新。日期、课时或日志未变时切页不必重画。 */
+export function agendaStateKey(state) {
+  if (!state) return "";
+  const log0 = state.log?.[0];
+  return [
+    state.date || "",
+    state.periodId || "",
+    state.player?.cohortYear ?? "",
+    state.player?.classNo ?? "",
+    log0?.date || "",
+    log0?.text || "",
+    state.talksToday || 0,
+    state.talksThisPeriod || 0,
+  ].join("|");
+}
+
+export function shouldRefreshAgenda(prevKey, nextKey) {
+  return prevKey !== nextKey;
 }

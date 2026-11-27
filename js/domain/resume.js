@@ -2,11 +2,11 @@
  * 学生个人履历：职务、比赛、所处水平、单科异常优异、近几次发挥。
  * 只组织已有事实，不编造奖项、职务、分数或排名。老师默认看不到潜力。
  */
-import { selectClassOffices, officeTitlesOf } from "./classManage.js?v=t65u1";
-import { studentContestAwards, awardsByLevel, formatAward, recruitPolicy, recruitOutcome } from "./contests.js?v=t65u1";
-import { studentExamHistory, buildStudentExamSnapshot, tierName } from "./studentHistory.js?v=t65u1";
-import { formatRankTriple } from "./displayRanks.js?v=t65u1";
-import { subjectById } from "./config.js?v=t65u1";
+import { selectClassOffices, officeTitlesOf } from "./classManage.js?v=t66u2";
+import { studentContestAwards, awardsByLevel, formatAward, recruitPolicy, recruitOutcome } from "./contests.js?v=t66u2";
+import { studentExamHistory, buildStudentExamSnapshot, tierName } from "./studentHistory.js?v=t66u2";
+import { formatRankTriple } from "./displayRanks.js?v=t66u2";
+import { subjectById } from "./config.js?v=t66u2";
 
 function classmatesOf(state, student) {
   if (!state || !student) return [];
