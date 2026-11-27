@@ -4,18 +4,18 @@
  * 不改能力、分数、排名或省控，不能代替备课（prepareLesson）或上课后收的随堂作业，
  * 也不改写订正主流程。玩家不是班主任。
  */
-import { hash01 } from "./prng.js?v=t68u1";
-import { addDays, eventsOn, SCHOOL_CALENDAR, schoolYearOf, termOf, weekday } from "./calendar.js?v=t68u1";
+import { hash01 } from "./prng.js?v=t69u1";
+import { addDays, eventsOn, SCHOOL_CALENDAR, schoolYearOf, termOf, weekday } from "./calendar.js?v=t69u1";
 import {
   activityEventOn, currentSlot, isEveningPeriodId, majorEventOn, weekStart,
-} from "./timetable.js?v=t68u1";
-import { isOpenHomework, studentTeachingContext, suggestedTopic, topicsForGrade } from "./teaching.js?v=t68u1";
-import { isParentsMeetingOpen } from "./parents.js?v=t68u1";
-import { isOfficeSittingSlot } from "./homeVisit.js?v=t68u1";
-import { isAwayFromClass, leaveCovering } from "./health.js?v=t68u1";
-import { isOpeningDayPlayDate, openingPlayDate } from "./openingDay.js?v=t68u1";
-import { isStudyHallSubject } from "./studyHall.js?v=t68u1";
-import { playerClassStudents } from "./visits.js?v=t68u1";
+} from "./timetable.js?v=t69u1";
+import { isOpenHomework, studentTeachingContext, suggestedTopic, topicsForGrade } from "./teaching.js?v=t69u1";
+import { isParentsMeetingOpen } from "./parents.js?v=t69u1";
+import { isOfficeSittingSlot } from "./homeVisit.js?v=t69u1";
+import { isAwayFromClass, leaveCovering } from "./health.js?v=t69u1";
+import { isOpeningDayPlayDate, openingPlayDate } from "./openingDay.js?v=t69u1";
+import { isStudyHallSubject } from "./studyHall.js?v=t69u1";
+import { playerClassStudents } from "./visits.js?v=t69u1";
 
 export const WEEKEND_HW_WEEK_CAP = 1;
 

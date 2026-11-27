@@ -4,25 +4,25 @@
  * 用确定性 PRNG 生成，不用 LLM，不改能力、分数、排名、省控或备课充分度。
  * 不能代替备课、上课、阅卷或班会，也不能做成第二场备课组质量分析会。
  */
-import { hash01 } from "./prng.js?v=t68u1";
-import { addDays, SCHOOL_CALENDAR, formatCohortGrade, schoolYearOf, termOf, weekday } from "./calendar.js?v=t68u1";
+import { hash01 } from "./prng.js?v=t69u1";
+import { addDays, SCHOOL_CALENDAR, formatCohortGrade, schoolYearOf, termOf, weekday } from "./calendar.js?v=t69u1";
 import {
   activityEventOn, currentSlot, isEveningPeriodId, majorEventOn,
-} from "./timetable.js?v=t68u1";
-import { isParentsMeetingOpen } from "./parents.js?v=t68u1";
-import { isOfficeSittingSlot } from "./homeVisit.js?v=t68u1";
-import { isTeachersDayPlayDate } from "./teachersDay.js?v=t68u1";
-import { isAwayFromClass, leaveCovering } from "./health.js?v=t68u1";
+} from "./timetable.js?v=t69u1";
+import { isParentsMeetingOpen } from "./parents.js?v=t69u1";
+import { isOfficeSittingSlot } from "./homeVisit.js?v=t69u1";
+import { isTeachersDayPlayDate } from "./teachersDay.js?v=t69u1";
+import { isAwayFromClass, leaveCovering } from "./health.js?v=t69u1";
 import {
   isOpeningDayPlayDate, openingCalendarEvent, openingPlayDate,
-} from "./openingDay.js?v=t68u1";
-import { isStudyHallSubject } from "./studyHall.js?v=t68u1";
-import { playerClassStudents } from "./visits.js?v=t68u1";
-import { HOMEROOM_NAME, MENTOR_NAME, PLAYER_CLASS_NO } from "./config.js?v=t68u1";
+} from "./openingDay.js?v=t69u1";
+import { isStudyHallSubject } from "./studyHall.js?v=t69u1";
+import { playerClassStudents } from "./visits.js?v=t69u1";
+import { HOMEROOM_NAME, MENTOR_NAME, PLAYER_CLASS_NO } from "./config.js?v=t69u1";
 import {
   currentQualityMeetExam, isQualityMeetExamKind, qualityMeetExamKey,
   qualityMeetPublishDate, qualityMeetWindowEnd, settledQualityMeetExams,
-} from "./qualityMeet.js?v=t68u1";
+} from "./qualityMeet.js?v=t69u1";
 
 export const FACULTY_MEET_ACTIONS = [
   { id: "listen", label: "到场听完" },

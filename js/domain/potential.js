@@ -2,8 +2,8 @@
  * 学科潜力：只描述能力距个人上限的余地，供档案、谈话和课堂纪要使用。
  * 不改写能力或潜力，也不参与计分公式。
  */
-import { subjectById, SUBJECT_IDS } from "./config.js?v=t68u1";
-import { hash01 } from "./prng.js?v=t68u1";
+import { subjectById, SUBJECT_IDS } from "./config.js?v=t69u1";
+import { hash01 } from "./prng.js?v=t69u1";
 
 const SUBJECT_NAMES = {
   chinese: "语文",

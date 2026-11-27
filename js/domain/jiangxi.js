@@ -1,5 +1,5 @@
 /** 江西公开分数线与一分一段查询。 */
-import { JX_DATA } from "../data/jiangxi2020.js?v=t68u1";
+import { JX_DATA } from "../data/jiangxi2020.js?v=t69u1";
 
 export const PROVINCIAL = JX_DATA.provincial;
 export const JX_SOURCE_NOTES = JX_DATA.sourceNotes;

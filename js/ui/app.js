@@ -72,32 +72,38 @@ import {
   isGradeMeetOpen, isGradeMeetWindow, gradeMeetUnavailableReason,
   ensureGradeMeetState, hasGradeMeet, latestGradeMeetMinutes, currentGradeMeetExam,
   GRADE_MEET_ACTIONS, GRADE_MEET_SOURCE_NOTE, GRADE_DIRECTOR_NAME, GRADE_DIRECTOR_TITLE,
-} from "../domain/simulation.js?v=t68u1";
-import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t68u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t68u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t68u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t68u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t68u1";
-import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t68u1";
-import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t68u1";
-import { hydrateReport } from "../domain/simulation.js?v=t68u1";
-import { renderSeating } from "./classroom.js?v=t68u1";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t68u1";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t68u1";
-import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t68u1";
-import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t68u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t68u1";
-import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t68u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t68u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t68u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t68u1";
+  handlePaperSign, composePaperSignBrief, paperSignOptionsFor,
+  isPaperSignOpen, isPaperSignWindow, paperSignUnavailableReason,
+  ensurePaperSignState, currentPaperSignExam, paperSignProgress, hasIssued, hasReturned,
+  suggestPaperSignIssue, suggestPaperSignRegister, suggestPaperSignInform,
+  PAPER_SIGN_ACTIONS, PAPER_SIGN_SOURCE_NOTE, PAPER_SIGN_BATCH_MIN, PAPER_SIGN_BATCH_MAX,
+  PAPER_SIGN_DAY_CAP,
+} from "../domain/simulation.js?v=t69u1";
+import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t69u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t69u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t69u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t69u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t69u1";
+import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t69u1";
+import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t69u1";
+import { hydrateReport } from "../domain/simulation.js?v=t69u1";
+import { renderSeating } from "./classroom.js?v=t69u1";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t69u1";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t69u1";
+import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t69u1";
+import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t69u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t69u1";
+import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t69u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t69u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t69u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t69u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
   parseAiCommentary, emptyAiCommentary,
-} from "../domain/examAi.js?v=t68u1";
+} from "../domain/examAi.js?v=t69u1";
 
 let state = null;
 let view = "classroom";
@@ -1180,6 +1186,7 @@ function viewProfile(host) {
         ${(s.studyHallNotes || []).length ? `<p><b>自习看班</b></p>${(s.studyHallNotes||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : (s.lastStudyHall ? `<p><b>自习看班</b></p><p class="muted">${s.lastStudyHall.date}　${s.lastStudyHall.text}</p>` : "")}
         ${(s.weekendHomeworkNotes || []).length ? `<p><b>周末作业</b></p>${(s.weekendHomeworkNotes||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : (s.lastWeekendHomework ? `<p><b>周末作业</b></p><p class="muted">${s.lastWeekendHomework.date}　${s.lastWeekendHomework.text}</p>` : "")}
         ${(s.dutyWeekNotes || []).length ? `<p><b>值周</b></p>${(s.dutyWeekNotes||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : (s.lastDutyWeek ? `<p><b>值周</b></p><p class="muted">${s.lastDutyWeek.date}　${s.lastDutyWeek.text}</p>` : "")}
+        ${(s.paperSigns || []).length ? `<p><b>试卷签字</b></p>${(s.paperSigns||[]).map((r)=>`<p class="muted">${r.date}　${r.examName || ""}　${r.text}</p>`).join("")}` : (s.lastPaperSign ? `<p><b>试卷签字</b></p><p class="muted">${s.lastPaperSign.date}　${s.lastPaperSign.examName || ""}　${s.lastPaperSign.text}</p>` : "")}
         <p class="muted">学科能力（潜能为个人上限，不是当场分数；括号里是距上限的余地，不是又一张分数表）</p>
         <p>${ab || "—"}</p>
       </div>
@@ -2148,6 +2155,54 @@ function bindGradeMeetActions(host) {
   });
 }
 
+function paperSignPanelHtml() {
+  if (!state) return "";
+  if (!isPaperSignWindow(state)) return "";
+  ensurePaperSignState(state);
+  const exam = currentPaperSignExam(state);
+  const rec = state.paperSign || {};
+  const doneToday = rec.date === state.date && rec.todayAction;
+  const prog = paperSignProgress(state, exam);
+  const examLine = exam ? `当前对应已公布的「${exam.examName}」。已发放 ${prog.issued} 人，已交回 ${prog.returned} 人，全班 ${prog.total} 人。每天最多一批，每批约 ${PAPER_SIGN_BATCH_MIN}–${PAPER_SIGN_BATCH_MAX} 人，不必一次点完全班，也不必强求全班办完。` : "";
+  if (!isPaperSignOpen(state) && !doneToday) {
+    return `<div class="paper visit-panel paper-sign-panel" data-paper-sign-panel="1">
+      <h3>试卷签字</h3>
+      <p class="muted">${paperSignUnavailableReason(state)} ${PAPER_SIGN_SOURCE_NOTE}</p>
+    </div>`;
+  }
+  if (doneToday) {
+    const minutes = rec.lastMinutes?.minutes || (state.paperSigns || [])[0]?.minutes || "";
+    const actionLabel = (PAPER_SIGN_ACTIONS.find((a) => a.id === rec.todayAction) || {}).label || "已办理一批";
+    return `<div class="paper visit-panel paper-sign-panel" data-paper-sign-panel="1">
+      <h3>试卷签字</h3>
+      <p class="muted">今天已经办理过一批：${actionLabel}。${examLine}下面是纪要，也可在学校日志和相关学生档案近况里查阅。其余的请明天再办。${PAPER_SIGN_SOURCE_NOTE}</p>
+      <p>${minutes}</p>
+    </div>`;
+  }
+  const brief = composePaperSignBrief(state, exam);
+  const options = paperSignOptionsFor(state);
+  const lists = options.map((o) => `<p><b>${o.label}</b>　今日建议：${(o.names || []).join("、") || "（暂无）"}</p>`).join("");
+  const btns = (options.length ? options : []).map((o) => `<button type="button" data-paper-sign="${o.id}">${o.label}</button>`).join("");
+  return `<div class="paper visit-panel paper-sign-panel" data-paper-sign-panel="1">
+      <h3>试卷签字</h3>
+      <p class="muted">本校月考、期中、期末或模拟成绩公布后，办公室坐班可以把数学试卷或成绩告知条发给学生带回请家长签字，并登记交回。你以任课老师身份办理，不是班主任，不能发放学校正式成绩单、通知书或操行评语表，也不能主持班会。这不是家长会或家访。${examLine}${PAPER_SIGN_SOURCE_NOTE}</p>
+      <p>${brief?.shortPoints || "按订正、课堂和本场波动确定今日建议名单。"}</p>
+      ${lists}
+      <div class="row-actions">${btns || `<p class="muted">眼下没有可办理的名单。</p>`}</div>
+    </div>`;
+}
+
+function bindPaperSignActions(host) {
+  host.querySelectorAll("[data-paper-sign]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const r = handlePaperSign(state, b.dataset.paperSign);
+      toast(r.ok ? r.text : r.reason);
+      persist(); render();
+    };
+  });
+}
+
 function officeCollabHtml() {
 
   const watch = homeworkWatchlist(state.homework, state);
@@ -2178,6 +2233,7 @@ function officeCollabHtml() {
     ${dutyWeekPanelHtml()}
     ${facultyMeetPanelHtml()}
     ${gradeMeetPanelHtml()}
+    ${paperSignPanelHtml()}
     ${openingDayPanelHtml()}
     ${tiaokePanelHtml()}`;
 }
@@ -2200,6 +2256,7 @@ function bindOfficeActions(host) {
   bindDutyWeekActions(host);
   bindFacultyMeetActions(host);
   bindGradeMeetActions(host);
+  bindPaperSignActions(host);
   bindOpeningDayActions(host);
   bindObserveActions(host);
   bindProctorActions(host);
@@ -3285,6 +3342,7 @@ function viewLog(host) {
   const dutyWeekMinutes = (state.dutyWeeks || []).map((m) => `<div class="log-item"><b>${m.date}</b> 值周${m.actionId ? "「" + (DUTY_WEEK_ACTIONS.find((a)=>a.id===m.actionId)?.label || m.actionId) + "」" : ""}　${m.minutes}</div>`);
   const facultyMinutes = (state.facultyMeetings || []).map((m) => `<div class="log-item"><b>${m.date}</b> 教职工大会　${m.minutes}</div>`);
   const gradeMinutes = (state.gradeMeetings || []).map((m) => `<div class="log-item"><b>${m.date}</b> 年级会${m.examName ? "「" + m.examName + "」" : ""}　${m.minutes}</div>`);
+  const paperSignMinutes = (state.paperSigns || []).map((m) => `<div class="log-item"><b>${m.date}</b> 试卷签字${m.examName ? "「" + m.examName + "」" : ""}　${m.minutes}</div>`);
   const minutes = qualityMinutes.concat(groupMinutes).join("");
   const openingBlock = openingMinutes.join("");
   const studyHallBlock = studyHallMinutes.join("");
@@ -3292,6 +3350,7 @@ function viewLog(host) {
   const dutyWeekBlock = dutyWeekMinutes.join("");
   const facultyBlock = facultyMinutes.join("");
   const gradeBlock = gradeMinutes.join("");
+  const paperSignBlock = paperSignMinutes.join("");
   host.innerHTML = `<h3>近期校历</h3>${cal || "<p class=\"muted\">暂无后续安排</p>"}
     ${minutes ? `<h3>备课组会议纪要</h3>${minutes}` : ""}
     ${facultyBlock ? `<h3>教职工大会纪要</h3>${facultyBlock}` : ""}
@@ -3300,6 +3359,7 @@ function viewLog(host) {
     ${studyHallBlock ? `<h3>自习看班纪要</h3>${studyHallBlock}` : ""}
     ${weekendHwBlock ? `<h3>周末作业纪要</h3>${weekendHwBlock}` : ""}
     ${dutyWeekBlock ? `<h3>值周纪要</h3>${dutyWeekBlock}` : ""}
+    ${paperSignBlock ? `<h3>试卷签字纪要</h3>${paperSignBlock}` : ""}
     <h3>日志</h3>${(state.log||[]).slice(0,40).map((l)=>`<div class="log-item"><b>${l.date}</b> ${l.text}</div>`).join("")}`;
 }
 
