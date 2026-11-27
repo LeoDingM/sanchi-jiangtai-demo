@@ -2,11 +2,11 @@
  * 日常教学：备课、上课、作业登记、课后面批。
  * 效果写入备课充分度与数学教学积累，并确定性影响任教班学生状态；不用 LLM 编课堂。
  */
-import { clamp, hash01, rngFrom, round1 } from "./prng.js?v=t65u1";
-import { seatLabel } from "./school.js?v=t65u1";
-import { deskChatPairs, deskMateOf, missingDeskPairs, peerStatusLine } from "./peers.js?v=t65u1";
-import { isAwayFromClass, classAbsences, healthStatusLine } from "./health.js?v=t65u1";
-import { lessonPotentialNote } from "./potential.js?v=t65u1";
+import { clamp, hash01, rngFrom, round1 } from "./prng.js?v=t66u1";
+import { seatLabel } from "./school.js?v=t66u1";
+import { deskChatPairs, deskMateOf, missingDeskPairs, peerStatusLine } from "./peers.js?v=t66u1";
+import { isAwayFromClass, classAbsences, healthStatusLine } from "./health.js?v=t66u1";
+import { lessonPotentialNote } from "./potential.js?v=t66u1";
 
 export const LESSON_TOPICS = {
   1: [
@@ -228,6 +228,9 @@ export function studentRecentStatus(student, state, { placed = false } = {}) {
   }
   if (student.lastStudyHall) {
     bits.push(student.lastStudyHall.statusLine || `${student.lastStudyHall.date}自习看班：已记入本班近况`);
+  }
+  if (student.lastWeekendHomework) {
+    bits.push(student.lastWeekendHomework.statusLine || `${student.lastWeekendHomework.date}周末作业：已记入本班近况`);
   }
   if (student.lastVisit) {
     bits.push(student.lastVisit.statusLine || `${student.lastVisit.date}来访：已处理`);

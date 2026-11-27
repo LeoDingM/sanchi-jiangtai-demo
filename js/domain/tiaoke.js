@@ -2,13 +2,13 @@
  * 本班课表的调课 / 借课。只改玩家看到、用来「下一节」「上课」的那张课表，
  * 不排全校各班。覆盖按日期生效，不改星期模板。
  */
-import { hash01, rngFrom } from "./prng.js?v=t65u1";
-import { addDays, weekday, weekdayName, formatDateCn, parseYmd, SCHOOL_CALENDAR } from "./calendar.js?v=t65u1";
-import { HOMEROOM_NAME } from "./config.js?v=t65u1";
+import { hash01, rngFrom } from "./prng.js?v=t66u1";
+import { addDays, weekday, weekdayName, formatDateCn, parseYmd, SCHOOL_CALENDAR } from "./calendar.js?v=t66u1";
+import { HOMEROOM_NAME } from "./config.js?v=t66u1";
 import {
   daySchedule, weekStart, weekDates, isClassPeriodId, overridesOf, majorEventOn,
   activityEventOn, periodIsActivity, periodsForWeekday,
-} from "./timetable.js?v=t65u1";
+} from "./timetable.js?v=t66u1";
 
 /** 虚构的本班任课老师，不是某所实校教师名册。 */
 export const SUBJECT_TEACHERS = {

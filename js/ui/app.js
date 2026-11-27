@@ -55,32 +55,36 @@ import {
   isStudyHallOpen, isStudyHallWindow, studyHallUnavailableReason,
   ensureStudyHallState, hasStudyHallThisSlot, latestStudyHallThisSlot,
   STUDY_HALL_ACTIONS, STUDY_HALL_SOURCE_NOTE,
-} from "../domain/simulation.js?v=t65u1";
-import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t65u1";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t65u1";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t65u1";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t65u1";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t65u1";
-import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t65u1";
-import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t65u1";
-import { hydrateReport } from "../domain/simulation.js?v=t65u1";
-import { renderSeating } from "./classroom.js?v=t65u1";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t65u1";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t65u1";
-import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t65u1";
-import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t65u1";
-import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t65u1";
-import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t65u1";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t65u1";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t65u1";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t65u1";
+  handleWeekendHomework, composeWeekendHwBrief, weekendHwOptionsFor,
+  isWeekendHwOpen, isWeekendHwWindow, weekendHwUnavailableReason,
+  ensureWeekendHwState, hasWeekendHwThisWeek, latestWeekendHwThisWeek,
+  WEEKEND_HW_ACTIONS, WEEKEND_HW_SOURCE_NOTE, WEEKEND_HW_WEEK_CAP,
+} from "../domain/simulation.js?v=t66u1";
+import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t66u1";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t66u1";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t66u1";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t66u1";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t66u1";
+import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t66u1";
+import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t66u1";
+import { hydrateReport } from "../domain/simulation.js?v=t66u1";
+import { renderSeating } from "./classroom.js?v=t66u1";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t66u1";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t66u1";
+import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t66u1";
+import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t66u1";
+import { provincialLines, officialProvincialPack } from "../domain/jiangxi.js?v=t66u1";
+import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t66u1";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t66u1";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t66u1";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t66u1";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
   playerSubjectName, analysisScope, isPlayerHomeroom, isActingHomeroom,
   buildExamAnalysisPayload, requestExamAnalysis, canAnalyzeReport,
   parseAiCommentary, emptyAiCommentary,
-} from "../domain/examAi.js?v=t65u1";
+} from "../domain/examAi.js?v=t66u1";
 
 let state = null;
 let view = "classroom";
@@ -1161,6 +1165,7 @@ function viewProfile(host) {
         ${(s.teachersDayNotes || []).length ? `<p><b>教师节记录</b></p>${(s.teachersDayNotes||[]).map((r)=>`<p class="muted">${r.date}　${r.gift === "flower" ? "花" : "贺卡"}　${r.reply === "encourage" ? "鼓励" : r.reply === "remind" ? "提醒认真听课" : "致谢"}　${r.text}</p>`).join("")}` : (s.lastTeachersDay ? `<p><b>教师节记录</b></p><p class="muted">${s.lastTeachersDay.date}　${s.lastTeachersDay.text}</p>` : "")}
         ${(s.activityNotes || []).length ? `<p><b>学校活动</b></p>${(s.activityNotes||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : ""}
         ${(s.studyHallNotes || []).length ? `<p><b>自习看班</b></p>${(s.studyHallNotes||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : (s.lastStudyHall ? `<p><b>自习看班</b></p><p class="muted">${s.lastStudyHall.date}　${s.lastStudyHall.text}</p>` : "")}
+        ${(s.weekendHomeworkNotes || []).length ? `<p><b>周末作业</b></p>${(s.weekendHomeworkNotes||[]).map((r)=>`<p class="muted">${r.date}　${r.text}</p>`).join("")}` : (s.lastWeekendHomework ? `<p><b>周末作业</b></p><p class="muted">${s.lastWeekendHomework.date}　${s.lastWeekendHomework.text}</p>` : "")}
         <p class="muted">学科能力（潜能为个人上限，不是当场分数；括号里是距上限的余地，不是又一张分数表）</p>
         <p>${ab || "—"}</p>
       </div>
@@ -1956,6 +1961,49 @@ function bindStudyHallActions(host) {
   });
 }
 
+function weekendHwPanelHtml() {
+  if (!state) return "";
+  if (!isWeekendHwWindow(state)) return "";
+  ensureWeekendHwState(state);
+  const rec = state.weekendHomework || {};
+  const done = hasWeekendHwThisWeek(state);
+  if (!isWeekendHwOpen(state) && !done) {
+    return `<div class="paper visit-panel weekend-hw-panel" data-weekend-hw-panel="1">
+      <h3>周末作业</h3>
+      <p class="muted">${weekendHwUnavailableReason(state)} ${WEEKEND_HW_SOURCE_NOTE}</p>
+    </div>`;
+  }
+  if (done) {
+    const minutes = rec.lastMinutes?.minutes || latestWeekendHwThisWeek(state)?.minutes || (state.weekendHomeworks || [])[0]?.minutes || "";
+    const follow = rec.followUp?.text || rec.lastMinutes?.followUp?.text || "本周末有分层作业";
+    return `<div class="paper visit-panel weekend-hw-panel" data-weekend-hw-panel="1">
+      <h3>周末作业</h3>
+      <p class="muted">本周周末数学作业已经布置过。跟进标记：${follow}。下面是纪要，也可在学校日志和相关学生档案近况里查阅。每周最多一次，不能代替备课或上课后收的随堂作业。${WEEKEND_HW_SOURCE_NOTE}</p>
+      <p>${minutes}</p>
+    </div>`;
+  }
+  const brief = composeWeekendHwBrief(state);
+  const options = weekendHwOptionsFor(state);
+  const btns = (options.length ? options : WEEKEND_HW_ACTIONS).map((o) => `<button type="button" data-weekend-hw="${o.id}">${o.label}</button>`).join("");
+  return `<div class="paper visit-panel weekend-hw-panel" data-weekend-hw-panel="1">
+      <h3>周末作业</h3>
+      <p class="muted">办公室坐班可以布置本周末数学作业，优先周五；若本周五是考试日、活动日、家长会或开学典礼、报到，则提前到周四。每周最多 ${WEEKEND_HW_WEEK_CAP} 次。你以任课老师身份布置，不是班主任，也不能代替备课或上课后收的那份随堂作业。${WEEKEND_HW_SOURCE_NOTE}</p>
+      <p><b>分层预览</b>　${brief?.preview || brief?.shortPoints || "按订正情况和学情分层。"}</p>
+      <div class="row-actions">${btns}</div>
+    </div>`;
+}
+
+function bindWeekendHwActions(host) {
+  host.querySelectorAll("[data-weekend-hw]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const r = handleWeekendHomework(state, b.dataset.weekendHw);
+      toast(r.ok ? r.text : r.reason);
+      persist(); render();
+    };
+  });
+}
+
 function officeCollabHtml() {
 
   const watch = homeworkWatchlist(state.homework, state);
@@ -1982,6 +2030,7 @@ function officeCollabHtml() {
     ${teachersDayPanelHtml({ place: "office" })}
     ${qualityMeetPanelHtml()}
     ${groupPrepPanelHtml()}
+    ${weekendHwPanelHtml()}
     ${openingDayPanelHtml()}
     ${tiaokePanelHtml()}`;
 }
@@ -2000,6 +2049,7 @@ function bindOfficeActions(host) {
   bindTeachersDayActions(host);
   bindQualityMeetActions(host);
   bindGroupPrepActions(host);
+  bindWeekendHwActions(host);
   bindOpeningDayActions(host);
   bindObserveActions(host);
   bindProctorActions(host);
@@ -3081,13 +3131,16 @@ function viewLog(host) {
   const groupMinutes = (state.groupPreps || []).map((m) => `<div class="log-item"><b>${m.date}</b> 集体备课${m.topic ? "「" + m.topic + "」" : ""}　${m.minutes}</div>`);
   const openingMinutes = (state.openingDays || []).map((m) => `<div class="log-item"><b>${m.date}</b> ${m.kindName || "开学安排"}　${m.minutes}</div>`);
   const studyHallMinutes = (state.studyHalls || []).map((m) => `<div class="log-item"><b>${m.date}</b> 自习看班${m.slotLabel ? "「" + m.slotLabel + "」" : ""}　${m.minutes}</div>`);
+  const weekendHwMinutes = (state.weekendHomeworks || []).map((m) => `<div class="log-item"><b>${m.date}</b> 周末作业${m.topic ? "「" + m.topic + "」" : ""}　${m.minutes}</div>`);
   const minutes = qualityMinutes.concat(groupMinutes).join("");
   const openingBlock = openingMinutes.join("");
   const studyHallBlock = studyHallMinutes.join("");
+  const weekendHwBlock = weekendHwMinutes.join("");
   host.innerHTML = `<h3>近期校历</h3>${cal || "<p class=\"muted\">暂无后续安排</p>"}
     ${minutes ? `<h3>备课组会议纪要</h3>${minutes}` : ""}
     ${openingBlock ? `<h3>开学纪要</h3>${openingBlock}` : ""}
     ${studyHallBlock ? `<h3>自习看班纪要</h3>${studyHallBlock}` : ""}
+    ${weekendHwBlock ? `<h3>周末作业纪要</h3>${weekendHwBlock}` : ""}
     <h3>日志</h3>${(state.log||[]).slice(0,40).map((l)=>`<div class="log-item"><b>${l.date}</b> ${l.text}</div>`).join("")}`;
 }
 
