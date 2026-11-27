@@ -3,17 +3,17 @@
  * 评语正文由已有事实与确定性 PRNG 生成，不用 LLM，不改能力、分数、排名或省控。
  * 这不是班主任操行评语，也不是考后 AI 分析。日期按宁川中学校内安排。
  */
-import { clamp, hash01 } from "./prng.js?v=t73u2";
-import { addDays, SCHOOL_CALENDAR, schoolYearOf, weekday } from "./calendar.js?v=t73u2";
+import { clamp, hash01 } from "./prng.js?v=t74u2";
+import { addDays, SCHOOL_CALENDAR, schoolYearOf, weekday } from "./calendar.js?v=t74u2";
 import {
   activityEventOn, currentSlot, isEveningPeriodId, majorEventOn,
-} from "./timetable.js?v=t73u2";
-import { isOpenHomework, studentTeachingContext } from "./teaching.js?v=t73u2";
-import { composeParentBrief, isParentsMeetingOpen } from "./parents.js?v=t73u2";
-import { playerClassStudents } from "./visits.js?v=t73u2";
-import { isOfficeSittingSlot } from "./homeVisit.js?v=t73u2";
-import { leaveCovering } from "./health.js?v=t73u2";
-import { seatLabel } from "./school.js?v=t73u2";
+} from "./timetable.js?v=t74u2";
+import { isOpenHomework, studentTeachingContext } from "./teaching.js?v=t74u2";
+import { composeParentBrief, isParentsMeetingOpen } from "./parents.js?v=t74u2";
+import { playerClassStudents } from "./visits.js?v=t74u2";
+import { isOfficeSittingSlot } from "./homeVisit.js?v=t74u2";
+import { leaveCovering } from "./health.js?v=t74u2";
+import { seatLabel } from "./school.js?v=t74u2";
 
 export const COMMENT_BATCH_MIN = 6;
 export const COMMENT_BATCH_MAX = 10;

@@ -4,18 +4,18 @@
  * 不改能力、分数、排名、省控或备课充分度，也不能代替上课、看班、点名或监考。
  * 玩家不是班主任，也不是值班领导；行政值班只能协助，不能主持或因此升职。
  */
-import { hash01 } from "./prng.js?v=t73u2";
-import { addDays, SCHOOL_CALENDAR, schoolYearOf, termOf, weekday } from "./calendar.js?v=t73u2";
+import { hash01 } from "./prng.js?v=t74u2";
+import { addDays, SCHOOL_CALENDAR, schoolYearOf, termOf, weekday } from "./calendar.js?v=t74u2";
 import {
   activityEventOn, currentSlot, isEveningPeriodId, majorEventOn, weekStart,
-} from "./timetable.js?v=t73u2";
-import { isParentsMeetingOpen } from "./parents.js?v=t73u2";
-import { isOfficeSittingSlot } from "./homeVisit.js?v=t73u2";
-import { isAwayFromClass, leaveCovering } from "./health.js?v=t73u2";
-import { isOpeningDayPlayDate, openingPlayDate } from "./openingDay.js?v=t73u2";
-import { isStudyHallSubject } from "./studyHall.js?v=t73u2";
-import { playerClassStudents } from "./visits.js?v=t73u2";
-import { PLAYER_CLASS_NO } from "./config.js?v=t73u2";
+} from "./timetable.js?v=t74u2";
+import { isParentsMeetingOpen } from "./parents.js?v=t74u2";
+import { isOfficeSittingSlot } from "./homeVisit.js?v=t74u2";
+import { isAwayFromClass, leaveCovering } from "./health.js?v=t74u2";
+import { isOpeningDayPlayDate, openingPlayDate } from "./openingDay.js?v=t74u2";
+import { isStudyHallSubject } from "./studyHall.js?v=t74u2";
+import { playerClassStudents } from "./visits.js?v=t74u2";
+import { PLAYER_CLASS_NO } from "./config.js?v=t74u2";
 
 export const DUTY_WEEKS_PER_TERM = 2;
 export const DUTY_DAY_CAP = 1;

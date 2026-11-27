@@ -4,8 +4,8 @@
  * 未查实不出公告、不写入履历已确认处分。高考/会考/官方联考不做校内处分文件。
  * 查实后取消该次作弊所得分数并重算名次，不改省控或校内线口径。
  */
-import { hash01 } from "./prng.js?v=t73u2";
-import { addDays } from "./calendar.js?v=t73u2";
+import { hash01 } from "./prng.js?v=t74u2";
+import { addDays } from "./calendar.js?v=t74u2";
 
 /** 只对校本考试建模校内处分；高考、会考、市/省联考不伪造考试院文件。 */
 export const SCHOOL_CHEAT_KINDS = new Set(["monthly", "midterm", "final", "mock1", "mock2", "mock3"]);
@@ -166,6 +166,8 @@ export function composeDisciplineNotice(caseRow, exam, student) {
     studentId: student?.id || caseRow.studentId,
     name,
     classNo,
+    tier: student?.tier || caseRow.tier || "",
+    track: student?.track || student?.trackPref || caseRow.track || "",
     discipline: caseRow.discipline,
     disciplineLabel: label,
     title: "校内处分公告",
@@ -224,4 +226,107 @@ export function formatDisciplineBoard(notices, exam = null) {
     examName: exam?.examName || "",
     examDate: exam?.date || exam?.examDate || "",
   };
+}
+
+
+const TIER_FILTER_ORDER = ["yunxiu_exp", "yunxiu_key", "lingxiao", "zhuoxing", "duxue", "yiti", "fuzhuo"];
+
+export function disciplineNoticeExamKey(notice) {
+  if (!notice) return "";
+  if (notice.examId) return String(notice.examId);
+  return [notice.examDate || notice.date || "", notice.examName || ""].join("|");
+}
+
+export function enrichDisciplineNotice(notice, student = null) {
+  if (!notice) return notice;
+  const classNo = notice.classNo ?? student?.classNo;
+  const tier = notice.tier || student?.tier || "";
+  const trackRaw = notice.track || student?.track || student?.trackPref || "";
+  const track = trackRaw === "wen" || trackRaw === "li" ? trackRaw : (trackRaw ? "mixed" : "");
+  return {
+    ...notice,
+    classNo,
+    tier,
+    track,
+    name: notice.name || student?.name || "",
+  };
+}
+
+export function filterDisciplineNotices(notices, filters = {}) {
+  const exam = filters.examId ?? filters.exam ?? "all";
+  const tier = filters.tier ?? "all";
+  const classNo = filters.classNo ?? "all";
+  const track = filters.track ?? "all";
+  const isAll = (v) => v == null || v === "" || v === "all";
+  return sortDisciplineNotices(notices).filter((n) => {
+    if (!isAll(exam) && disciplineNoticeExamKey(n) !== String(exam) && String(n.examId || "") !== String(exam)) return false;
+    if (!isAll(tier) && String(n.tier || "") !== String(tier)) return false;
+    if (!isAll(classNo) && Number(n.classNo) !== Number(classNo)) return false;
+    if (!isAll(track)) {
+      const t = n.track === "wen" || n.track === "li" ? n.track : (n.track ? "mixed" : "");
+      if (t !== String(track)) return false;
+    }
+    return true;
+  });
+}
+
+export function disciplineNoticeFilterOptions(notices) {
+  const examSeen = new Set();
+  const exams = [];
+  const tierSeen = new Set();
+  const classSeen = new Set();
+  const classes = [];
+  const trackSeen = new Set();
+  for (const n of sortDisciplineNotices(notices)) {
+    const key = disciplineNoticeExamKey(n);
+    if (key && !examSeen.has(key)) {
+      examSeen.add(key);
+      const date = n.examDate || n.date || "";
+      const name = n.examName || "考试";
+      exams.push({ value: key, label: date ? `${date}「${name}」` : `「${name}」` });
+    }
+    if (n.tier) tierSeen.add(n.tier);
+    if (n.classNo != null && n.classNo !== "") {
+      const no = Number(n.classNo);
+      if (Number.isFinite(no) && !classSeen.has(no)) {
+        classSeen.add(no);
+        classes.push(no);
+      }
+    }
+    const t = n.track === "wen" || n.track === "li" ? n.track : (n.track ? "mixed" : "");
+    if (t) trackSeen.add(t);
+  }
+  classes.sort((a, b) => a - b);
+  const tiers = TIER_FILTER_ORDER.filter((id) => tierSeen.has(id)).concat(
+    [...tierSeen].filter((id) => !TIER_FILTER_ORDER.includes(id)),
+  );
+  const tracks = ["li", "wen", "mixed"].filter((id) => trackSeen.has(id));
+  return { exams, tiers, classes, tracks };
+}
+
+export function disciplineBoardButtonLabel(count) {
+  const n = Math.max(0, Number(count) || 0);
+  return n > 0 ? `校内处分公告（${n}）` : "校内处分公告";
+}
+
+export function filtersAreActive(filters = {}) {
+  const keys = ["examId", "exam", "tier", "classNo", "track"];
+  return keys.some((k) => {
+    const v = filters[k];
+    return v != null && v !== "" && v !== "all";
+  });
+}
+
+/**
+ * 弹层空状态说明。未查实的本来就不在 notices 里。
+ * 有筛选且无结果，或完全没有查实公告时：当前范围无查实作弊公告。
+ * 打开某场校本考试且该场没有查实公告时：本次校本考试无查实作弊公告。
+ */
+export function disciplineBoardEmptyNote({ exam = null, filters = {}, currentCount = 0, filteredCount = 0, totalCount = 0 } = {}) {
+  if (filteredCount > 0) return "";
+  if (filtersAreActive(filters)) return "当前范围无查实作弊公告";
+  if (exam && !isSchoolExamKind(exam.examKind)) return "高考、会考或官方联考不做校内处分文件。";
+  if (exam && isSchoolExamKind(exam.examKind) && currentCount === 0) return "本次校本考试无查实作弊公告";
+  if (!totalCount) return "当前范围无查实作弊公告";
+  return "当前范围无查实作弊公告";
 }

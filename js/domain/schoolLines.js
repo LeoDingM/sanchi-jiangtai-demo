@@ -3,9 +3,9 @@
  * 高一高二没有补习班，按 520/1696、1100/1696 折算到本年级应届池，不能套用这两个绝对名次。
  * 应届省控上线人数仍只统应届，只作对照统计，不再当作校内划线名额。
  */
-import { FALLBACK_SCHOOL_QUOTA, SCHOOL_LINE_FIRST_RANK, SCHOOL_LINE_SECOND_RANK } from "./config.js?v=t73u2";
-import { provincialLines, officialProvincialPack, gaokaoScheme, isOfficialProvincialYear, provincialTrackLabel, provincialFirstShortLabel, provincialSecondShortLabel } from "./jiangxi.js?v=t73u2";
-import { hash01 } from "./prng.js?v=t73u2";
+import { FALLBACK_SCHOOL_QUOTA, SCHOOL_LINE_FIRST_RANK, SCHOOL_LINE_SECOND_RANK } from "./config.js?v=t74u2";
+import { provincialLines, officialProvincialPack, gaokaoScheme, isOfficialProvincialYear, provincialTrackLabel, provincialFirstShortLabel, provincialSecondShortLabel } from "./jiangxi.js?v=t74u2";
+import { hash01 } from "./prng.js?v=t74u2";
 
 function clampRank(want, n) {
   const cap = Math.max(1, n);

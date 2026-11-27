@@ -1,21 +1,21 @@
 /** 组织一次考试：出分、文理分列排名、分数线、层次筛选、单科第一。 */
-import { CUTOFF_FIRST_RANK, CUTOFF_SECOND_RANK } from "./config.js?v=t73u2";
+import { CUTOFF_FIRST_RANK, CUTOFF_SECOND_RANK } from "./config.js?v=t74u2";
 import {
   attachStudentMeta, cutoffRanks, cutoffsFromRanked, gradeStudent, rankRows,
   scaleOf, subjectRanks, summarizeClass, subjectsFor, applyTrackTotalCompression,
-} from "./scores.js?v=t73u2";
-import { provincialLines } from "./jiangxi.js?v=t73u2";
-import { attachJointExam, JOINT_SOURCE_NOTE } from "./jointExam.js?v=t73u2";
-import { fallbackSchoolQuota, classProvincialCounts, provincialCompareYear } from "./schoolLines.js?v=t73u2";
-import { decorateDisplayRanks, reportRankOpts } from "./displayRanks.js?v=t73u2";
+} from "./scores.js?v=t74u2";
+import { provincialLines } from "./jiangxi.js?v=t74u2";
+import { attachJointExam, JOINT_SOURCE_NOTE } from "./jointExam.js?v=t74u2";
+import { fallbackSchoolQuota, classProvincialCounts, provincialCompareYear } from "./schoolLines.js?v=t74u2";
+import { decorateDisplayRanks, reportRankOpts } from "./displayRanks.js?v=t74u2";
 import {
   examUsesNewGaokaoSubjects, ensureStudentElectives, applyReelectiveAssign,
   ASSIGN_NOTE, classTrackLabel,
-} from "./newGaokao.js?v=t73u2";
+} from "./newGaokao.js?v=t74u2";
 import {
   cheatAttempt, investigateCheat, applyBoostToRow, restoreCheatedRow,
   composeDisciplineNotice, resumeDisciplineLine, isSchoolExamKind,
-} from "./cheating.js?v=t73u2";
+} from "./cheating.js?v=t74u2";
 
 export function studentTrackForExam(student, split) {
   if (!split || student.track === "mixed" || !student.track) return "mixed";

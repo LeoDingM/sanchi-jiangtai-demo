@@ -78,39 +78,43 @@ import {
   suggestPaperSignIssue, suggestPaperSignRegister, suggestPaperSignInform,
   PAPER_SIGN_ACTIONS, PAPER_SIGN_SOURCE_NOTE, PAPER_SIGN_BATCH_MIN, PAPER_SIGN_BATCH_MAX,
   PAPER_SIGN_DAY_CAP,
-} from "../domain/simulation.js?v=t73u2";
-import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t73u2";
-import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t73u2";
-import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t73u2";
-import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t73u2";
-import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t73u2";
-import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t73u2";
-import { classTrackLabel } from "../domain/newGaokao.js?v=t73u2";
-import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t73u2";
-import { hydrateReport } from "../domain/simulation.js?v=t73u2";
-import { renderSeating } from "./classroom.js?v=t73u2";
-import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t73u2";
-import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t73u2";
-import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t73u2";
-import { buildStudentResume, resumeAiPayload, formatResumeLocal } from "../domain/resume.js?v=t73u2";
-import { buildAlumniBoostBoard, alumniBoostAiPayload, validateAlumniBoostText, ALUMNI_BOOST_TITLE, ALUMNI_BOOST_SOURCE_NOTE } from "../domain/alumniBoost.js?v=t73u2";
-import { explainScoreDrop, scoreDropAiPayload, validateScoreDropText, listScoreDropEntries } from "../domain/scoreDrop.js?v=t73u2";
-import { formatDisciplineBoard } from "../domain/cheating.js?v=t73u2";
+} from "../domain/simulation.js?v=t74u2";
+import { addDays, weekday, schoolYearOf } from "../domain/calendar.js?v=t74u2";
+import { parentTalkPriority, composeParentBrief } from "../domain/parents.js?v=t74u2";
+import { saveSlot, loadSlot, loadSlotResult, listSlots, toJSON, fromJSON } from "../domain/save.js?v=t74u2";
+import { startNewGameSession, continueGameSession, createBootQueue } from "../domain/bootFlow.js?v=t74u2";
+import { subjectById, SUBJECTS_G1 } from "../domain/config.js?v=t74u2";
+import { rankRows, usesComprehensive, displayScoreColumns, displayScoreCell, formatToppersLine, formatLastGaokaoText, formatComprehensiveLabel } from "../domain/scores.js?v=t74u2";
+import { classTrackLabel } from "../domain/newGaokao.js?v=t74u2";
+import { classStandings, examReportKey, pickExamReport, officeBoard } from "../domain/examService.js?v=t74u2";
+import { hydrateReport } from "../domain/simulation.js?v=t74u2";
+import { renderSeating } from "./classroom.js?v=t74u2";
+import { classPeersOf, deskMateOf } from "../domain/peers.js?v=t74u2";
+import { classAbsences, isAwayFromClass, healthStatusLine } from "../domain/health.js?v=t74u2";
+import { formatAbilityWithRoom, mathRoomLine } from "../domain/potential.js?v=t74u2";
+import { buildStudentResume, resumeAiPayload, formatResumeLocal } from "../domain/resume.js?v=t74u2";
+import { buildAlumniBoostBoard, alumniBoostAiPayload, validateAlumniBoostText, ALUMNI_BOOST_TITLE, ALUMNI_BOOST_SOURCE_NOTE } from "../domain/alumniBoost.js?v=t74u2";
+import { explainScoreDrop, scoreDropAiPayload, validateScoreDropText, listScoreDropEntries } from "../domain/scoreDrop.js?v=t74u2";
+import {
+  formatDisciplineBoard, filterDisciplineNotices, enrichDisciplineNotice,
+  disciplineNoticeFilterOptions, disciplineBoardButtonLabel, disciplineBoardEmptyNote,
+  filtersAreActive,
+} from "../domain/cheating.js?v=t74u2";
 import {
   buildStudentScoreTrendFacts, formatLocalStudentScoreTrend, studentScoreTrendChartModel,
   studentScoreTrendAiPayload, validateScoreTrendText,
   buildClassScoreTrendFacts, formatLocalClassScoreTrend, classScoreTrendChartModel,
   classScoreTrendAiPayload, SCORE_TREND_SOURCE_NOTE,
-} from "../domain/scoreTrend.js?v=t73u2";
-import { sameTierFirstBoard, classFirstBoard, formatStability } from "../domain/toppers.js?v=t73u2";
-import { decorateDisplayRanks, formatRankTriple, reportRankOpts, agendaStateKey, shouldRefreshAgenda } from "../domain/displayRanks.js?v=t73u2";
-import { classOfficesFor, officeTitlesOf, selectClassOffices } from "../domain/classManage.js?v=t73u2";
-import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t73u2";
-import { provincialLines, officialProvincialPack, provincialTrackLabel, provincialFirstShortLabel, provincialSecondShortLabel, provincialFirstLabel, provincialSecondLabel } from "../domain/jiangxi.js?v=t73u2";
-import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t73u2";
-import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t73u2";
-import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t73u2";
-import { drawLineChart, drawBarChart } from "./charts.js?v=t73u2";
+} from "../domain/scoreTrend.js?v=t74u2";
+import { sameTierFirstBoard, classFirstBoard, formatStability } from "../domain/toppers.js?v=t74u2";
+import { decorateDisplayRanks, formatRankTriple, reportRankOpts, agendaStateKey, shouldRefreshAgenda } from "../domain/displayRanks.js?v=t74u2";
+import { classOfficesFor, officeTitlesOf, selectClassOffices } from "../domain/classManage.js?v=t74u2";
+import { playerCareerLine, playerCareerStatus, playerCareerBrief, OFFICIAL_LOG_TEXT } from "../domain/career.js?v=t74u2";
+import { provincialLines, officialProvincialPack, provincialTrackLabel, provincialFirstShortLabel, provincialSecondShortLabel, provincialFirstLabel, provincialSecondLabel } from "../domain/jiangxi.js?v=t74u2";
+import { formatAdmissionBatch, formatAdmissionDest, formatLastAdmissionLabel, enrichAdmissionResults, studentsForAdmissionYear, admissionClassOptions, filterAdmissionResults, admissionCountKpis, ADMISSION_TIER_FILTERS, ADMISSION_TRACK_FILTERS, ADMISSION_TABLE_LIMIT } from "../domain/admission.js?v=t74u2";
+import { describeSchoolCutoff, describeClassProvincial, describeZhuoxingPeers, describeSchoolProvincial, describeOfficialProvincialLines, schoolCutoffView, provincialCompareYear, classProvincialCounts } from "../domain/schoolLines.js?v=t74u2";
+import { studentExamHistory, tierName, tierLabel, TIER_ORDER, findStudentInState } from "../domain/studentHistory.js?v=t74u2";
+import { drawLineChart, drawBarChart } from "./charts.js?v=t74u2";
 import {
   loadAiSettings, saveAiSettings, clearAiKey, maskApiKey,
   loadGodSettings, saveGodSettings, officialHomeroomName,
@@ -120,7 +124,7 @@ import {
   requestTalkAdvice, requestTeachingReflection, requestResumePolish,
   requestAlumniBoostPolish, requestScoreDropPolish,
   requestStudentScoreTrend, requestClassScoreTrend,
-} from "../domain/examAi.js?v=t73u2";
+} from "../domain/examAi.js?v=t74u2";
 
 let state = null;
 let view = "classroom";
@@ -346,6 +350,7 @@ function playerScoreDropEntries(examId = null) {
 }
 
 function openStudentProfile(id, hash) {
+  closeAppDialog();
   if (id) selectedId = id;
   view = "profile";
   render();
@@ -362,26 +367,172 @@ function openClassScoreTrendView() {
   if (el) el.scrollIntoView({ block: "nearest" });
 }
 
+function enrichedDisciplineNotices() {
+  return (state.disciplineNotices || []).map((n) => enrichDisciplineNotice(n, findStudent(n.studentId) || findStudentInState(state, n.studentId)));
+}
+
+function disciplineTrackLabel(track) {
+  if (track === "wen") return "文科";
+  if (track === "li") return "理科";
+  if (track === "mixed") return "未分科";
+  return "未分科";
+}
+
 function disciplineBoardHtml(exam = null) {
-  const board = formatDisciplineBoard(state.disciplineNotices || [], exam);
-  const items = (n) => (n || []).map((x) => `<div class="discipline-item"><b>${escapeHtml(x.date || x.examDate || "")}</b> ${escapeHtml(x.title || "校内处分公告")}　${escapeHtml(x.body || "")}<div class="muted">${escapeHtml(x.source || "")}</div></div>`).join("");
-  const currentBlock = exam
-    ? (board.currentNote
-      ? `<p class="notice">${escapeHtml(board.currentNote)}</p>`
-      : (board.current.length ? items(board.current) : ""))
-    : "";
-  const histBlock = board.history.length
-    ? `<p><b>历史查实公告</b>（按时间倒序）</p>${items(board.history)}`
-    : `<p class="muted">还没有已查实的校内处分公告。未查实的举报不会出现在这里。</p>`;
-  return `<div class="paper discipline-board" id="discipline-board">
-    <h3>${escapeHtml(board.title)}</h3>
-    ${exam ? `<p class="muted">场次：${escapeHtml((exam.date || "") + "「" + (exam.examName || "") + "」")}</p>` : ""}
-    ${currentBlock}
-    ${histBlock}
+  const total = (state.disciplineNotices || []).length;
+  const label = disciplineBoardButtonLabel(total);
+  const examId = exam?.examId || exam?.id || "";
+  return `<div class="board-entry discipline-board-entry" id="discipline-board">
+    <button type="button" class="talk-btn" data-open-discipline="${escapeHtml(String(examId))}" data-open-discipline-date="${escapeHtml(exam?.date || exam?.examDate || "")}" data-open-discipline-name="${escapeHtml(exam?.examName || "")}" data-open-discipline-kind="${escapeHtml(exam?.examKind || "")}">${escapeHtml(label)}</button>
+    <p class="muted">点开查看已查实的校内处分。未查实的举报不上榜。</p>
   </div>`;
 }
 
-function scoreDropBoardHtml({ exam = null, students = null, limit = 24 } = {}) {
+function disciplineItemHtml(x) {
+  const meta = [
+    x.classNo != null && x.classNo !== "" ? `${x.classNo}班` : "",
+    x.tier ? tierLabel(x.tier) : "",
+    x.track ? disciplineTrackLabel(x.track) : "",
+  ].filter(Boolean).join(" · ");
+  return `<div class="discipline-item"><b>${escapeHtml(x.date || x.examDate || "")}</b> ${escapeHtml(x.title || "校内处分公告")}　${escapeHtml(x.body || "")}
+    ${meta ? `<div class="muted">${escapeHtml(meta)}</div>` : ""}
+    <div class="muted">${escapeHtml(x.source || "")}</div>
+  </div>`;
+}
+
+function closeAppDialog() {
+  const root = document.getElementById("app-dialog-root");
+  if (!root) return;
+  const prevOverflow = root.dataset.prevOverflow ?? "";
+  document.body.style.overflow = prevOverflow;
+  document.removeEventListener("keydown", appDialogKeyHandler);
+  root.remove();
+}
+
+function appDialogKeyHandler(e) {
+  if (e.key === "Escape") {
+    e.preventDefault();
+    closeAppDialog();
+  }
+}
+
+function openAppDialog({ title, bodyHtml, onBind } = {}) {
+  closeAppDialog();
+  const root = document.createElement("div");
+  root.id = "app-dialog-root";
+  root.className = "app-dialog-root";
+  root.dataset.prevOverflow = document.body.style.overflow || "";
+  root.innerHTML = `
+    <div class="app-dialog-backdrop" data-close-dialog="1"></div>
+    <div class="app-dialog" role="dialog" aria-modal="true" aria-labelledby="app-dialog-title">
+      <div class="app-dialog-head">
+        <h3 id="app-dialog-title">${escapeHtml(title || "")}</h3>
+        <button type="button" class="app-dialog-close" data-close-dialog="1">关闭</button>
+      </div>
+      <div class="app-dialog-body" id="app-dialog-body">${bodyHtml || ""}</div>
+    </div>`;
+  document.body.appendChild(root);
+  document.body.style.overflow = "hidden";
+  document.addEventListener("keydown", appDialogKeyHandler);
+  root.querySelectorAll("[data-close-dialog]").forEach((el) => {
+    el.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      closeAppDialog();
+    });
+  });
+  const closeBtn = root.querySelector(".app-dialog-close");
+  if (closeBtn) closeBtn.focus();
+  if (typeof onBind === "function") onBind(root.querySelector("#app-dialog-body"), root);
+  return root;
+}
+
+function examContextFromButton(btn) {
+  if (!btn) return null;
+  const examId = btn.dataset.openDiscipline || "";
+  const date = btn.dataset.openDisciplineDate || "";
+  const examName = btn.dataset.openDisciplineName || "";
+  const examKind = btn.dataset.openDisciplineKind || "";
+  if (!examId && !date && !examName && !examKind) return null;
+  return { examId, id: examId, date, examDate: date, examName, examKind };
+}
+
+function openDisciplineDialog(exam = null) {
+  const notices = enrichedDisciplineNotices();
+  const board = formatDisciplineBoard(notices, exam);
+  const opts = disciplineNoticeFilterOptions(notices);
+  const filters = { examId: "all", tier: "all", classNo: "all", track: "all" };
+  const selectHtml = (id, label, items) => `<label>${escapeHtml(label)} <select id="${id}">${items}</select></label>`;
+  const examOpts = [`<option value="all">全部考试</option>`].concat(
+    opts.exams.map((e) => `<option value="${escapeHtml(e.value)}">${escapeHtml(e.label)}</option>`),
+  ).join("");
+  const tierOpts = [`<option value="all">全部层级</option>`].concat(
+    opts.tiers.map((id) => `<option value="${escapeHtml(id)}">${escapeHtml(tierLabel(id))}</option>`),
+  ).join("");
+  const classOpts = [`<option value="all">全部班级</option>`].concat(
+    opts.classes.map((no) => `<option value="${escapeHtml(String(no))}">${escapeHtml(String(no))}班</option>`),
+  ).join("");
+  const trackOpts = [`<option value="all">全部科类</option>`].concat(
+    opts.tracks.map((id) => `<option value="${escapeHtml(id)}">${escapeHtml(disciplineTrackLabel(id))}</option>`),
+  ).join("");
+  const paintList = (body) => {
+    const filtered = filterDisciplineNotices(notices, filters);
+    const empty = disciplineBoardEmptyNote({
+      exam,
+      filters,
+      currentCount: board.current.length,
+      filteredCount: filtered.length,
+      totalCount: notices.length,
+    });
+    const banner = (!filtersAreActive(filters) && board.currentNote && filtered.length)
+      ? `<p class="notice">${escapeHtml(board.currentNote)}</p>`
+      : "";
+    const list = filtered.length
+      ? `<p class="muted">已查实 ${filtered.length} 条，按时间倒序。未查实的举报不会出现在这里。</p>${filtered.map(disciplineItemHtml).join("")}`
+      : `<p class="notice">${escapeHtml(empty)}</p><p class="muted">未查实的举报不会出现在这里。</p>`;
+    const box = body.querySelector("#discipline-dialog-list");
+    if (box) box.innerHTML = `${banner}${list}`;
+  };
+  const bodyHtml = `
+    ${exam ? `<p class="muted">当前场次：${escapeHtml((exam.date || exam.examDate || "") + (exam.examName ? "「" + exam.examName + "」" : ""))}</p>` : ""}
+    <div class="filters discipline-filters">
+      ${selectHtml("disc-filter-exam", "考试", examOpts)}
+      ${selectHtml("disc-filter-tier", "层级", tierOpts)}
+      ${selectHtml("disc-filter-class", "班级", classOpts)}
+      ${selectHtml("disc-filter-track", "文理科", trackOpts)}
+    </div>
+    <div id="discipline-dialog-list"></div>`;
+  openAppDialog({
+    title: "校内处分公告",
+    bodyHtml,
+    onBind(body) {
+      const bindSel = (id, key) => {
+        const el = body.querySelector(id);
+        if (!el) return;
+        el.onchange = () => { filters[key] = el.value; paintList(body); };
+      };
+      bindSel("#disc-filter-exam", "examId");
+      bindSel("#disc-filter-tier", "tier");
+      bindSel("#disc-filter-class", "classNo");
+      bindSel("#disc-filter-track", "track");
+      paintList(body);
+    },
+  });
+}
+
+function scoreDropBoardHtml({ exam = null, students = null } = {}) {
+  const list = students || clsStudents();
+  const reports = cohortReports();
+  const entries = listScoreDropEntries(list, reports, { seed: state.seed ?? 1, examId: exam?.examId || null });
+  const n = entries.length;
+  const label = n > 0 ? `掉分需关注（${n}）` : "掉分需关注";
+  return `<div class="board-entry score-drop-board-entry" id="score-drop-board">
+    <button type="button" class="talk-btn" data-open-score-drop="${escapeHtml(exam?.examId || "")}">${escapeHtml(label)}</button>
+    <p class="muted">点开查看大幅退步名单。进入说明不占用当日谈话次数。</p>
+  </div>`;
+}
+
+function openScoreDropDialog({ exam = null, students = null, limit = 24 } = {}) {
   const list = students || clsStudents();
   const reports = cohortReports();
   const entries = listScoreDropEntries(list, reports, { seed: state.seed ?? 1, examId: exam?.examId || null });
@@ -400,12 +551,31 @@ function scoreDropBoardHtml({ exam = null, students = null, limit = 24 } = {}) {
   const empty = exam
     ? `<p class="muted">本次考试没有触发「大幅掉分」说明的学生。普通中游波动不会出现在这里。触发条件包括：平时班排稳定前 5 后突然大掉，或前列学生高考/模拟未达二本，或校排相对平时退步 300 名及以上。</p>`
     : `<p class="muted">近几次没有触发大幅掉分说明的学生。普通中游波动不会出现在这里。</p>`;
-  return `<div class="paper score-drop-board" id="score-drop-board">
-    <h4>掉分需关注</h4>
+  const bodyHtml = `
     <p>下列学生相对平时出现大幅退步。点「查看掉分原因」进入档案说明，不占用当日谈话次数。</p>
-    ${entries.length ? `<ul>${rows}</ul>` : empty}
-  </div>`;
+    ${entries.length ? `<ul>${rows}</ul>` : empty}`;
+  openAppDialog({
+    title: entries.length ? `掉分需关注（${entries.length}）` : "掉分需关注",
+    bodyHtml,
+    onBind(body) {
+      body.querySelectorAll("[data-open-drop]").forEach((b) => {
+        b.onclick = (ev) => {
+          ev.stopPropagation();
+          closeAppDialog();
+          openStudentProfile(b.dataset.openDrop, "#score-drop-panel");
+        };
+      });
+      body.querySelectorAll("[data-open-trend]").forEach((b) => {
+        b.onclick = (ev) => {
+          ev.stopPropagation();
+          closeAppDialog();
+          openStudentProfile(b.dataset.openTrend, "#student-score-trend");
+        };
+      });
+    },
+  });
 }
+
 
 function studentScoreTrendPanelHtml(student) {
   if (!student) return "";
@@ -455,8 +625,27 @@ function classScoreTrendPanelHtml() {
   </div>`;
 }
 
+function bindBoardDialogs(host) {
+  if (!host) return;
+  host.querySelectorAll("[data-open-discipline]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      openDisciplineDialog(examContextFromButton(b));
+    };
+  });
+  host.querySelectorAll("[data-open-score-drop]").forEach((b) => {
+    b.onclick = (ev) => {
+      ev.stopPropagation();
+      const examId = b.dataset.openScoreDrop || "";
+      const exam = examId ? { examId, id: examId } : null;
+      openScoreDropDialog({ exam, students: clsStudents() });
+    };
+  });
+}
+
 function bindScoreTrendPanels(host) {
   if (!host) return;
+  bindBoardDialogs(host);
   host.querySelectorAll("[data-open-drop]").forEach((b) => {
     b.onclick = (ev) => { ev.stopPropagation(); openStudentProfile(b.dataset.openDrop, "#score-drop-panel"); };
   });
@@ -1106,6 +1295,7 @@ function render(opts = {}) {
   const host = $("#view");
   try {
     if (refreshView && host) {
+      closeAppDialog();
       if (opts.keepViewShell) paintCurrentView(host);
       else {
         host.innerHTML = "";
@@ -4053,6 +4243,7 @@ function viewLog(host) {
     ${dutyWeekBlock ? `<h3>值周纪要</h3>${dutyWeekBlock}` : ""}
     ${paperSignBlock ? `<h3>试卷签字纪要</h3>${paperSignBlock}` : ""}
     <h3>日志</h3>${(state.log||[]).slice(0,40).map((l)=>`<div class="log-item"><b>${l.date}</b> ${l.text}</div>`).join("")}`;
+  bindBoardDialogs(host);
 }
 
 function viewSave(host) {
